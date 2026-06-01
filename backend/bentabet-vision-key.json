@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "bentabet-vision",
+  "private_key_id": "afc30bfa5fae1e51640a397d7dfb4f3b57d5098b",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCfgKAAdHeLhJlP\ne74vGr0339o6+XsLe9KV35gn27M4W1bT9kNsooDG2hO3rjj+rrdASDm5uBd2HP8l\ntNNgYZki7j+fKz4Ayvs8IINZ2xdeykrKMP8pAG9ZOCSJ1p3eGwyHP5SHh8Q45csz\nv8lcuG7Zv1s0Y33gdPJE4V6lXEAAxGloJ7mMBGjNiZBPMY1h3jBpn+wlvn8Gmjir\nScgea6dVzsE8xdyGAEQtizlQKnJMLguM7UsKl9pyUkIWZsu+K+jNrcUhmJcIrf30\nciBwTFcC7p7AJmKBeFs4CvnnkBWzrch3PMyz2e9gbJbsBHPKYYgiJHh1clhwCEGt\nHvi3N6sTAgMBAAECggEALHdg48+UVj5wuTJvulUThESxY7iSf4iVFDhCBHag16jL\nI4tnj50cFpPMZGw7MnFF4DNieG6kh8acsQfg1+FNnmnaLccR4Ym1EbWkuMO2F7SA\nti6DrAwVfsOCmDTPTRCwZPIqN8B3ST9y72nburAmIylQRWIpQQ6JTf+gcawuoaev\nZQUNKUH5rr8DTXAGIflmxt34V5mrdhXNST7oR58+OkNPvSsXomEDPZDmTsc2KxgU\nHnuvKhh7Akx0FTkYPEZwe/vxxNOm2PUjg9yqaszoRsjsp52NaiwmTCoo781Famg/\n8tAvHh3pymW+Eni08a6o+yo+bTxaqH0k8loKTMO3dQKBgQDNz0DxXfXggPSgjIPL\njrj14iV8y13Xlc3bsYKCo6HY7kaAPnMGTou7yXu6rEW+XLNUScsyZdrWxlih4cWO\nVcOvPZMntmfqy6+pmyd1osSDiq5gycGOYbW9bxXwAxSmUSGIme46Mx8fCzAeCnYm\nTcVcgAV+3p7qyzjFEcKetbtnnQKBgQDGZmd7xupABFPzJugUZUBi/4UJ8x5UOpOV\nLsu6DJmtpu838TQ7KDHHkX3KCpzRGnwUOo3GFwPwnKzGBUSYalaZ/8yEdAErvF3c\ngc+T77GGD0QKQHwPPHDxXDE5a6u1j1Hdau2K4h/VB44cjiXG4qQ3xROxvNe0DfiD\nh1hkI5NWbwKBgFcuvoIAnZGWzwnbvFDUisGOJPcyZvRWPzgbf/+7NWphtXfJ/Ivl\nZggMl99B7uFu/4BrKiqVPxjQOOeKbleXOSfY26ds+6RY2HbuhM6uPrTCYJAbp2Sb\nO5OdpRthErRJlfz5yBLbaQmLgbyYDei39Sz0Bl/yCjvIDqpclacJsPN5AoGAKgl8\nl69X5uSD3Rs7RUcG03MMf0UyAeq/ZnaZ1/vfe/nI6fODe51SntRm8K4699tCuw6F\nB5nMzeiEexiWpiyx2MNoVBA4R0oMITKoBtJcrOkDI6DyKFBIJfvAukfkA/4v/Fgx\nqKGs2PhW1hoQSwmufdqWB6zZj17+bu/4fI9FIqUCgYAvfPclyM+VIS3bN4XQIXCl\nRLbbJQ6fVhNgbtmQzXlmPnVmqFBLWqUUyt4c7p3L1H34N3MAMvEb+D1/9iNohCOZ\nWeAprrzhAsNF6we9Qo39wI/gEdzoGyclZTcxiEiWqV9OUck2bqcYOm4jJHG3Sz2T\nLWVeruH6GqfUedQxrVX3jw==\n-----END PRIVATE KEY-----\n",
+  "client_email": "bentabet@bentabet-vision.iam.gserviceaccount.com",
+  "client_id": "100120718250139685512",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/bentabet%40bentabet-vision.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}
