@@ -12,6 +12,7 @@ import {
 import { useAuthStore } from '../store/authStore';
 import { authAPI } from '../services/api';
 import { App } from 'antd';
+import logo from './../assets/logo.png';
 
 const { Sider, Header, Content } = Layout;
 const { Text } = Typography;
@@ -101,7 +102,7 @@ export default function MainLayout() {
         <div className="logo">
           {!collapsed ? (
             <>
-              <div className="title">⚡ BENTABET</div>
+              <div className="title"><img src={logo} alt="Bentabet-logo" style={{ width: '10%', height: '10%', objectFit: 'contain', display: 'inline' }} /> BENTABET</div>
               <div className="subtitle">Slot Management System</div>
             </>
           ) : (
