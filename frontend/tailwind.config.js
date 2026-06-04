@@ -9,6 +9,7 @@ export default {
       colors: {
         brand: {
           dark: '#021559',
+          light: "#0a237a",
         }
       }
     },

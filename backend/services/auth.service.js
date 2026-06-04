@@ -21,11 +21,19 @@ const getUserWithRole = async (userId) => {
 };
 
 const register = async ({ name, email, password, role_id, employee_id, phone }) => {
+  if (!phone?.trim()) throw new Error('Phone number is required');
   const existing = await User.findOne({ where: { email } });
   if (existing) throw new Error('Email already registered');
 
   const password_hash = await bcrypt.hash(password, BCRYPT_ROUNDS);
-  const user = await User.create({ name, email, password_hash, role_id, employee_id, phone });
+  const user = await User.create({
+    name,
+    email,
+    password_hash,
+    role_id,
+    employee_id,
+    phone: phone.trim(),
+  });
   return getUserWithRole(user.id);
 };
 

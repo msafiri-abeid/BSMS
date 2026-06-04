@@ -86,7 +86,7 @@ export const authAPI = {
 
 export const usersAPI = {
   list: (p) => api.get('/users', { params: p }),
-  create: (d) => api.post('/auth/register', d),
+  create: (d) => api.post('/users', d),
   update: (id, d) => api.put(`/users/${id}`, d),
 };
 
@@ -168,7 +168,18 @@ export const inventoryAPI = {
 
 export const staffAPI = {
   employees: () => api.get('/staff/employees'),
-  createEmployee: (d) => api.post('/staff/employees', d),
+  getEmployee: (id) => api.get(`/staff/employees/${id}`),
+  createEmployee: (d, config) => api.post('/staff/employees', d, config),
+  updateEmployee: (id, d, config) => api.put(`/staff/employees/${id}`, d, config),
+  deleteEmployee: (id) => api.delete(`/staff/employees/${id}`),
   departments: () => api.get('/staff/departments'),
+  createDepartment: (d) => api.post('/staff/departments', d),
+  updateDepartment: (id, d) => api.put(`/staff/departments/${id}`, d),
+  deleteDepartment: (id) => api.delete(`/staff/departments/${id}`),
+  organization: () => api.get('/staff/organization'),
   positions: () => api.get('/staff/positions'),
+  createPosition: (d) => api.post('/staff/positions', d),
+  updatePosition: (id, d) => api.put(`/staff/positions/${id}`, d),
+  deletePosition: (id) => api.delete(`/staff/positions/${id}`),
+  roles: () => api.get('/staff/roles'),
 };

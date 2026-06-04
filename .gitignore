@@ -19,3 +19,9 @@ dist/
 # OS files
 .DS_Store
 Thumbs.db
+
+CLAUDE.md
+
+.claudeignore
+
+notes.txt

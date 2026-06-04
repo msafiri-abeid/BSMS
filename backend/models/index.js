@@ -338,6 +338,8 @@ const TicketActivity = sequelize.define('TicketActivity', {
 const Department = sequelize.define('Department', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
   name: { type: DataTypes.STRING(100), allowNull: false },
+  parent_id: { type: DataTypes.INTEGER },
+  sort_order: { type: DataTypes.INTEGER, defaultValue: 0 },
 }, { tableName: 'departments', updatedAt: false });
 
 const Position = sequelize.define('Position', {
@@ -350,12 +352,16 @@ const Employee = sequelize.define('Employee', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
   user_id: { type: DataTypes.INTEGER, unique: true },
   employee_code: { type: DataTypes.STRING(50), unique: true },
+  full_name: { type: DataTypes.STRING(150) },
+  email: { type: DataTypes.STRING(200) },
+  phone: { type: DataTypes.STRING(20) },
   department_id: { type: DataTypes.INTEGER },
   position_id: { type: DataTypes.INTEGER },
   hire_date: { type: DataTypes.DATEONLY },
   basic_salary: { type: DataTypes.INTEGER, defaultValue: 0 },
   bank_account: { type: DataTypes.STRING(100) },
   national_id: { type: DataTypes.STRING(50) },
+  documents: { type: DataTypes.JSON, defaultValue: [] },
   status: { type: DataTypes.ENUM('active', 'inactive', 'terminated'), defaultValue: 'active' },
 }, { tableName: 'employees' });
 
@@ -432,10 +438,15 @@ Ticket.belongsTo(TicketGroup, { foreignKey: 'assigned_group_id', as: 'group' });
 Ticket.belongsTo(User, { foreignKey: 'assigned_to', as: 'assignee' });
 Ticket.hasMany(TicketActivity, { foreignKey: 'ticket_id', as: 'activities' });
 
+Department.hasMany(Department, { foreignKey: 'parent_id', as: 'children' });
+Department.belongsTo(Department, { foreignKey: 'parent_id', as: 'parent' });
+
 Employee.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 Employee.belongsTo(Department, { foreignKey: 'department_id', as: 'department' });
 Employee.belongsTo(Position, { foreignKey: 'position_id', as: 'position' });
 Employee.hasMany(Attendance, { foreignKey: 'employee_id', as: 'attendance' });
+Attendance.belongsTo(Employee, { foreignKey: 'employee_id', as: 'employee' });
+Position.belongsTo(Department, { foreignKey: 'department_id', as: 'department' });
 
 module.exports = {
   sequelize,

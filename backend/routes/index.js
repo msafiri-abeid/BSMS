@@ -22,21 +22,10 @@ router.get('/auth/me', authenticate, authC.me);
 router.put('/auth/password', authenticate, authC.changePassword);
 
 // ── USERS ─────────────────────────────────────────────────────
-const { User, Role, Permission } = require('../models');
-router.get('/users', authenticate, checkPermission('users', 'read'), async (req, res, next) => {
-  try {
-    const users = await User.findAll({ attributes: { exclude: ['password_hash'] }, include: [{ model: Role, as: 'role' }], order: [['name', 'ASC']] });
-    res.json({ success: true, data: users });
-  } catch (err) { next(err); }
-});
-router.put('/users/:id', authenticate, checkPermission('users', 'write'), async (req, res, next) => {
-  try {
-    const u = await User.findByPk(req.params.id);
-    if (!u) return res.status(404).json({ success: false, message: 'Not found' });
-    await u.update(req.body);
-    res.json({ success: true, data: u });
-  } catch (err) { next(err); }
-});
+const usersC = require('../controllers/users.controller');
+router.get('/users', authenticate, checkPermission('users', 'read'), usersC.listUsers);
+router.post('/users', authenticate, checkPermission('users', 'write'), usersC.createUser);
+router.put('/users/:id', authenticate, checkPermission('users', 'write'), usersC.updateUser);
 
 // ── PARTNERS & SHOPS ──────────────────────────────────────────
 router.get('/partners', authenticate, checkPermission('partners', 'read'), partnerC.listPartners);
@@ -122,24 +111,23 @@ router.get('/dashboard/finance', authenticate, dashC.financeDashboard);
 router.get('/dashboard/director', authenticate, dashC.directorDashboard);
 
 // ── STAFF ─────────────────────────────────────────────────────
-const { Employee, Department, Position, Attendance } = require('../models');
-router.get('/staff/employees', authenticate, checkPermission('staff', 'read'), async (req, res, next) => {
-  try {
-    const data = await Employee.findAll({ include: [{ model: User, as: 'user', attributes: { exclude: ['password_hash'] } }, { model: Department, as: 'department' }, { model: Position, as: 'position' }] });
-    res.json({ success: true, data });
-  } catch (err) { next(err); }
-});
-router.post('/staff/employees', authenticate, checkPermission('staff', 'write'), async (req, res, next) => {
-  try {
-    const emp = await Employee.create(req.body);
-    res.status(201).json({ success: true, data: emp });
-  } catch (err) { next(err); }
-});
-router.get('/staff/departments', authenticate, async (req, res, next) => {
-  try { res.json({ success: true, data: await Department.findAll() }); } catch (err) { next(err); }
-});
-router.get('/staff/positions', authenticate, async (req, res, next) => {
-  try { res.json({ success: true, data: await Position.findAll() }); } catch (err) { next(err); }
-});
+const staffC = require('../controllers/staff.controller');
+const { uploadEmployee } = require('../middleware/upload');
+
+router.get('/staff/organization', authenticate, checkPermission('staff', 'read'), staffC.getOrganization);
+router.get('/staff/departments', authenticate, checkPermission('staff', 'read'), staffC.listDepartments);
+router.post('/staff/departments', authenticate, checkPermission('staff', 'write'), staffC.createDepartment);
+router.put('/staff/departments/:id', authenticate, checkPermission('staff', 'write'), staffC.updateDepartment);
+router.delete('/staff/departments/:id', authenticate, checkPermission('staff', 'write'), staffC.deleteDepartment);
+router.get('/staff/positions', authenticate, checkPermission('staff', 'read'), staffC.listPositions);
+router.post('/staff/positions', authenticate, checkPermission('staff', 'write'), staffC.createPosition);
+router.put('/staff/positions/:id', authenticate, checkPermission('staff', 'write'), staffC.updatePosition);
+router.delete('/staff/positions/:id', authenticate, checkPermission('staff', 'write'), staffC.deletePosition);
+router.get('/staff/employees', authenticate, checkPermission('staff', 'read'), staffC.listEmployees);
+router.get('/staff/employees/:id', authenticate, checkPermission('staff', 'read'), staffC.getEmployee);
+router.post('/staff/employees', authenticate, checkPermission('staff', 'write'), uploadEmployee, staffC.createEmployee);
+router.put('/staff/employees/:id', authenticate, checkPermission('staff', 'write'), uploadEmployee, staffC.updateEmployee);
+router.delete('/staff/employees/:id', authenticate, checkPermission('staff', 'write'), staffC.deleteEmployee);
+router.get('/staff/roles', authenticate, checkPermission('staff', 'read'), usersC.listRoles);
 
 module.exports = router;

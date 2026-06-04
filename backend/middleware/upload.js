@@ -23,5 +23,6 @@ module.exports = {
   uploadMeter: multer({ storage: memStorage }),
   uploadAvatar: multer({ storage: createStorage('avatars') }),
   uploadTicket: multer({ storage: createStorage('tickets') }),
+  uploadEmployee: multer({ storage: createStorage('employees') }).array('documents', 5),
   cloudinary,
 };

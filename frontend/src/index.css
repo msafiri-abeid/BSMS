@@ -8,7 +8,7 @@
 body {
   margin: 0;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  background: #f5f5f5;
+  background: #f8fafc;
   color: #1a1a1a;
 }
 
@@ -23,7 +23,7 @@ body {
   margin: 0;
   font-size: 20px;
   font-weight: 600;
-  color: #0f1f14;
+  color: #021559;
 }
 
 .stat-card {
@@ -45,14 +45,44 @@ body {
 .stat-card .value {
   font-size: 28px;
   font-weight: 700;
-  color: #0f1f14;
+  color: #021559;
   line-height: 1;
 }
 
 .stat-card .sub {
   font-size: 12px;
-  color: #52c41a;
+  color: #0a237a;
   margin-top: 6px;
+}
+
+.ant-layout-sider {
+  background: #021559 !important;
+}
+
+.ant-menu-dark {
+  background: #021559 !important;
+}
+
+.ant-menu-dark .ant-menu-item-selected {
+  background: rgba(255, 255, 255, 0.12) !important;
+  border-radius: 8px;
+  font-weight: 600;
+}
+
+.ant-menu-dark .ant-menu-item:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+
+.ant-menu-dark .ant-menu-submenu-selected {
+  color: #ffffff !important;
+}
+
+.ant-layout-header {
+  background: #ffffff !important;
+}
+
+.ant-layout-content {
+  background: #f8fafc;
 }
 
 .ant-layout-sider .logo {

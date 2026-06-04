@@ -22,7 +22,13 @@ import TicketsPage from './pages/tickets/TicketsPage';
 import TicketDetailPage from './pages/tickets/TicketDetailPage';
 import ReportsPage from './pages/reports/ReportsPage';
 import SettingsPage from './pages/settings/SettingsPage';
-import StaffPage from './pages/staff/StaffPage';
+import StaffLayout from './pages/staff/StaffLayout';
+import EmployeesPage from './pages/staff/EmployeesPage';
+import EmployeeDetailPage from './pages/staff/EmployeeDetailPage';
+import DepartmentsPage from './pages/staff/DepartmentsPage';
+import PositionsPage from './pages/staff/PositionsPage';
+import OrganizationPage from './pages/staff/OrganizationPage';
+import StaffUsersPage from './pages/staff/StaffUsersPage';
 import NotFoundPage from './pages/NotFoundPage';
 
 const queryClient = new QueryClient({
@@ -67,7 +73,15 @@ export default function App() {
               <Route path="tickets/:id" element={<TicketDetailPage />} />
               <Route path="reports" element={<ReportsPage />} />
               <Route path="settings" element={<SettingsPage />} />
-              <Route path="staff" element={<StaffPage />} />
+              <Route path="staff" element={<StaffLayout />}>
+                <Route index element={<Navigate to="employees" replace />} />
+                <Route path="employees" element={<EmployeesPage />} />
+                <Route path="employees/:id" element={<EmployeeDetailPage />} />
+                <Route path="departments" element={<DepartmentsPage />} />
+                <Route path="positions" element={<PositionsPage />} />
+                <Route path="organization" element={<OrganizationPage />} />
+                <Route path="users" element={<StaffUsersPage />} />
+              </Route>
             </Route>
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
