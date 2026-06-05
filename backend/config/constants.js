@@ -1,4 +1,3 @@
-// config/constants.js
 require('dotenv').config();
 
 module.exports = {

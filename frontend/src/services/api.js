@@ -92,14 +92,18 @@ export const usersAPI = {
 
 export const partnersAPI = {
   list: (p) => api.get('/partners', { params: p }),
+  get: (id) => api.get(`/partners/${id}`),
   create: (d) => api.post('/partners', d),
   update: (id, d) => api.put(`/partners/${id}`, d),
+  delete: (id) => api.delete(`/partners/${id}`),
 };
 
 export const shopsAPI = {
   list: (p) => api.get('/shops', { params: p }),
+  get: (id) => api.get(`/shops/${id}`),
   create: (d) => api.post('/shops', d),
   update: (id, d) => api.put(`/shops/${id}`, d),
+  delete: (id) => api.delete(`/shops/${id}`),
 };
 
 export const machinesAPI = {
@@ -161,9 +165,54 @@ export const dashboardAPI = {
 };
 
 export const inventoryAPI = {
+  // Products & Categories
   tokens: () => api.get('/inventory/tokens'),
   addTokenMovement: (d) => api.post('/inventory/tokens', d),
   products: (p) => api.get('/inventory/products', { params: p }),
+  createProduct: (d) => api.post('/inventory/products', d),
+  categories: (shopId) => api.get('/inventory/categories', { params: { shop_id: shopId } }),
+  
+  // Sales
+  listSales: (p) => api.get('/inventory/sales', { params: p }),
+  getSale: (id) => api.get(`/inventory/sales/${id}`),
+  recordSale: (d) => api.post('/inventory/sales', d),
+  recordPayment: (saleId, d) => api.post(`/inventory/sales/${saleId}/payment`, d),
+  getSaleReport: (p) => api.get('/inventory/sales/report/summary', { params: p }),
+  
+  // Stock Audits
+  listAudits: (p) => api.get('/inventory/audits', { params: p }),
+  getAudit: (id) => api.get(`/inventory/audits/${id}`),
+  startAudit: (d) => api.post('/inventory/audits', d),
+  updateAuditItem: (d) => api.put('/inventory/audits/item', d),
+  completeAudit: (id) => api.put(`/inventory/audits/${id}/complete`),
+  verifyAudit: (id) => api.put(`/inventory/audits/${id}/verify`),
+  
+  // Stock Transfers
+  listTransfers: (p) => api.get('/inventory/transfers', { params: p }),
+  getTransfer: (id) => api.get(`/inventory/transfers/${id}`),
+  initializeTransfer: (d) => api.post('/inventory/transfers', d),
+  approveTransfer: (id) => api.put(`/inventory/transfers/${id}/approve`),
+  receiveTransfer: (id) => api.put(`/inventory/transfers/${id}/receive`),
+  cancelTransfer: (id) => api.put(`/inventory/transfers/${id}/cancel`),
+  
+  // Sales Returns
+  listReturns: (p) => api.get('/inventory/returns', { params: p }),
+  getReturn: (id) => api.get(`/inventory/returns/${id}`),
+  processReturn: (d) => api.post('/inventory/returns', d),
+  approveReturn: (id) => api.put(`/inventory/returns/${id}/approve`),
+  
+  // Low Stock Alerts
+  listAlerts: (p) => api.get('/inventory/alerts', { params: p }),
+  getAlertSummary: (p) => api.get('/inventory/alerts/summary', { params: p }),
+  getAlert: (id) => api.get(`/inventory/alerts/${id}`),
+  checkLowStock: (p) => api.post('/inventory/alerts/check', p),
+  acknowledgeAlert: (id) => api.put(`/inventory/alerts/${id}/acknowledge`),
+  
+  // Accounting
+  getShopProfitLoss: (p) => api.get('/inventory/accounting/profit-loss', { params: p }),
+  getProductMargins: (p) => api.get('/inventory/accounting/margins', { params: p }),
+  getInventoryValuation: (p) => api.get('/inventory/accounting/valuation', { params: p }),
+  getDailyReport: (p) => api.get('/inventory/accounting/daily-report', { params: p }),
 };
 
 export const staffAPI = {

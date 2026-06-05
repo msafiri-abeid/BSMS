@@ -30,6 +30,10 @@ import {
   AimOutlined,
   SafetyOutlined,
   ToolOutlined,
+  CheckSquareOutlined,
+  ShoppingOutlined,
+  UndoOutlined,
+  AlertOutlined,
 } from "@ant-design/icons";
 import { useAuthStore } from "../store/authStore";
 import { authAPI } from "../services/api";
@@ -89,8 +93,13 @@ const ALL_NAV = [
     icon: <InboxOutlined />,
     module: "inventory",
     children: [
-      { key: "/inventory/tokens", label: "Token Stock", module: "inventory" },
-      { key: "/inventory/shop", label: "Shop Products", module: "inventory" },
+      { key: "/inventory/tokens", label: "Token Stock", icon: <DollarOutlined />, module: "inventory" },
+      { key: "/inventory/products", label: "Products", icon: <ShoppingOutlined />, module: "inventory" },
+      { key: "/inventory/stock", label: "Stock Management", icon: <CheckSquareOutlined />, module: "inventory" },
+      { key: "/inventory/sales", label: "Sales", icon: <ShoppingOutlined />, module: "inventory" },
+      { key: "/inventory/returns", label: "Returns", icon: <UndoOutlined />, module: "inventory" },
+      { key: "/inventory/alerts", label: "Alerts", icon: <AlertOutlined />, module: "inventory" },
+      { key: "/inventory/accounting", label: "Accounting", icon: <BarChartOutlined />, module: "inventory" },
     ],
   },
   {

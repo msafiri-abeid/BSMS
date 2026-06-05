@@ -1,6 +1,6 @@
 // src/pages/inventory/ShopInventoryPage.jsx
 import { useState } from 'react';
-import { Table, Button, Modal, Form, Input, InputNumber, Select, Tag, Alert, App, Typography, Space } from 'antd';
+import { Table, Button, Modal, Form, Input, InputNumber, Select, Tag, Alert, App, Typography, Space, DatePicker } from 'antd';
 import { PlusOutlined, WarningOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { inventoryAPI, shopsAPI } from '../../services/api';
@@ -17,18 +17,29 @@ export default function ShopInventoryPage() {
   const qc = useQueryClient();
 
   const { data: shopsData } = useQuery({ queryKey: ['shops-list'], queryFn: () => shopsAPI.list().then(r => r.data.data) });
-  const shops = shopsData?.rows || [];
+  // Filter shops: company-owned (Bentabet or Dante) with bar/grocery types
+  const shops = (shopsData?.rows || []).filter(s => 
+    ['Bentabet', 'Dante'].includes(s.partner?.label) && 
+    ['bar', 'grocery', 'mixed'].includes(s.type)
+  );
 
   const { data: products, isLoading } = useQuery({
     queryKey: ['products', selectedShop],
     queryFn: () => inventoryAPI.products(selectedShop ? { shop_id: selectedShop } : {}).then(r => r.data.data),
   });
 
+  const { data: categoriesData } = useQuery({
+    queryKey: ['categories', selectedShop],
+    queryFn: () => selectedShop ? inventoryAPI.categories(selectedShop).then(r => r.data.data) : Promise.resolve([]),
+    enabled: !!selectedShop && open,
+  });
+
   const createMutation = useMutation({
-    mutationFn: (d) => inventoryAPI.addTokenMovement(d),
+    mutationFn: (d) => inventoryAPI.createProduct(d),
     onSuccess: () => {
       message.success('Product added');
       qc.invalidateQueries({ queryKey: ['products'] });
+      qc.invalidateQueries({ queryKey: ['categories'] });
       setOpen(false);
       form.resetFields();
     },
@@ -77,6 +88,8 @@ export default function ShopInventoryPage() {
             allowClear
             style={{ width: 200 }}
             onChange={setSelectedShop}
+            showSearch
+            optionFilterProp="children"
           >
             {shops.map(s => <Option key={s.id} value={s.id}>{s.name}</Option>)}
           </Select>
@@ -120,19 +133,33 @@ export default function ShopInventoryPage() {
         confirmLoading={createMutation.isPending}
       >
         <Form form={form} layout="vertical" onFinish={(v) => createMutation.mutate(v)} style={{ marginTop: 16 }}>
-          <Form.Item name="shop_id" label="Shop" rules={[{ required: true }]}>
-            <Select showSearch optionFilterProp="children">
+          <Form.Item name="shop_id" label="Shop" rules={[{ required: true, message: 'Select a shop' }]}>
+            <Select placeholder="Select a shop" showSearch optionFilterProp="children">
               {shops.map(s => <Option key={s.id} value={s.id}>{s.name}</Option>)}
             </Select>
           </Form.Item>
           <Form.Item name="name" label="Product Name" rules={[{ required: true }]}><Input /></Form.Item>
-          <Form.Item name="category" label="Category"><Input /></Form.Item>
+          <Form.Item name="category" label="Category">
+            <Select
+              placeholder="Select or create category"
+              mode="tags"
+              maxTagCount={1}
+              style={{ width: '100%' }}
+            >
+              {(categoriesData || []).map(c => (
+                <Option key={c.value} value={c.value}>{c.value}</Option>
+              ))}
+            </Select>
+          </Form.Item>
           <Form.Item name="unit" label="Unit" initialValue="pcs"><Input /></Form.Item>
           <Form.Item name="purchase_price" label="Purchase Price (TZS)" rules={[{ required: true }]}>
             <InputNumber min={0} style={{ width: '100%' }} />
           </Form.Item>
           <Form.Item name="selling_price" label="Selling Price (TZS)" rules={[{ required: true }]}>
             <InputNumber min={0} style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item name="expiry_date" label="Expiry Date">
+            <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
           </Form.Item>
         </Form>
       </Modal>

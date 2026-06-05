@@ -7,17 +7,25 @@ import MainLayout from './components/MainLayout';
 import LoginPage from './pages/auth/LoginPage';
 import Dashboard from './pages/dashboard/Dashboard';
 import PartnersPage from './pages/partners/PartnersPage';
+import PartnerDetailPage from './pages/partners/PartnerDetailPage';
 import ShopsPage from './pages/partners/ShopsPage';
+import ShopDetailPage from './pages/partners/ShopDetailPage';
 import MachinesPage from './pages/machines/MachinesPage';
 import MachineDetailPage from './pages/machines/MachineDetailPage';
 import CollectionsPage from './pages/collections/CollectionsPage';
 import MyAssignmentsPage from './pages/collections/MyAssignmentsPage';
 import WeeklyTargetsPage from './pages/collections/WeeklyTargetsPage';
+import CreateAssignmentPage from './pages/collections/CreateAssignmentPage';
 import ExpensesPage from './pages/finance/ExpensesPage';
 import InvoicesPage from './pages/finance/InvoicesPage';
 import PayrollPage from './pages/finance/PayrollPage';
 import TokenInventoryPage from './pages/inventory/TokenInventoryPage';
 import ShopInventoryPage from './pages/inventory/ShopInventoryPage';
+import StockManagementPage from './pages/inventory/StockManagementPage';
+import SalesPage from './pages/inventory/SalesPage';
+import SalesReturnsPage from './pages/inventory/SalesReturnsPage';
+import AccountingPage from './pages/inventory/AccountingPage';
+import AlertsPage from './pages/inventory/AlertsPage';
 import TicketsPage from './pages/tickets/TicketsPage';
 import TicketDetailPage from './pages/tickets/TicketDetailPage';
 import ReportsPage from './pages/reports/ReportsPage';
@@ -58,17 +66,27 @@ export default function App() {
             <Route path="/" element={<PrivateRoute><MainLayout /></PrivateRoute>}>
               <Route index element={<Dashboard />} />
               <Route path="partners" element={<PartnersPage />} />
+              <Route path="partners/:id" element={<PartnerDetailPage />} />
               <Route path="shops" element={<ShopsPage />} />
+              <Route path="shops/:id" element={<ShopDetailPage />} />
               <Route path="machines" element={<MachinesPage />} />
               <Route path="machines/:id" element={<MachineDetailPage />} />
               <Route path="collections" element={<CollectionsPage />} />
               <Route path="my-assignments" element={<MyAssignmentsPage />} />
               <Route path="weekly-targets" element={<WeeklyTargetsPage />} />
+              <Route path="create-assignment" element={<CreateAssignmentPage />} />
               <Route path="finance/expenses" element={<ExpensesPage />} />
               <Route path="finance/invoices" element={<InvoicesPage />} />
               <Route path="finance/payroll" element={<PayrollPage />} />
-              <Route path="inventory/tokens" element={<TokenInventoryPage />} />
-              <Route path="inventory/shop" element={<ShopInventoryPage />} />
+              <Route path="inventory">
+                <Route path="products" element={<ShopInventoryPage />} />
+                <Route path="tokens" element={<TokenInventoryPage />} />
+                <Route path="stock" element={<StockManagementPage />} />
+                <Route path="sales" element={<SalesPage />} />
+                <Route path="returns" element={<SalesReturnsPage />} />
+                <Route path="alerts" element={<AlertsPage />} />
+                <Route path="accounting" element={<AccountingPage />} />
+              </Route>
               <Route path="tickets" element={<TicketsPage />} />
               <Route path="tickets/:id" element={<TicketDetailPage />} />
               <Route path="reports" element={<ReportsPage />} />

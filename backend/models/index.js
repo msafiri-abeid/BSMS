@@ -296,6 +296,100 @@ const VipOffer = sequelize.define('VipOffer', {
   is_active: { type: DataTypes.BOOLEAN, defaultValue: true },
 }, { tableName: 'vip_offers' });
 
+const Sale = sequelize.define('Sale', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  shop_id: { type: DataTypes.INTEGER, allowNull: false },
+  sale_date: { type: DataTypes.DATE, allowNull: false },
+  total_amount_tzs: { type: DataTypes.INTEGER, allowNull: false },
+  discount_amount_tzs: { type: DataTypes.INTEGER, defaultValue: 0 },
+  net_amount_tzs: { type: DataTypes.INTEGER, allowNull: false },
+  payment_method: { type: DataTypes.ENUM('cash', 'card', 'mobile', 'credit'), defaultValue: 'cash' },
+  customer_name: { type: DataTypes.STRING(150) },
+  notes: { type: DataTypes.TEXT },
+  recorded_by: { type: DataTypes.INTEGER, allowNull: false },
+  status: { type: DataTypes.ENUM('completed', 'returned', 'partial_returned'), defaultValue: 'completed' },
+}, { tableName: 'sales' });
+
+const SaleItem = sequelize.define('SaleItem', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  sale_id: { type: DataTypes.INTEGER, allowNull: false },
+  product_id: { type: DataTypes.INTEGER, allowNull: false },
+  qty: { type: DataTypes.INTEGER, allowNull: false },
+  unit_price_tzs: { type: DataTypes.INTEGER, allowNull: false },
+  discount_pct: { type: DataTypes.INTEGER, defaultValue: 0 },
+  line_total_tzs: { type: DataTypes.INTEGER, allowNull: false },
+}, { tableName: 'sale_items', updatedAt: false });
+
+const SalesReturn = sequelize.define('SalesReturn', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  sale_id: { type: DataTypes.INTEGER, allowNull: false },
+  return_date: { type: DataTypes.DATE, allowNull: false },
+  product_id: { type: DataTypes.INTEGER, allowNull: false },
+  qty_returned: { type: DataTypes.INTEGER, allowNull: false },
+  reason: { type: DataTypes.TEXT, allowNull: false },
+  refund_amount_tzs: { type: DataTypes.INTEGER, allowNull: false },
+  refund_method: { type: DataTypes.ENUM('cash', 'credit'), defaultValue: 'cash' },
+  processed_by: { type: DataTypes.INTEGER, allowNull: false },
+}, { tableName: 'sales_returns', updatedAt: false });
+
+const SalePayment = sequelize.define('SalePayment', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  sale_id: { type: DataTypes.INTEGER, allowNull: false },
+  amount_tzs: { type: DataTypes.INTEGER, allowNull: false },
+  payment_method: { type: DataTypes.ENUM('cash', 'card', 'mobile', 'credit'), allowNull: false },
+  reference: { type: DataTypes.STRING(100) },
+  notes: { type: DataTypes.TEXT },
+  recorded_by: { type: DataTypes.INTEGER, allowNull: false },
+}, { tableName: 'sale_payments', updatedAt: false });
+
+const StockAudit = sequelize.define('StockAudit', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  shop_id: { type: DataTypes.INTEGER, allowNull: false },
+  audit_date: { type: DataTypes.DATE, allowNull: false },
+  status: { type: DataTypes.ENUM('draft', 'completed', 'verified'), defaultValue: 'draft' },
+  auditor_id: { type: DataTypes.INTEGER, allowNull: false },
+  verified_by: { type: DataTypes.INTEGER },
+  total_variance_items: { type: DataTypes.INTEGER, defaultValue: 0 },
+  notes: { type: DataTypes.TEXT },
+}, { tableName: 'stock_audits' });
+
+const AuditItem = sequelize.define('AuditItem', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  audit_id: { type: DataTypes.INTEGER, allowNull: false },
+  product_id: { type: DataTypes.INTEGER, allowNull: false },
+  system_qty: { type: DataTypes.INTEGER, allowNull: false },
+  counted_qty: { type: DataTypes.INTEGER, allowNull: false },
+  variance: { type: DataTypes.INTEGER, defaultValue: 0 },
+  notes: { type: DataTypes.TEXT },
+}, { tableName: 'audit_items', updatedAt: false });
+
+const StockTransfer = sequelize.define('StockTransfer', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  from_shop_id: { type: DataTypes.INTEGER, allowNull: false },
+  to_shop_id: { type: DataTypes.INTEGER, allowNull: false },
+  product_id: { type: DataTypes.INTEGER, allowNull: false },
+  qty: { type: DataTypes.INTEGER, allowNull: false },
+  transfer_date: { type: DataTypes.DATE, allowNull: false },
+  status: { type: DataTypes.ENUM('pending', 'in_transit', 'received', 'cancelled'), defaultValue: 'pending' },
+  initiated_by: { type: DataTypes.INTEGER, allowNull: false },
+  received_by: { type: DataTypes.INTEGER },
+  received_at: { type: DataTypes.DATE },
+  notes: { type: DataTypes.TEXT },
+}, { tableName: 'stock_transfers' });
+
+const LowStockAlert = sequelize.define('LowStockAlert', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  product_id: { type: DataTypes.INTEGER, allowNull: false },
+  shop_id: { type: DataTypes.INTEGER, allowNull: false },
+  current_qty: { type: DataTypes.INTEGER, allowNull: false },
+  reorder_level: { type: DataTypes.INTEGER, allowNull: false },
+  threshold_pct: { type: DataTypes.INTEGER, defaultValue: 50 },
+  alert_date: { type: DataTypes.DATE, allowNull: false },
+  acknowledged: { type: DataTypes.BOOLEAN, defaultValue: false },
+  acknowledged_by: { type: DataTypes.INTEGER },
+  acknowledged_at: { type: DataTypes.DATE },
+}, { tableName: 'low_stock_alerts', updatedAt: false });
+
 // ─── TICKETS ──────────────────────────────────────────────────
 const TicketGroup = sequelize.define('TicketGroup', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
@@ -432,6 +526,40 @@ Product.belongsTo(Shop, { foreignKey: 'shop_id', as: 'shop' });
 Product.hasMany(StockMovement, { foreignKey: 'product_id', as: 'movements' });
 Product.hasOne(StockLevel, { foreignKey: 'product_id', as: 'stockLevel' });
 
+Sale.belongsTo(Shop, { foreignKey: 'shop_id', as: 'shop' });
+Sale.belongsTo(User, { foreignKey: 'recorded_by', as: 'recorder' });
+Sale.hasMany(SaleItem, { foreignKey: 'sale_id', as: 'items' });
+Sale.hasMany(SalePayment, { foreignKey: 'sale_id', as: 'payments' });
+Sale.hasMany(SalesReturn, { foreignKey: 'sale_id', as: 'returns' });
+
+SaleItem.belongsTo(Sale, { foreignKey: 'sale_id' });
+SaleItem.belongsTo(Product, { foreignKey: 'product_id', as: 'product' });
+
+SalesReturn.belongsTo(Sale, { foreignKey: 'sale_id', as: 'sale' });
+SalesReturn.belongsTo(Product, { foreignKey: 'product_id', as: 'product' });
+SalesReturn.belongsTo(User, { foreignKey: 'processed_by', as: 'processor' });
+
+SalePayment.belongsTo(Sale, { foreignKey: 'sale_id', as: 'sale' });
+SalePayment.belongsTo(User, { foreignKey: 'recorded_by', as: 'recorder' });
+
+StockAudit.belongsTo(Shop, { foreignKey: 'shop_id', as: 'shop' });
+StockAudit.belongsTo(User, { foreignKey: 'auditor_id', as: 'auditor' });
+StockAudit.belongsTo(User, { foreignKey: 'verified_by', as: 'verifier' });
+StockAudit.hasMany(AuditItem, { foreignKey: 'audit_id', as: 'items' });
+
+AuditItem.belongsTo(StockAudit, { foreignKey: 'audit_id' });
+AuditItem.belongsTo(Product, { foreignKey: 'product_id', as: 'product' });
+
+StockTransfer.belongsTo(Shop, { foreignKey: 'from_shop_id', as: 'fromShop' });
+StockTransfer.belongsTo(Shop, { foreignKey: 'to_shop_id', as: 'toShop' });
+StockTransfer.belongsTo(Product, { foreignKey: 'product_id', as: 'product' });
+StockTransfer.belongsTo(User, { foreignKey: 'initiated_by', as: 'initiator' });
+StockTransfer.belongsTo(User, { foreignKey: 'received_by', as: 'receiver' });
+
+LowStockAlert.belongsTo(Product, { foreignKey: 'product_id', as: 'product' });
+LowStockAlert.belongsTo(Shop, { foreignKey: 'shop_id', as: 'shop' });
+LowStockAlert.belongsTo(User, { foreignKey: 'acknowledged_by', as: 'acknowledger' });
+
 Ticket.belongsTo(Machine, { foreignKey: 'machine_id', as: 'machine' });
 Ticket.belongsTo(Shop, { foreignKey: 'shop_id', as: 'shop' });
 Ticket.belongsTo(TicketGroup, { foreignKey: 'assigned_group_id', as: 'group' });
@@ -454,8 +582,9 @@ module.exports = {
   Partner, Shop,
   Machine, MachineDeployment, MachineExchange, MachineRefill,
   CollectorAssignment, Collection, NovomaticReading, WeeklyTarget,
-  ExpenseCategory, Expense, Invoice, Payment, CreditNote, Payroll,
+  ExpenseCategory, Expense, Invoice, Payment, CreditNote, Payroll, SalePayment,
   TokenInventory, Product, StockMovement, StockLevel, VipOffer,
+  Sale, SaleItem, SalesReturn, StockAudit, AuditItem, StockTransfer, LowStockAlert,
   TicketGroup, Ticket, TicketActivity,
   Department, Position, Employee, Attendance,
   SmsLog,

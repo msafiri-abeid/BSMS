@@ -1,7 +1,7 @@
 // src/pages/machines/MachinesPage.jsx
 import { useState } from 'react';
-import { Table, Button, Modal, Form, Input, Select, Tag, Space, InputNumber, App, Typography, Tooltip } from 'antd';
-import { PlusOutlined, DeploymentUnitOutlined, SwapOutlined, GiftOutlined, EyeOutlined } from '@ant-design/icons';
+import { Table, Button, Modal, Form, Input, Select, Tag, Space, InputNumber, App, Typography, Tooltip, Dropdown, } from 'antd';
+import { UserOutlined, PlusOutlined, DeploymentUnitOutlined, SwapOutlined, GiftOutlined, EyeOutlined, MoreOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { machinesAPI, shopsAPI } from '../../services/api';
 import { useNavigate } from 'react-router-dom';
@@ -58,30 +58,91 @@ export default function MachinesPage() {
     { title: 'Slot Code', dataIndex: 'slot_code', sorter: (a, b) => a.slot_code.localeCompare(b.slot_code) },
     { title: 'Manufacturer', dataIndex: 'manufacturer', render: v => <Tag color={v === 'Meteora' ? 'blue' : v === 'Novomatic' ? 'purple' : 'orange'}>{v}</Tag> },
     { title: 'Serial No.', dataIndex: 'serial_number' },
-    { title: 'Sticker', dataIndex: 'sticker_no' },
-    { title: 'Shop', dataIndex: ['currentShop', 'name'], render: v => v || <Tag>Undeployed</Tag> },
-    { title: 'Credit Value', dataIndex: 'credit_value_tzs', render: v => `${v} TZS` },
+    { title: 'Sticker No.', dataIndex: 'sticker_no' },
+    { title: 'Location', dataIndex: ['currentShop', 'name'], render: v => v || <Tag>Office</Tag> },
+    { title: 'Credit', dataIndex: 'credit_value_tzs', render: v => `${v} TZS` },
     { title: 'Status', dataIndex: 'status', render: v => <Tag color={STATUS_COLORS[v]}>{v}</Tag> },
     {
       title: 'Actions',
-      render: (_, r) => (
-        <Space size={4}>
-          <Tooltip title="View Detail"><Button size="small" icon={<EyeOutlined />} onClick={() => navigate(`/machines/${r.id}`)} /></Tooltip>
-          <Tooltip title="Deploy"><Button size="small" icon={<DeploymentUnitOutlined />} onClick={() => { setDeployOpen(r); deployForm.resetFields(); }} /></Tooltip>
-          {r.status === 'active' && <Tooltip title="Exchange"><Button size="small" icon={<SwapOutlined />} onClick={() => { setExchangeOpen(r); exchangeForm.resetFields(); }} /></Tooltip>}
-          {r.manufacturer !== 'Novomatic' && r.status === 'active' && <Tooltip title="Refill"><Button size="small" icon={<GiftOutlined />} onClick={() => { setRefillOpen(r); refillForm.resetFields(); }} /></Tooltip>}
-        </Space>
-      ),
+      width: 80,
+      render: (_, r) => {
+        const items = [
+          {
+            key: 'view',
+            icon: <EyeOutlined />,
+            label: 'View Details',
+            onClick: () => navigate(`/machines/${r.id}`),
+          },
+          {
+            key: 'deploy',
+            icon: <DeploymentUnitOutlined />,
+            label: 'Deploy',
+            onClick: () => {
+              setDeployOpen(r);
+              deployForm.resetFields();
+            },
+          },
+        ];
+
+        if (r.status === 'active') {
+          items.push({
+            key: 'exchange',
+            icon: <SwapOutlined />,
+            label: 'Exchange',
+            onClick: () => {
+              setExchangeOpen(r);
+              exchangeForm.resetFields();
+            },
+          });
+        }
+
+        if (r.manufacturer !== 'Novomatic' && r.status === 'active') {
+          items.push({
+            key: 'refill',
+            icon: <GiftOutlined />,
+            label: 'Refill Tokens',
+            onClick: () => {
+              setRefillOpen(r);
+              refillForm.resetFields();
+            },
+          });
+        }
+
+        return (
+          <Dropdown
+            menu={{
+              items,
+              onClick: ({ key }) => {
+                const action = items.find((item) => item.key === key);
+                action?.onClick?.();
+              },
+            }}
+            trigger={['click']}
+            placement="bottomRight"
+          >
+            <Button
+              type="text"
+              icon={<MoreOutlined />}
+              className="flex items-center justify-center"
+            />
+          </Dropdown>
+        );
+      },
     },
   ];
 
   return (
     <div>
       <div className="page-header">
-        <Title level={4} style={{ margin: 0 }}>Machines ({machines?.count || 0})</Title>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => setRegisterOpen(true)} style={{ background: '#1a6b3a' }}>
-          Register Machine
-        </Button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <Title level={4} style={{ margin: 0 }}>Machines ({machines?.count || 0})</Title>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => setRegisterOpen(true)} style={{ background: '#1a6b3a' }}>
+            Register Machine
+          </Button>
+          <Button type="primary" icon={<UserOutlined />} onClick={() => navigate('/create-assignment')}>
+            Create Assignment
+          </Button>
+        </div>
       </div>
 
       <Table dataSource={machines?.rows || []} columns={cols} rowKey="id" loading={isLoading} size="middle"

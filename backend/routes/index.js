@@ -12,6 +12,12 @@ const ticketC = require('../controllers/ticket.controller');
 const partnerC = require('../controllers/partner.controller');
 const settingsC = require('../controllers/settings.controller');
 const dashC = require('../controllers/dashboard.controller');
+const salesC = require('../controllers/inventory.sales.controller');
+const auditsC = require('../controllers/inventory.audits.controller');
+const transfersC = require('../controllers/inventory.transfers.controller');
+const returnsC = require('../controllers/inventory.returns.controller');
+const accountingC = require('../controllers/inventory.accounting.controller');
+const alertsC = require('../controllers/inventory.alerts.controller');
 
 // ── AUTH ──────────────────────────────────────────────────────
 router.post('/auth/register', authC.register);
@@ -31,9 +37,13 @@ router.put('/users/:id', authenticate, checkPermission('users', 'write'), usersC
 router.get('/partners', authenticate, checkPermission('partners', 'read'), partnerC.listPartners);
 router.post('/partners', authenticate, checkPermission('partners', 'write'), uploadContract.single('contract'), partnerC.createPartner);
 router.put('/partners/:id', authenticate, checkPermission('partners', 'write'), uploadContract.single('contract'), partnerC.updatePartner);
+router.delete('/partners/:id', authenticate, checkPermission('partners', 'write'), partnerC.deletePartner);
+router.get('/partners/:id', authenticate, checkPermission('partners', 'read'), partnerC.getPartner);
 router.get('/shops', authenticate, checkPermission('shops', 'read'), partnerC.listShops);
 router.post('/shops', authenticate, checkPermission('shops', 'write'), uploadContract.single('contract'), partnerC.createShop);
 router.put('/shops/:id', authenticate, checkPermission('shops', 'write'), uploadContract.single('contract'), partnerC.updateShop);
+router.delete('/shops/:id', authenticate, checkPermission('shops', 'write'), partnerC.deleteShop);
+router.get('/shops/:id', authenticate, checkPermission('shops', 'read'), partnerC.getShop);
 
 // ── MACHINES ──────────────────────────────────────────────────
 router.get('/machines', authenticate, checkPermission('machines', 'read'), machineC.list);
@@ -84,6 +94,8 @@ router.post('/settings/sms-test', authenticate, checkPermission('settings', 'wri
 
 // ── INVENTORY ─────────────────────────────────────────────────
 const { TokenInventory, Product, StockMovement, StockLevel } = require('../models');
+
+// Basic inventory (tokens, products)
 router.get('/inventory/tokens', authenticate, checkPermission('inventory', 'read'), async (req, res, next) => {
   try {
     const movements = await TokenInventory.findAll({ order: [['created_at', 'DESC']], limit: 100 });
@@ -103,6 +115,74 @@ router.get('/inventory/products', authenticate, checkPermission('inventory', 're
     res.json({ success: true, data: products });
   } catch (err) { next(err); }
 });
+router.post('/inventory/products', authenticate, checkPermission('inventory', 'write'), async (req, res, next) => {
+  try {
+    const { shop_id, name, category, unit, purchase_price, selling_price, expiry_date } = req.body;
+    if (!shop_id || !name || !purchase_price || !selling_price) {
+      return res.status(400).json({ success: false, message: 'Missing required fields' });
+    }
+    const product = await Product.create({ shop_id, name, category, unit, purchase_price, selling_price });
+    const stockLevel = await StockLevel.create({ product_id: product.id, expiry_date });
+    res.status(201).json({ success: true, data: { ...product.toJSON(), stockLevel } });
+  } catch (err) { next(err); }
+});
+router.get('/inventory/categories', authenticate, checkPermission('inventory', 'read'), async (req, res, next) => {
+  try {
+    const shop_id = req.query.shop_id;
+    if (!shop_id) {
+      return res.status(400).json({ success: false, message: 'shop_id required' });
+    }
+    const categories = await Product.findAll({
+      attributes: [['category', 'value']],
+      where: { shop_id, category: { [require('sequelize').Op.not]: null } },
+      raw: true,
+      group: ['category'],
+    });
+    res.json({ success: true, data: categories.filter(c => c.value) });
+  } catch (err) { next(err); }
+});
+
+// Sales
+router.get('/inventory/sales', authenticate, checkPermission('inventory', 'read'), salesC.listSales);
+router.get('/inventory/sales/:id', authenticate, checkPermission('inventory', 'read'), salesC.getSale);
+router.post('/inventory/sales', authenticate, checkPermission('inventory', 'write'), salesC.recordSale);
+router.post('/inventory/sales/:id/payment', authenticate, checkPermission('inventory', 'write'), salesC.recordPayment);
+router.get('/inventory/sales/report/summary', authenticate, checkPermission('inventory', 'read'), salesC.getSaleReport);
+
+// Stock Audits
+router.get('/inventory/audits', authenticate, checkPermission('inventory', 'audit'), auditsC.listAudits);
+router.get('/inventory/audits/:id', authenticate, checkPermission('inventory', 'audit'), auditsC.getAudit);
+router.post('/inventory/audits', authenticate, checkPermission('inventory', 'audit'), auditsC.startAudit);
+router.put('/inventory/audits/item', authenticate, checkPermission('inventory', 'audit'), auditsC.updateAuditItem);
+router.put('/inventory/audits/:id/complete', authenticate, checkPermission('inventory', 'audit'), auditsC.completeAudit);
+router.put('/inventory/audits/:id/verify', authenticate, checkPermission('inventory', 'audit'), auditsC.verifyAudit);
+
+// Stock Transfers
+router.get('/inventory/transfers', authenticate, checkPermission('inventory', 'write'), transfersC.listTransfers);
+router.get('/inventory/transfers/:id', authenticate, checkPermission('inventory', 'write'), transfersC.getTransfer);
+router.post('/inventory/transfers', authenticate, checkPermission('inventory', 'write'), transfersC.initializeTransfer);
+router.put('/inventory/transfers/:id/approve', authenticate, checkPermission('inventory', 'audit'), transfersC.approveTransfer);
+router.put('/inventory/transfers/:id/receive', authenticate, checkPermission('inventory', 'write'), transfersC.receiveTransfer);
+router.put('/inventory/transfers/:id/cancel', authenticate, checkPermission('inventory', 'write'), transfersC.cancelTransfer);
+
+// Sales Returns
+router.get('/inventory/returns', authenticate, checkPermission('inventory', 'read'), returnsC.listReturns);
+router.get('/inventory/returns/:id', authenticate, checkPermission('inventory', 'read'), returnsC.getReturn);
+router.post('/inventory/returns', authenticate, checkPermission('inventory', 'write'), returnsC.processReturn);
+router.put('/inventory/returns/:id/approve', authenticate, checkPermission('inventory', 'approve'), returnsC.approveReturn);
+
+// Low Stock Alerts
+router.get('/inventory/alerts', authenticate, checkPermission('inventory', 'read'), alertsC.listAlerts);
+router.get('/inventory/alerts/summary', authenticate, checkPermission('inventory', 'read'), alertsC.getAlertSummary);
+router.get('/inventory/alerts/:id', authenticate, checkPermission('inventory', 'read'), alertsC.getAlert);
+router.post('/inventory/alerts/check', authenticate, checkPermission('inventory', 'read'), alertsC.checkLowStock);
+router.put('/inventory/alerts/:id/acknowledge', authenticate, checkPermission('inventory', 'read'), alertsC.acknowledgeAlert);
+
+// Accounting & Reports
+router.get('/inventory/accounting/profit-loss', authenticate, checkPermission('inventory', 'accounting'), accountingC.getShopProfitLoss);
+router.get('/inventory/accounting/margins', authenticate, checkPermission('inventory', 'accounting'), accountingC.getProductMargins);
+router.get('/inventory/accounting/valuation', authenticate, checkPermission('inventory', 'accounting'), accountingC.getInventoryValuation);
+router.get('/inventory/accounting/daily-report', authenticate, checkPermission('inventory', 'accounting'), accountingC.getDailyReport);
 
 // ── DASHBOARDS ────────────────────────────────────────────────
 router.get('/dashboard/admin', authenticate, dashC.adminDashboard);

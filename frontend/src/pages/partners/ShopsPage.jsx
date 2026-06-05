@@ -1,7 +1,7 @@
-// src/pages/partners/ShopsPage.jsx
 import { useState } from 'react';
-import { Table, Button, Modal, Form, Input, Select, Tag, App, Typography } from 'antd';
-import { PlusOutlined, EditOutlined } from '@ant-design/icons';
+import { Table, Button, Modal, Form, Input, Select, Tag, App, Typography, Dropdown } from 'antd';
+import { PlusOutlined, EditOutlined, MoreOutlined, EyeOutlined, DeleteOutlined } from '@ant-design/icons';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { shopsAPI, partnersAPI } from '../../services/api';
 
@@ -12,6 +12,7 @@ const SHOP_TYPES = { slot_only: 'Slot Only', bar: 'Bar + Slot', grocery: 'Grocer
 const TYPE_COLORS = { slot_only: 'blue', bar: 'purple', grocery: 'green', mixed: 'orange' };
 
 export default function ShopsPage() {
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form] = Form.useForm();
@@ -31,6 +32,15 @@ export default function ShopsPage() {
     onError: (e) => message.error(e.response?.data?.message || 'Error'),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (id) => shopsAPI.delete(id),
+    onSuccess: () => {
+      message.success('Shop deleted');
+      qc.invalidateQueries({ queryKey: ['shops'] });
+    },
+    onError: (e) => message.error(e.response?.data?.message || 'Failed'),
+  });
+
   const cols = [
     { title: 'Name', dataIndex: 'name', sorter: (a, b) => a.name.localeCompare(b.name) },
     { title: 'Partner', dataIndex: ['partner', 'name'] },
@@ -38,17 +48,72 @@ export default function ShopsPage() {
     { title: 'Address', dataIndex: 'address', ellipsis: true },
     { title: 'Status', dataIndex: 'status', render: v => <Tag color={v === 'active' ? 'green' : 'red'}>{v}</Tag> },
     {
-      title: '', render: (_, r) => (
-        <Button size="small" icon={<EditOutlined />} onClick={() => { setEditing(r); form.setFieldsValue({ ...r, partner_id: r.partner_id }); setOpen(true); }} />
-      ),
+      title: 'Actions',
+      width: 80,
+      render: (_, r) => {
+        const items = [
+          {
+            key: 'view',
+            icon: <EyeOutlined />,
+            label: 'View Details',
+          },
+          {
+            key: 'edit',
+            icon: <EditOutlined />,
+            label: 'Edit Shop',
+          },
+          {
+            key: 'delete',
+            icon: <DeleteOutlined />,
+            label: 'Delete',
+            danger: true,
+          },
+        ];
+
+        return (
+          <Dropdown
+            trigger={['click']}
+            placement="bottomRight"
+            menu={{
+              items,
+              onClick: ({ key }) => {
+                if (key === 'view') {
+                  navigate(`/shops/${r.id}`);
+                } else if (key === 'edit') {
+                  setEditing(r);
+                  form.setFieldsValue({
+                    ...r,
+                    partner_id: r.partner_id,
+                  });
+                  setOpen(true);
+                } else if (key === 'delete') {
+                  Modal.confirm({
+                    title: 'Delete Shop',
+                    content: `Are you sure you want to delete "${r.name}"?`,
+                    okText: 'Delete',
+                    okType: 'danger',
+                    onOk: () => deleteMutation.mutate(r.id),
+                  });
+                }
+              },
+            }}
+          >
+            <Button
+              type="text"
+              icon={<MoreOutlined />}
+              className="flex items-center justify-center"
+            />
+          </Dropdown>
+        );
+      },
     },
   ];
 
   return (
     <div>
-      <div className="page-header">
-        <Title level={4} style={{ margin: 0 }}>Shops</Title>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditing(null); form.resetFields(); setOpen(true); }} style={{ background: '#1a6b3a' }}>
+      <div className="flex justify-between items-center mb-4">
+        <Title level={4} className="!m-0">Shops</Title>
+        <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditing(null); form.resetFields(); setOpen(true); }} className="bg-[#021559] hover:bg-[#162a75]">
           Add Shop
         </Button>
       </div>
@@ -56,7 +121,7 @@ export default function ShopsPage() {
 
       <Modal title={editing ? 'Edit Shop' : 'New Shop'} open={open} onCancel={() => { setOpen(false); form.resetFields(); }}
         onOk={() => form.submit()} confirmLoading={saveMutation.isPending}>
-        <Form form={form} layout="vertical" onFinish={(v) => saveMutation.mutate(v)} style={{ marginTop: 16 }}>
+        <Form form={form} layout="vertical" onFinish={(v) => saveMutation.mutate(v)} className="mt-4">
           <Form.Item name="partner_id" label="Partner" rules={[{ required: true }]}>
             <Select placeholder="Select partner" showSearch optionFilterProp="children">
               {(partnersData?.rows || []).map(p => <Option key={p.id} value={p.id}>{p.name}</Option>)}
