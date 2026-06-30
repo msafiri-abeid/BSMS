@@ -1,107 +1,112 @@
-// controllers/partner.controller.js
-const { Partner, Shop } = require('../models');
-const { Op } = require('sequelize');
+const partnerService = require('../services/partner.service');
 
-const listPartners = async (req, res, next) => {
+exports.listPartners = async (req, res, next) => {
   try {
-    const { status, type, search } = req.query;
-    const where = {};
-    if (status) where.status = status;
-    if (type) where.type = type;
-    if (search) where.name = { [Op.like]: `%${search}%` };
-    const data = await Partner.findAndCountAll({ where, include: [{ model: Shop, as: 'shops', attributes: ['id', 'name', 'status'] }], order: [['name', 'ASC']] });
+    const data = await partnerService.listPartners(req.query);
     res.json({ success: true, data });
   } catch (err) { next(err); }
 };
 
-const createPartner = async (req, res, next) => {
+exports.listOwnPartners = async (req, res, next) => {
   try {
-    const contract_url = req.file?.path;
-    const partner = await Partner.create({ ...req.body, contract_url });
+    const data = await partnerService.listPartners({ type: 'own' });
+    res.json({ success: true, data });
+  } catch (err) { next(err); }
+};
+
+exports.createPartner = async (req, res, next) => {
+  try {
+    const partner = await partnerService.createPartner(req.body, req.file);
     res.status(201).json({ success: true, data: partner });
   } catch (err) { next(err); }
 };
 
-const updatePartner = async (req, res, next) => {
+exports.updatePartner = async (req, res, next) => {
   try {
-    const p = await Partner.findByPk(req.params.id);
-    if (!p) return res.status(404).json({ success: false, message: 'Partner not found' });
-    if (req.file) req.body.contract_url = req.file.path;
-    await p.update(req.body);
-    res.json({ success: true, data: p });
-  } catch (err) { next(err); }
-};
-
-const getPartner = async (req, res, next) => {
-  try {
-    const partner = await Partner.findByPk(req.params.id, {
-      include: [{ model: Shop, as: 'shops', attributes: ['id', 'name', 'status', 'type'] }],
-    });
+    const partner = await partnerService.updatePartner(req.params.id, req.body, req.file);
     if (!partner) return res.status(404).json({ success: false, message: 'Partner not found' });
     res.json({ success: true, data: partner });
   } catch (err) { next(err); }
 };
 
-const deletePartner = async (req, res, next) => {
+exports.getPartner = async (req, res, next) => {
   try {
-    const p = await Partner.findByPk(req.params.id);
-    if (!p) return res.status(404).json({ success: false, message: 'Partner not found' });
-    await p.destroy();
-    res.json({ success: true });
+    const partner = await partnerService.getPartner(req.params.id);
+    if (!partner) return res.status(404).json({ success: false, message: 'Partner not found' });
+    res.json({ success: true, data: partner });
   } catch (err) { next(err); }
 };
 
-const listShops = async (req, res, next) => {
+exports.deletePartner = async (req, res, next) => {
   try {
-    const { partner_id, status, type } = req.query;
-    const where = {};
-    if (partner_id) where.partner_id = partner_id;
-    if (status) where.status = status;
-    if (type) where.type = type;
-    const data = await Shop.findAndCountAll({
-      where,
-      include: [{ model: Partner, as: 'partner', attributes: ['id', 'name', 'label', 'type'] }],
-      order: [['name', 'ASC']],
-    });
+    const ok = await partnerService.deletePartner(req.params.id);
+    if (!ok) return res.status(404).json({ success: false, message: 'Partner not found' });
+    res.json({ success: true, message: 'Partner deactivated' });
+  } catch (err) { next(err); }
+};
+
+exports.listShops = async (req, res, next) => {
+  try {
+    const data = await partnerService.listShops(req.query);
     res.json({ success: true, data });
   } catch (err) { next(err); }
 };
 
-const createShop = async (req, res, next) => {
+exports.createShop = async (req, res, next) => {
   try {
-    const contract_url = req.file?.path;
-    const shop = await Shop.create({ ...req.body, contract_url });
+    const shop = await partnerService.createShop(req.body, req.file);
     res.status(201).json({ success: true, data: shop });
   } catch (err) { next(err); }
 };
 
-const updateShop = async (req, res, next) => {
+exports.updateShop = async (req, res, next) => {
   try {
-    const s = await Shop.findByPk(req.params.id);
-    if (!s) return res.status(404).json({ success: false, message: 'Shop not found' });
-    if (req.file) req.body.contract_url = req.file.path;
-    await s.update(req.body);
-    res.json({ success: true, data: s });
-  } catch (err) { next(err); }
-};
-
-const getShop = async (req, res, next) => {
-  try {
-    const shop = await Shop.findByPk(req.params.id, {
-      include: [{ model: Partner, as: 'partner', attributes: ['name', 'type'] }],
-    });
+    const shop = await partnerService.updateShop(req.params.id, req.body, req.file);
     if (!shop) return res.status(404).json({ success: false, message: 'Shop not found' });
     res.json({ success: true, data: shop });
   } catch (err) { next(err); }
 };
 
-const deleteShop = async (req, res, next) => {
+exports.getShop = async (req, res, next) => {
   try {
-    const s = await Shop.findByPk(req.params.id);
-    if (!s) return res.status(404).json({ success: false, message: 'Shop not found' });
-    await s.destroy();
+    const shop = await partnerService.getShop(req.params.id);
+    if (!shop) return res.status(404).json({ success: false, message: 'Shop not found' });
+    res.json({ success: true, data: shop });
+  } catch (err) { next(err); }
+};
+
+exports.deleteShop = async (req, res, next) => {
+  try {
+    const ok = await partnerService.deleteShop(req.params.id);
+    if (!ok) return res.status(404).json({ success: false, message: 'Shop not found' });
     res.json({ success: true });
   } catch (err) { next(err); }
 };
 
-module.exports = { listPartners, createPartner, updatePartner, getPartner, deletePartner, listShops, createShop, updateShop, getShop, deleteShop };
+exports.listRegions = async (req, res, next) => {
+  try {
+    const regions = await partnerService.listRegions();
+    res.json({ success: true, data: regions });
+  } catch (err) { next(err); }
+};
+
+exports.listDistricts = async (req, res, next) => {
+  try {
+    const districts = await partnerService.listDistricts(req.query.region_id);
+    res.json({ success: true, data: districts });
+  } catch (err) { next(err); }
+};
+
+exports.listWards = async (req, res, next) => {
+  try {
+    const wards = await partnerService.listWards(req.query.district_id);
+    res.json({ success: true, data: wards });
+  } catch (err) { next(err); }
+};
+
+exports.listStreets = async (req, res, next) => {
+  try {
+    const streets = await partnerService.listStreets(req.query.ward_id);
+    res.json({ success: true, data: streets });
+  } catch (err) { next(err); }
+};

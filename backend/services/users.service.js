@@ -3,10 +3,15 @@ const { BCRYPT_ROUNDS } = require('../config/constants');
 const { User, Role } = require('../models');
 const authService = require('./auth.service');
 
-const listUsers = async () => {
+const listUsers = async (filters = {}) => {
+  const include = [{ model: Role, as: 'role', attributes: ['id', 'name'] }];
+  if (filters.role) {
+    include[0].where = { name: filters.role };
+    include[0].required = true;
+  }
   return User.findAll({
     attributes: { exclude: ['password_hash'] },
-    include: [{ model: Role, as: 'role', attributes: ['id', 'name'] }],
+    include,
     order: [['name', 'ASC']],
   });
 };

@@ -3,7 +3,7 @@ const { Role } = require('../models');
 
 const listUsers = async (req, res, next) => {
   try {
-    const data = await usersService.listUsers();
+    const data = await usersService.listUsers(req.query);
     res.json({ success: true, data });
   } catch (err) { next(err); }
 };

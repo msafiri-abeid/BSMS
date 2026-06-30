@@ -1,5 +1,5 @@
 // controllers/collection.controller.js
-const { submitCollection, getCollections } = require('../services/collection.service');
+const { submitCollection, getCollections, updateCollection, removeCollection, getAssignments, updateAssignment, removeAssignment } = require('../services/collection.service');
 const { extractMeterReading } = require('../services/ocr.service');
 const { Machine, CollectorAssignment, WeeklyTarget, Collection } = require('../models');
 const { Op } = require('sequelize');
@@ -11,11 +11,20 @@ const submit = async (req, res, next) => {
     let meterImageUrl = null;
 
     if (req.file) {
-      const uploadRes = await cloudinary.uploader.upload_stream({ folder: 'bentabet/meters' }, async (err, result) => {
-        if (result) meterImageUrl = result.secure_url;
+      meterImageUrl = await new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          { folder: 'bentabet/meters' },
+          (err, result) => {
+            if (err) reject(err);
+            else resolve(result.secure_url);
+          }
+        );
+        stream.end(req.file.buffer);
       });
-      uploadRes.end(req.file.buffer);
     }
+
+    const allowedRoles = ['Admin', 'General Manager', 'Operations Manager'];
+    const skipDebtRepayment = allowedRoles.includes(req.user.role?.name) && body.skip_debt_repayment === 'true';
 
     const collection = await submitCollection({
       machineId: body.machine_id,
@@ -25,6 +34,7 @@ const submit = async (req, res, next) => {
       meterImageUrl,
       novomaticData: body.novomatic_data ? JSON.parse(body.novomatic_data) : null,
       assignmentId: body.assignment_id,
+      skipDebtRepayment,
     });
 
     res.status(201).json({ success: true, data: collection });
@@ -45,7 +55,10 @@ const list = async (req, res, next) => {
   try {
     const data = await getCollections(req.query, req.user);
     res.json({ success: true, data });
-  } catch (err) { next(err); }
+  } catch (err) {
+    console.error('[Collections list]', err.message, err.stack);
+    next(err);
+  }
 };
 
 const myAssignments = async (req, res, next) => {
@@ -55,7 +68,7 @@ const myAssignments = async (req, res, next) => {
     const assignments = await CollectorAssignment.findAll({
       where,
       include: [
-        { model: Machine, as: 'machine', attributes: ['id', 'slot_code', 'manufacturer', 'previous_count', 'credit_value_tzs'] },
+        { model: Machine, as: 'machine', attributes: ['id', 'slot_code', 'manufacturer', 'previous_count', 'credit_value_tzs', 'opening_count'] },
         { model: require('../models').Shop, as: 'shop', attributes: ['id', 'name'] },
       ],
     });
@@ -65,6 +78,10 @@ const myAssignments = async (req, res, next) => {
 
 const createAssignment = async (req, res, next) => {
   try {
+    const allowed = ['Admin', 'General Manager', 'Operations Manager'];
+    if (!allowed.includes(req.user.role?.name)) {
+      return res.status(403).json({ success: false, message: 'Only Admin, Operations Manager, or General Manager can create assignments' });
+    }
     const { collector_id, machine_ids, date } = req.body;
     const machines = await Machine.findAll({ where: { id: machine_ids } });
     const assignments = await CollectorAssignment.bulkCreate(
@@ -75,6 +92,42 @@ const createAssignment = async (req, res, next) => {
       }))
     );
     res.status(201).json({ success: true, data: assignments });
+  } catch (err) { next(err); }
+};
+
+const openMachine = async (req, res, next) => {
+  try {
+    const assignment = await CollectorAssignment.findOne({
+      where: { id: req.params.id, collector_id: req.user.id },
+    });
+    if (!assignment) return res.status(404).json({ success: false, message: 'Assignment not found' });
+    if (assignment.status !== 'pending') return res.status(400).json({ success: false, message: 'Assignment is not pending' });
+    await assignment.update({ is_opened: true, opened_at: new Date() });
+    res.json({ success: true, data: assignment });
+  } catch (err) { next(err); }
+};
+
+const update = async (req, res, next) => {
+  try {
+    const allowed = ['Admin', 'General Manager', 'Operations Manager'];
+    if (!allowed.includes(req.user.role?.name)) {
+      return res.status(403).json({ success: false, message: 'Permission denied' });
+    }
+    const collection = await updateCollection(req.params.id, req.body);
+    if (!collection) return res.status(404).json({ success: false, message: 'Collection not found' });
+    res.json({ success: true, data: collection });
+  } catch (err) { next(err); }
+};
+
+const remove = async (req, res, next) => {
+  try {
+    const allowed = ['Admin', 'General Manager', 'Operations Manager'];
+    if (!allowed.includes(req.user.role?.name)) {
+      return res.status(403).json({ success: false, message: 'Permission denied' });
+    }
+    const deleted = await removeCollection(req.params.id);
+    if (!deleted) return res.status(404).json({ success: false, message: 'Collection not found' });
+    res.json({ success: true, message: 'Collection deleted successfully' });
   } catch (err) { next(err); }
 };
 
@@ -90,7 +143,48 @@ const weeklyTargets = async (req, res, next) => {
       limit: 100,
     });
     res.json({ success: true, data: targets });
+  } catch (err) {
+    console.error('[WeeklyTargets]', err.message, err.stack);
+    next(err);
+  }
+};
+
+const assignAllowed = (user) => ['Admin', 'General Manager', 'Operations Manager'].includes(user.role?.name);
+
+const listAssignments = async (req, res, next) => {
+  try {
+    if (!assignAllowed(req.user)) return res.status(403).json({ success: false, message: 'Permission denied' });
+    const data = await getAssignments(req.query);
+    res.json({ success: true, data });
   } catch (err) { next(err); }
 };
 
-module.exports = { submit, ocr, list, myAssignments, createAssignment, weeklyTargets };
+const editAssignment = async (req, res, next) => {
+  try {
+    if (!assignAllowed(req.user)) return res.status(403).json({ success: false, message: 'Permission denied' });
+    const result = await updateAssignment(req.params.id, req.body);
+    if (!result) return res.status(404).json({ success: false, message: 'Assignment not found' });
+    res.json({ success: true, data: result });
+  } catch (err) { next(err); }
+};
+
+const deleteAssignment = async (req, res, next) => {
+  try {
+    if (!assignAllowed(req.user)) return res.status(403).json({ success: false, message: 'Permission denied' });
+    const deleted = await removeAssignment(req.params.id);
+    if (!deleted) return res.status(404).json({ success: false, message: 'Assignment not found' });
+    res.json({ success: true, message: 'Assignment deleted' });
+  } catch (err) { next(err); }
+};
+
+const exportAssignments = async (req, res, next) => {
+  try {
+    if (!assignAllowed(req.user)) return res.status(403).json({ success: false, message: 'Permission denied' });
+    const buffer = await require('../services/collection.service').exportAssignmentsExcel(req.query);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename=assignments-${new Date().toISOString().split('T')[0]}.xlsx`);
+    res.send(buffer);
+  } catch (err) { next(err); }
+};
+
+module.exports = { submit, ocr, list, myAssignments, createAssignment, openMachine, update, remove, weeklyTargets, listAssignments, editAssignment, deleteAssignment, exportAssignments };

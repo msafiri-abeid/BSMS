@@ -1,20 +1,14 @@
-// src/pages/NotFoundPage.jsx
-import { Button, Typography } from 'antd';
 import { useNavigate } from 'react-router-dom';
-
-const { Title, Text } = Typography;
+import { Button } from 'antd';
 
 export default function NotFoundPage() {
   const navigate = useNavigate();
   return (
-    <div style={{
-      minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-      flexDirection: 'column', gap: 16, background: '#f5f5f5',
-    }}>
-      <div style={{ fontSize: 80, lineHeight: 1 }}>⚡</div>
-      <Title level={2} style={{ margin: 0 }}>404 — Page Not Found</Title>
-      <Text type="secondary">The page you're looking for doesn't exist.</Text>
-      <Button type="primary" onClick={() => navigate('/')} style={{ background: '#1a6b3a' }}>
+    <div className="min-h-screen flex items-center justify-center flex-col gap-4 bg-slate-100">
+      <div className="text-7xl leading-none">⚡</div>
+      <h2 className="text-2xl font-bold text-slate-800 m-0">404 — Page Not Found</h2>
+      <p className="text-slate-500">The page you're looking for doesn't exist.</p>
+      <Button type="primary" onClick={() => navigate('/')} className="!bg-brand-dark hover:!bg-brand-light border-none">
         Back to Dashboard
       </Button>
     </div>

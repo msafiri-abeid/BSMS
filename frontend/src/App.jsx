@@ -15,7 +15,8 @@ import MachineDetailPage from './pages/machines/MachineDetailPage';
 import CollectionsPage from './pages/collections/CollectionsPage';
 import MyAssignmentsPage from './pages/collections/MyAssignmentsPage';
 import WeeklyTargetsPage from './pages/collections/WeeklyTargetsPage';
-import CreateAssignmentPage from './pages/collections/CreateAssignmentPage';
+import DebtsPage from './pages/debts/DebtsPage';
+
 import ExpensesPage from './pages/finance/ExpensesPage';
 import InvoicesPage from './pages/finance/InvoicesPage';
 import PayrollPage from './pages/finance/PayrollPage';
@@ -29,14 +30,22 @@ import AlertsPage from './pages/inventory/AlertsPage';
 import TicketsPage from './pages/tickets/TicketsPage';
 import TicketDetailPage from './pages/tickets/TicketDetailPage';
 import ReportsPage from './pages/reports/ReportsPage';
-import SettingsPage from './pages/settings/SettingsPage';
 import StaffLayout from './pages/staff/StaffLayout';
 import EmployeesPage from './pages/staff/EmployeesPage';
 import EmployeeDetailPage from './pages/staff/EmployeeDetailPage';
 import DepartmentsPage from './pages/staff/DepartmentsPage';
 import PositionsPage from './pages/staff/PositionsPage';
-import OrganizationPage from './pages/staff/OrganizationPage';
-import StaffUsersPage from './pages/staff/StaffUsersPage';
+
+import SettingsLayout from './pages/settings/SettingsLayout';
+import ProfileTab from './pages/settings/ProfileTab';
+import CompanyTab from './pages/settings/CompanyTab';
+import MachineSettingsTab from './pages/settings/MachineSettingsTab';
+import FinanceSettingsTab from './pages/settings/FinanceSettingsTab';
+import NotificationsTab from './pages/settings/NotificationsTab';
+import RoleBuilderTab from './pages/settings/RoleBuilderTab';
+import BusinessManagementTab from './pages/settings/BusinessManagementTab';
+import SystemTab from './pages/settings/SystemTab';
+
 import NotFoundPage from './pages/NotFoundPage';
 
 const queryClient = new QueryClient({
@@ -74,7 +83,7 @@ export default function App() {
               <Route path="collections" element={<CollectionsPage />} />
               <Route path="my-assignments" element={<MyAssignmentsPage />} />
               <Route path="weekly-targets" element={<WeeklyTargetsPage />} />
-              <Route path="create-assignment" element={<CreateAssignmentPage />} />
+              <Route path="debts" element={<DebtsPage />} />
               <Route path="finance/expenses" element={<ExpensesPage />} />
               <Route path="finance/invoices" element={<InvoicesPage />} />
               <Route path="finance/payroll" element={<PayrollPage />} />
@@ -90,15 +99,23 @@ export default function App() {
               <Route path="tickets" element={<TicketsPage />} />
               <Route path="tickets/:id" element={<TicketDetailPage />} />
               <Route path="reports" element={<ReportsPage />} />
-              <Route path="settings" element={<SettingsPage />} />
+              <Route path="settings" element={<SettingsLayout />}>
+                <Route index element={<Navigate to="profile" replace />} />
+                <Route path="profile" element={<ProfileTab />} />
+                <Route path="company" element={<CompanyTab />} />
+                <Route path="machines" element={<MachineSettingsTab />} />
+                <Route path="finance" element={<FinanceSettingsTab />} />
+                <Route path="notifications" element={<NotificationsTab />} />
+                <Route path="roles" element={<RoleBuilderTab />} />
+                <Route path="businesses" element={<BusinessManagementTab />} />
+                <Route path="system" element={<SystemTab />} />
+              </Route>
               <Route path="staff" element={<StaffLayout />}>
                 <Route index element={<Navigate to="employees" replace />} />
                 <Route path="employees" element={<EmployeesPage />} />
                 <Route path="employees/:id" element={<EmployeeDetailPage />} />
                 <Route path="departments" element={<DepartmentsPage />} />
                 <Route path="positions" element={<PositionsPage />} />
-                <Route path="organization" element={<OrganizationPage />} />
-                <Route path="users" element={<StaffUsersPage />} />
               </Route>
             </Route>
             <Route path="*" element={<NotFoundPage />} />

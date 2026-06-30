@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Table, Button, Modal, Form, Input, Select, Space, Tooltip, Popconfirm, App, Alert } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { Table, Button, Modal, Form, Input, Select, App } from 'antd';
+import { Plus, Edit3, Trash2 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { staffAPI } from '../../services/api';
 import { buildDeptTreeSelect } from './staffUtils';
@@ -9,7 +9,7 @@ export default function PositionsPage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form] = Form.useForm();
-  const { message } = App.useApp();
+  const { message, modal } = App.useApp();
   const qc = useQueryClient();
 
   const { data: positions, isLoading, error } = useQuery({
@@ -41,35 +41,92 @@ export default function PositionsPage() {
   });
 
   const cols = [
-    { title: 'Position', dataIndex: 'name' },
-    { title: 'Department', dataIndex: ['department', 'name'], render: (v) => v || '—' },
+    { title: 'Position', dataIndex: 'name', render: (v) => <span className="font-medium">{v}</span> },
+    { title: 'Department', dataIndex: ['department', 'name'], render: (v) => v || <span className="text-slate-400">—</span> },
     {
-      title: '',
+      title: 'Actions',
       width: 90,
       align: 'right',
       render: (_, r) => (
-        <Space size={2}>
-          <Tooltip title="Edit"><Button type="text" size="small" icon={<EditOutlined />} onClick={() => { setEditing(r); form.setFieldsValue({ name: r.name, department_id: r.department_id }); setOpen(true); }} /></Tooltip>
-          <Popconfirm title="Delete position?" onConfirm={() => deleteMutation.mutate(r.id)}>
-            <Tooltip title="Delete"><Button type="text" size="small" danger icon={<DeleteOutlined />} /></Tooltip>
-          </Popconfirm>
-        </Space>
+        <div className="flex justify-end gap-1">
+          <Button
+            type="text"
+            size="small"
+            icon={<Edit3 className="w-4 h-4" />}
+            onClick={() => {
+              setEditing(r);
+              form.setFieldsValue({ name: r.name, department_id: r.department_id });
+              setOpen(true);
+            }}
+            className="!text-slate-500 hover:!text-amber-600"
+            title="Edit"
+          />
+          <Button
+            type="text"
+            size="small"
+            icon={<Trash2 className="w-4 h-4" />}
+            onClick={() => {
+              modal.confirm({
+                title: 'Delete position?',
+                content: `Remove "${r.name}"?`,
+                okText: 'Delete',
+                okType: 'danger',
+                onOk: () => deleteMutation.mutate(r.id),
+              });
+            }}
+            className="!text-slate-500 hover:!text-red-600"
+            title="Delete"
+          />
+        </div>
       ),
     },
   ];
 
   return (
     <div>
-      {error && <Alert type="error" showIcon className="mb-3" message={error.response?.data?.message || 'Failed to load positions'} />}
-      <div className="flex justify-end mb-3">
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditing(null); form.resetFields(); setOpen(true); }} className="bg-[#021559] hover:bg-[#162a75]">Add Position</Button>
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-200/60">
+        <div>
+          <h4 className="text-base font-bold text-slate-800 m-0">Positions</h4>
+          <span className="text-xs text-slate-500">{(positions || []).length} total</span>
+        </div>
+        <Button
+          icon={<Plus className="w-4 h-4" />}
+          onClick={() => { setEditing(null); form.resetFields(); setOpen(true); }}
+          className="!bg-brand-dark hover:!bg-brand-light hover:!text-white border-none shadow-sm flex items-center gap-1.5 text-white"
+        >
+          Add Position
+        </Button>
       </div>
-      <Table dataSource={positions || []} columns={cols} rowKey="id" loading={isLoading} size="middle" pagination={false} />
 
-      <Modal title={editing ? 'Edit Position' : 'Add Position'} open={open} onCancel={() => { setOpen(false); setEditing(null); form.resetFields(); }} onOk={() => form.submit()} confirmLoading={saveMutation.isPending}>
+      {error && (
+        <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
+          {error.response?.data?.message || 'Failed to load positions'}
+        </div>
+      )}
+
+      <Table
+        dataSource={positions || []}
+        columns={cols}
+        rowKey="id"
+        loading={isLoading}
+        size="middle"
+        pagination={false}
+        locale={{ emptyText: <span className="text-slate-500 text-sm">No positions yet</span> }}
+      />
+
+      <Modal
+        title={editing ? 'Edit Position' : 'Add Position'}
+        open={open}
+        onCancel={() => { setOpen(false); setEditing(null); form.resetFields(); }}
+        onOk={() => form.submit()}
+        confirmLoading={saveMutation.isPending}
+        width={480}
+        className="top-8"
+      >
         <Form form={form} layout="vertical" onFinish={(v) => saveMutation.mutate(v)} className="mt-4">
-          <Form.Item name="name" label="Position name" rules={[{ required: true }]}><Input /></Form.Item>
-          <Form.Item name="department_id" label="Department">
+          <Form.Item name="name" label={<span className="text-xs font-semibold text-slate-600">Position name</span>} rules={[{ required: true }]}><Input /></Form.Item>
+          <Form.Item name="department_id" label={<span className="text-xs font-semibold text-slate-600">Department</span>}>
             <Select allowClear placeholder="Select department" options={buildDeptTreeSelect(departments)} />
           </Form.Item>
         </Form>

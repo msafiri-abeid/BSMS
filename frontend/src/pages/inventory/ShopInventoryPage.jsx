@@ -1,12 +1,11 @@
-// src/pages/inventory/ShopInventoryPage.jsx
 import { useState } from 'react';
 import { Table, Button, Modal, Form, Input, InputNumber, Select, Tag, Alert, App, Typography, Space, DatePicker } from 'antd';
-import { PlusOutlined, WarningOutlined } from '@ant-design/icons';
+import { Plus, AlertTriangle } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { inventoryAPI, shopsAPI } from '../../services/api';
 import dayjs from 'dayjs';
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 const { Option } = Select;
 
 export default function ShopInventoryPage() {
@@ -17,7 +16,6 @@ export default function ShopInventoryPage() {
   const qc = useQueryClient();
 
   const { data: shopsData } = useQuery({ queryKey: ['shops-list'], queryFn: () => shopsAPI.list().then(r => r.data.data) });
-  // Filter shops: company-owned (Bentabet or Dante) with bar/grocery types
   const shops = (shopsData?.rows || []).filter(s => 
     ['Bentabet', 'Dante'].includes(s.partner?.label) && 
     ['bar', 'grocery', 'mixed'].includes(s.type)
@@ -59,13 +57,13 @@ export default function ShopInventoryPage() {
     { title: 'Unit', dataIndex: 'unit' },
     { title: 'Purchase Price', dataIndex: 'purchase_price', render: v => `TZS ${v?.toLocaleString()}` },
     { title: 'Selling Price', dataIndex: 'selling_price', render: v => `TZS ${v?.toLocaleString()}` },
-    { title: 'Margin', render: (_, r) => `TZS ${(r.selling_price - r.purchase_price)?.toLocaleString()}` },
+    { title: 'Margin', render: (_, r) => <span className="font-semibold">TZS {`${(r.selling_price - r.purchase_price)?.toLocaleString()}`}</span> },
     {
       title: 'Stock',
       render: (_, r) => {
         const qty = r.stockLevel?.current_qty ?? '—';
         const isLow = r.stockLevel && r.stockLevel.current_qty <= r.stockLevel.reorder_level;
-        return <Tag color={isLow ? 'red' : 'green'}>{qty} {isLow && <WarningOutlined />}</Tag>;
+        return <Tag color={isLow ? 'red' : 'green'} className="flex items-center gap-1">{qty} {isLow && <AlertTriangle className="w-3 h-3" />}</Tag>;
       },
     },
     {
@@ -80,20 +78,21 @@ export default function ShopInventoryPage() {
 
   return (
     <div>
-      <div className="page-header">
-        <Title level={4} style={{ margin: 0 }}>Shop Inventory</Title>
+      <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-200/60">
+        <h4 className="text-base font-bold text-slate-800 m-0">Shop Inventory</h4>
         <Space>
           <Select
             placeholder="Filter by shop"
             allowClear
-            style={{ width: 200 }}
+            className="w-[200px]"
             onChange={setSelectedShop}
             showSearch
             optionFilterProp="children"
           >
             {shops.map(s => <Option key={s.id} value={s.id}>{s.name}</Option>)}
           </Select>
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)} style={{ background: '#1a6b3a' }}>
+          <Button type="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setOpen(true)}
+            className="!bg-brand-dark hover:!bg-brand-light border-none shadow-sm flex items-center gap-1.5">
             Add Product
           </Button>
         </Space>
@@ -104,7 +103,7 @@ export default function ShopInventoryPage() {
           type="warning"
           message={`${lowStockItems.length} product(s) below reorder level: ${lowStockItems.map(p => p.name).join(', ')}`}
           showIcon
-          style={{ marginBottom: 16 }}
+          className="mb-4"
         />
       )}
       {expiringItems.length > 0 && (
@@ -112,7 +111,7 @@ export default function ShopInventoryPage() {
           type="error"
           message={`${expiringItems.length} product(s) expiring within 7 days: ${expiringItems.map(p => p.name).join(', ')}`}
           showIcon
-          style={{ marginBottom: 16 }}
+          className="mb-4"
         />
       )}
 
@@ -125,41 +124,44 @@ export default function ShopInventoryPage() {
         pagination={{ pageSize: 20 }}
       />
 
-      <Modal
-        title="Add Product"
+      <Modal title={<span className="text-sm font-bold text-slate-700">Add Product</span>}
         open={open}
         onCancel={() => { setOpen(false); form.resetFields(); }}
         onOk={() => form.submit()}
         confirmLoading={createMutation.isPending}
-      >
-        <Form form={form} layout="vertical" onFinish={(v) => createMutation.mutate(v)} style={{ marginTop: 16 }}>
-          <Form.Item name="shop_id" label="Shop" rules={[{ required: true, message: 'Select a shop' }]}>
+        className="top-8">
+        <Form form={form} layout="vertical" onFinish={(v) => createMutation.mutate({ ...v, category: Array.isArray(v.category) ? v.category[0] : v.category })} className="mt-4">
+          <Form.Item name="shop_id" label={<span className="text-xs font-semibold text-slate-600">Shop</span>} rules={[{ required: true, message: 'Select a shop' }]}>
             <Select placeholder="Select a shop" showSearch optionFilterProp="children">
               {shops.map(s => <Option key={s.id} value={s.id}>{s.name}</Option>)}
             </Select>
           </Form.Item>
-          <Form.Item name="name" label="Product Name" rules={[{ required: true }]}><Input /></Form.Item>
-          <Form.Item name="category" label="Category">
+          <Form.Item name="name" label={<span className="text-xs font-semibold text-slate-600">Product Name</span>} rules={[{ required: true }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="category" label={<span className="text-xs font-semibold text-slate-600">Category</span>}>
             <Select
               placeholder="Select or create category"
               mode="tags"
               maxTagCount={1}
-              style={{ width: '100%' }}
+              className="w-full"
             >
               {(categoriesData || []).map(c => (
                 <Option key={c.value} value={c.value}>{c.value}</Option>
               ))}
             </Select>
           </Form.Item>
-          <Form.Item name="unit" label="Unit" initialValue="pcs"><Input /></Form.Item>
-          <Form.Item name="purchase_price" label="Purchase Price (TZS)" rules={[{ required: true }]}>
-            <InputNumber min={0} style={{ width: '100%' }} />
+          <Form.Item name="unit" label={<span className="text-xs font-semibold text-slate-600">Unit</span>} initialValue="pcs">
+            <Input />
           </Form.Item>
-          <Form.Item name="selling_price" label="Selling Price (TZS)" rules={[{ required: true }]}>
-            <InputNumber min={0} style={{ width: '100%' }} />
+          <Form.Item name="purchase_price" label={<span className="text-xs font-semibold text-slate-600">Purchase Price (TZS)</span>} rules={[{ required: true }]}>
+            <InputNumber min={0} className="w-full" />
           </Form.Item>
-          <Form.Item name="expiry_date" label="Expiry Date">
-            <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
+          <Form.Item name="selling_price" label={<span className="text-xs font-semibold text-slate-600">Selling Price (TZS)</span>} rules={[{ required: true }]}>
+            <InputNumber min={0} className="w-full" />
+          </Form.Item>
+          <Form.Item name="expiry_date" label={<span className="text-xs font-semibold text-slate-600">Expiry Date</span>}>
+            <DatePicker className="w-full" format="YYYY-MM-DD" />
           </Form.Item>
         </Form>
       </Modal>

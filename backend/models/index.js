@@ -13,7 +13,7 @@ const Permission = sequelize.define('Permission', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
   role_id: { type: DataTypes.INTEGER, allowNull: false },
   module: { type: DataTypes.STRING(50), allowNull: false },
-  action: { type: DataTypes.ENUM('read', 'write', 'approve', 'delete'), allowNull: false },
+  action: { type: DataTypes.ENUM('read', 'write', 'approve', 'delete', 'create', 'update'), allowNull: false },
 }, { tableName: 'permissions', updatedAt: false });
 
 const User = sequelize.define('User', {
@@ -51,10 +51,10 @@ const Partner = sequelize.define('Partner', {
   label: { type: DataTypes.STRING(100) },
   name: { type: DataTypes.STRING(150), allowNull: false },
   phone: { type: DataTypes.STRING(20) },
-  address: { type: DataTypes.TEXT },
   type: { type: DataTypes.ENUM('own', 'partner'), defaultValue: 'partner' },
   contract_url: { type: DataTypes.TEXT },
   status: { type: DataTypes.ENUM('active', 'inactive'), defaultValue: 'active' },
+  documents: { type: DataTypes.JSON, defaultValue: [] },
 }, { tableName: 'partners' });
 
 const Shop = sequelize.define('Shop', {
@@ -62,12 +62,49 @@ const Shop = sequelize.define('Shop', {
   partner_id: { type: DataTypes.INTEGER, allowNull: false },
   name: { type: DataTypes.STRING(150), allowNull: false },
   type: { type: DataTypes.ENUM('slot_only', 'bar', 'grocery', 'mixed'), defaultValue: 'slot_only' },
-  address: { type: DataTypes.TEXT },
   lat: { type: DataTypes.DECIMAL(10, 8) },
   lng: { type: DataTypes.DECIMAL(11, 8) },
   contract_url: { type: DataTypes.TEXT },
   status: { type: DataTypes.ENUM('active', 'inactive', 'suspended'), defaultValue: 'active' },
+  documents: { type: DataTypes.JSON, defaultValue: [] },
 }, { tableName: 'shops' });
+
+const Region = sequelize.define('Region', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  name: { type: DataTypes.STRING(100), allowNull: false, unique: true },
+}, { tableName: 'regions', updatedAt: false });
+
+const District = sequelize.define('District', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  name: { type: DataTypes.STRING(200), allowNull: false },
+  region_id: { type: DataTypes.INTEGER, allowNull: false },
+}, { tableName: 'districts', updatedAt: false, indexes: [{ unique: true, fields: ['name', 'region_id'] }] });
+
+const Ward = sequelize.define('Ward', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  name: { type: DataTypes.STRING(150), allowNull: false },
+  region_id: { type: DataTypes.INTEGER, allowNull: false },
+  district_id: { type: DataTypes.INTEGER, allowNull: true },
+}, { tableName: 'wards', updatedAt: false, indexes: [{ unique: true, fields: ['name', 'region_id'] }] });
+
+const Street = sequelize.define('Street', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  name: { type: DataTypes.STRING(200), allowNull: false },
+  ward_id: { type: DataTypes.INTEGER, allowNull: false },
+}, { tableName: 'streets', updatedAt: false, indexes: [{ unique: true, fields: ['name', 'ward_id'] }] });
+
+const Address = sequelize.define('Address', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  partner_id: { type: DataTypes.INTEGER },
+  shop_id: { type: DataTypes.INTEGER },
+  street: { type: DataTypes.STRING(200) },
+  ward: { type: DataTypes.STRING(100) },
+  ward_id: { type: DataTypes.INTEGER },
+  street_id: { type: DataTypes.INTEGER },
+  district_id: { type: DataTypes.INTEGER },
+  region_id: { type: DataTypes.INTEGER },
+  country: { type: DataTypes.STRING(100), defaultValue: 'Tanzania' },
+}, { tableName: 'addresses', updatedAt: false });
 
 // ─── MACHINES ─────────────────────────────────────────────────
 const Machine = sequelize.define('Machine', {
@@ -77,6 +114,8 @@ const Machine = sequelize.define('Machine', {
   sticker_no: { type: DataTypes.STRING(50) },
   manufacturer: { type: DataTypes.ENUM('Meteora', 'Novomatic', 'EGT'), allowNull: false },
   credit_value_tzs: { type: DataTypes.INTEGER, allowNull: false },
+  weekly_target_tzs: { type: DataTypes.INTEGER },
+  cycle_start_date: { type: DataTypes.DATEONLY },
   opening_count: { type: DataTypes.BIGINT, defaultValue: 0 },
   previous_count: { type: DataTypes.BIGINT, defaultValue: 0 },
   current_shop_id: { type: DataTypes.INTEGER },
@@ -90,6 +129,8 @@ const MachineDeployment = sequelize.define('MachineDeployment', {
   deployed_by: { type: DataTypes.INTEGER, allowNull: false },
   opening_count: { type: DataTypes.BIGINT, defaultValue: 0 },
   initial_load_tzs: { type: DataTypes.INTEGER, defaultValue: 0 },
+  machine_load_tzs: { type: DataTypes.INTEGER, defaultValue: 0 },
+  tray_tzs: { type: DataTypes.INTEGER, defaultValue: 0 },
   deployed_at: { type: DataTypes.DATE, allowNull: false },
   withdrawn_at: { type: DataTypes.DATE },
 }, { tableName: 'machine_deployments' });
@@ -125,6 +166,8 @@ const CollectorAssignment = sequelize.define('CollectorAssignment', {
   assigned_date: { type: DataTypes.DATEONLY, allowNull: false },
   status: { type: DataTypes.ENUM('pending', 'done', 'skipped'), defaultValue: 'pending' },
   assigned_by: { type: DataTypes.INTEGER, allowNull: false },
+  is_opened: { type: DataTypes.BOOLEAN, defaultValue: false },
+  opened_at: { type: DataTypes.DATE, allowNull: true },
 }, { tableName: 'collector_assignments' });
 
 const Collection = sequelize.define('Collection', {
@@ -173,6 +216,22 @@ const WeeklyTarget = sequelize.define('WeeklyTarget', {
   collected_tzs: { type: DataTypes.INTEGER, defaultValue: 0 },
   status: { type: DataTypes.ENUM('pending', 'met', 'unmet'), defaultValue: 'pending' },
 }, { tableName: 'weekly_targets' });
+
+// ─── MACHINE DEBTS ────────────────────────────────────────────
+const MachineDebt = sequelize.define('MachineDebt', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  machine_id: { type: DataTypes.INTEGER, allowNull: false },
+  shop_id: { type: DataTypes.INTEGER, allowNull: false },
+  collection_id: { type: DataTypes.INTEGER },
+  type: { type: DataTypes.ENUM('token', 'commission', 'advance', 'shortage', 'other'), defaultValue: 'token' },
+  amount: { type: DataTypes.INTEGER, allowNull: false },
+  paid_amount: { type: DataTypes.INTEGER, defaultValue: 0 },
+  reason: { type: DataTypes.TEXT },
+  receipt_url: { type: DataTypes.TEXT },
+  recorded_by: { type: DataTypes.INTEGER, allowNull: false },
+  status: { type: DataTypes.ENUM('pending', 'partial', 'paid', 'written_off'), defaultValue: 'pending' },
+  paid_at: { type: DataTypes.DATE },
+}, { tableName: 'machine_debts' });
 
 // ─── FINANCE ──────────────────────────────────────────────────
 const ExpenseCategory = sequelize.define('ExpenseCategory', {
@@ -253,10 +312,17 @@ const TokenInventory = sequelize.define('TokenInventory', {
   qty: { type: DataTypes.INTEGER, allowNull: false },
   unit_value_tzs: { type: DataTypes.INTEGER, allowNull: false },
   total_value_tzs: { type: DataTypes.INTEGER, allowNull: false },
-  movement_type: { type: DataTypes.ENUM('purchase', 'refill_out', 'adjustment'), allowNull: false },
+  movement_type: { type: DataTypes.ENUM('purchase', 'refill_out', 'adjustment', 'distribute', 'return', 'lend', 'debt_repayment'), allowNull: false },
   reference_id: { type: DataTypes.INTEGER },
+  recipient_type: { type: DataTypes.ENUM('collector', 'technician', 'partner', 'shop', 'vendor') },
+  recipient_id: { type: DataTypes.INTEGER },
+  vendor_name: { type: DataTypes.STRING(150) },
+  reference: { type: DataTypes.TEXT },
   note: { type: DataTypes.TEXT },
   created_by: { type: DataTypes.INTEGER, allowNull: false },
+  debt_id: { type: DataTypes.INTEGER },
+  approved_by: { type: DataTypes.INTEGER },
+  approved_at: { type: DataTypes.DATE },
 }, { tableName: 'token_inventory', updatedAt: false });
 
 const Product = sequelize.define('Product', {
@@ -273,9 +339,10 @@ const StockMovement = sequelize.define('StockMovement', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
   product_id: { type: DataTypes.INTEGER, allowNull: false },
   qty_change: { type: DataTypes.INTEGER, allowNull: false },
-  movement_type: { type: DataTypes.ENUM('purchase', 'sale', 'adjustment', 'waste'), allowNull: false },
+  movement_type: { type: DataTypes.ENUM('purchase', 'sale', 'adjustment', 'waste', 'transfer'), allowNull: false },
   reference_no: { type: DataTypes.STRING(100) },
   note: { type: DataTypes.TEXT },
+  receipt_url: { type: DataTypes.TEXT },
   created_by: { type: DataTypes.INTEGER, allowNull: false },
 }, { tableName: 'stock_movements', updatedAt: false });
 
@@ -454,9 +521,15 @@ const Employee = sequelize.define('Employee', {
   hire_date: { type: DataTypes.DATEONLY },
   basic_salary: { type: DataTypes.INTEGER, defaultValue: 0 },
   bank_account: { type: DataTypes.STRING(100) },
+  account_holder_name: { type: DataTypes.STRING(150) },
+  bank_name: { type: DataTypes.STRING(100) },
+  bank_code: { type: DataTypes.STRING(50) },
+  bank_branch: { type: DataTypes.STRING(100) },
+  tax_payer_id: { type: DataTypes.STRING(50) },
   national_id: { type: DataTypes.STRING(50) },
   documents: { type: DataTypes.JSON, defaultValue: [] },
   status: { type: DataTypes.ENUM('active', 'inactive', 'terminated'), defaultValue: 'active' },
+  reports_to: { type: DataTypes.INTEGER },
 }, { tableName: 'employees' });
 
 const Attendance = sequelize.define('Attendance', {
@@ -492,6 +565,24 @@ RefreshToken.belongsTo(User, { foreignKey: 'user_id' });
 Partner.hasMany(Shop, { foreignKey: 'partner_id', as: 'shops' });
 Shop.belongsTo(Partner, { foreignKey: 'partner_id', as: 'partner' });
 
+Address.belongsTo(Partner, { foreignKey: 'partner_id', as: 'partner' });
+Address.belongsTo(Shop, { foreignKey: 'shop_id', as: 'shop' });
+Address.belongsTo(Region, { foreignKey: 'region_id', as: 'region' });
+Partner.hasOne(Address, { foreignKey: 'partner_id', as: 'address' });
+Shop.hasOne(Address, { foreignKey: 'shop_id', as: 'address' });
+Region.hasMany(Address, { foreignKey: 'region_id', as: 'addresses' });
+Region.hasMany(District, { foreignKey: 'region_id', as: 'districts' });
+District.belongsTo(Region, { foreignKey: 'region_id', as: 'region' });
+District.hasMany(Ward, { foreignKey: 'district_id', as: 'wards' });
+Ward.belongsTo(District, { foreignKey: 'district_id', as: 'district' });
+Region.hasMany(Ward, { foreignKey: 'region_id', as: 'wards' });
+Ward.belongsTo(Region, { foreignKey: 'region_id', as: 'region' });
+Ward.hasMany(Street, { foreignKey: 'ward_id', as: 'streets' });
+Street.belongsTo(Ward, { foreignKey: 'ward_id', as: 'ward' });
+Address.belongsTo(District, { foreignKey: 'district_id', as: 'districtData' });
+Address.belongsTo(Ward, { foreignKey: 'ward_id', as: 'wardData' });
+Address.belongsTo(Street, { foreignKey: 'street_id', as: 'streetData' });
+
 Shop.hasMany(Machine, { foreignKey: 'current_shop_id', as: 'machines' });
 Machine.belongsTo(Shop, { foreignKey: 'current_shop_id', as: 'currentShop' });
 
@@ -501,17 +592,41 @@ MachineDeployment.belongsTo(Shop, { foreignKey: 'shop_id', as: 'shop' });
 MachineDeployment.belongsTo(User, { foreignKey: 'deployed_by', as: 'deployedBy' });
 
 Machine.hasMany(MachineExchange, { foreignKey: 'machine_id', as: 'exchanges' });
-
+MachineExchange.belongsTo(Shop, { foreignKey: 'from_shop_id', as: 'fromShop' });
+MachineExchange.belongsTo(Shop, { foreignKey: 'to_shop_id', as: 'toShop' });
 Machine.hasMany(Collection, { foreignKey: 'machine_id', as: 'collections' });
 Collection.belongsTo(Machine, { foreignKey: 'machine_id', as: 'machine' });
 Collection.belongsTo(Shop, { foreignKey: 'shop_id', as: 'shop' });
 Collection.belongsTo(User, { foreignKey: 'collector_id', as: 'collector' });
+Collection.belongsTo(User, { foreignKey: 'approved_by', as: 'approver' });
+
+// Performance association for machine performance tab
+Machine.hasMany(Collection, {
+  foreignKey: 'machine_id',
+  as: 'performance',
+  order: [['collected_at', 'DESC']]
+});
 
 Collection.hasOne(NovomaticReading, { foreignKey: 'collection_id', as: 'novomaticReading' });
 
 CollectorAssignment.belongsTo(User, { foreignKey: 'collector_id', as: 'collector' });
 CollectorAssignment.belongsTo(Machine, { foreignKey: 'machine_id', as: 'machine' });
 CollectorAssignment.belongsTo(Shop, { foreignKey: 'shop_id', as: 'shop' });
+
+WeeklyTarget.belongsTo(Machine, { foreignKey: 'machine_id', as: 'machine' });
+WeeklyTarget.belongsTo(Shop, { foreignKey: 'shop_id', as: 'shop' });
+
+MachineDebt.belongsTo(Machine, { foreignKey: 'machine_id', as: 'machine' });
+MachineDebt.belongsTo(Shop, { foreignKey: 'shop_id', as: 'shop' });
+MachineDebt.belongsTo(User, { foreignKey: 'recorded_by', as: 'recorder' });
+MachineDebt.belongsTo(Collection, { foreignKey: 'collection_id', as: 'collection' });
+Machine.hasMany(MachineDebt, { foreignKey: 'machine_id', as: 'debts' });
+
+// TokenInventory associations
+TokenInventory.belongsTo(User, { foreignKey: 'created_by', as: 'creator' });
+TokenInventory.belongsTo(User, { foreignKey: 'approved_by', as: 'approver' });
+TokenInventory.belongsTo(MachineDebt, { foreignKey: 'debt_id', as: 'debt' });
+MachineDebt.hasMany(TokenInventory, { foreignKey: 'debt_id', as: 'tokenMovements' });
 
 Expense.belongsTo(User, { foreignKey: 'submitted_by', as: 'submitter' });
 Expense.belongsTo(User, { foreignKey: 'approved_by', as: 'approver' });
@@ -569,9 +684,11 @@ Ticket.hasMany(TicketActivity, { foreignKey: 'ticket_id', as: 'activities' });
 Department.hasMany(Department, { foreignKey: 'parent_id', as: 'children' });
 Department.belongsTo(Department, { foreignKey: 'parent_id', as: 'parent' });
 
+User.hasOne(Employee, { foreignKey: 'user_id', as: 'employee' });
 Employee.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 Employee.belongsTo(Department, { foreignKey: 'department_id', as: 'department' });
 Employee.belongsTo(Position, { foreignKey: 'position_id', as: 'position' });
+Employee.belongsTo(Employee, { foreignKey: 'reports_to', as: 'supervisor' });
 Employee.hasMany(Attendance, { foreignKey: 'employee_id', as: 'attendance' });
 Attendance.belongsTo(Employee, { foreignKey: 'employee_id', as: 'employee' });
 Position.belongsTo(Department, { foreignKey: 'department_id', as: 'department' });
@@ -579,9 +696,9 @@ Position.belongsTo(Department, { foreignKey: 'department_id', as: 'department' }
 module.exports = {
   sequelize,
   Role, Permission, User, RefreshToken, Setting,
-  Partner, Shop,
+  Partner, Shop, Region, District, Ward, Street, Address,
   Machine, MachineDeployment, MachineExchange, MachineRefill,
-  CollectorAssignment, Collection, NovomaticReading, WeeklyTarget,
+  CollectorAssignment, Collection, NovomaticReading, WeeklyTarget, MachineDebt,
   ExpenseCategory, Expense, Invoice, Payment, CreditNote, Payroll, SalePayment,
   TokenInventory, Product, StockMovement, StockLevel, VipOffer,
   Sale, SaleItem, SalesReturn, StockAudit, AuditItem, StockTransfer, LowStockAlert,

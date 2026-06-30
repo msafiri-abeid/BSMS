@@ -1,13 +1,12 @@
-// src/pages/tickets/TicketDetailPage.jsx
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, Button, Tag, Select, Space, Timeline, Input, Upload, App, Typography, Descriptions, Spin, Row, Col, Divider } from 'antd';
-import { ArrowLeftOutlined, SendOutlined, UploadOutlined, UserOutlined, ClockCircleOutlined } from '@ant-design/icons';
+import { ArrowLeft, Send, Upload as UploadIcon, Clock, Paperclip } from 'lucide-react';
 import { ticketsAPI } from '../../services/api';
 import dayjs from 'dayjs';
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 const { Option } = Select;
 const { TextArea } = Input;
 
@@ -62,79 +61,80 @@ export default function TicketDetailPage() {
     activityMutation.mutate(fd);
   };
 
-  if (isLoading) return <Spin size="large" style={{ display: 'block', margin: '80px auto' }} />;
+  if (isLoading) return <Spin size="large" className="block mx-auto my-20" />;
   if (!ticket) return <div>Ticket not found</div>;
 
   const availableTransitions = TRANSITIONS[ticket.status] || [];
 
   const timelineItems = (ticket.activities || []).map(a => ({
-    dot: <ClockCircleOutlined style={{ fontSize: 14 }} />,
+    dot: <Clock className="w-3.5 h-3.5" />,
     color: a.to_status ? STATUS_COLORS[a.to_status] || 'gray' : 'gray',
     children: (
-      <div style={{ paddingBottom: 8 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-          <Text strong style={{ fontSize: 13 }}>{a.action?.replace('_', ' ')}</Text>
-          <Text type="secondary" style={{ fontSize: 11 }}>{dayjs(a.created_at).format('DD MMM YYYY HH:mm')}</Text>
+      <div className="pb-2">
+        <div className="flex justify-between mb-1">
+          <Text strong className="text-xs">{a.action?.replace('_', ' ')}</Text>
+          <Text type="secondary" className="text-[11px]">{dayjs(a.created_at).format('DD MMM YYYY HH:mm')}</Text>
         </div>
         {a.from_status && a.to_status && (
-          <div style={{ marginBottom: 4 }}>
+          <div className="mb-1">
             <Tag>{a.from_status}</Tag> → <Tag color={STATUS_COLORS[a.to_status]}>{a.to_status}</Tag>
           </div>
         )}
-        {a.note && <Text style={{ fontSize: 13, display: 'block', color: '#444' }}>{a.note}</Text>}
+        {a.note && <Text className="text-xs block text-slate-600">{a.note}</Text>}
         {a.attachments?.length > 0 && (
-          <div style={{ marginTop: 4 }}>
+          <div className="mt-1">
             {a.attachments.map((url, i) => (
-              <a key={i} href={url} target="_blank" rel="noreferrer" style={{ marginRight: 8, fontSize: 12 }}>📎 Attachment {i + 1}</a>
+              <a key={i} href={url} target="_blank" rel="noreferrer" className="mr-2 text-xs text-brand-dark inline-flex items-center gap-1">
+                <Paperclip className="w-3 h-3" /> Attachment {i + 1}
+              </a>
             ))}
           </div>
         )}
-        <Text type="secondary" style={{ fontSize: 11 }}>by {a.performed_by}</Text>
+        <Text type="secondary" className="text-[11px]">by {a.performed_by}</Text>
       </div>
     ),
   }));
 
   return (
     <div>
-      <div className="page-header">
+      <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-200/60">
         <Space>
-          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/tickets')} />
-          <Title level={4} style={{ margin: 0 }}>Ticket #{ticket.ticket_number}</Title>
+          <Button icon={<ArrowLeft className="w-4 h-4" />} onClick={() => navigate('/tickets')} />
+          <h4 className="text-base font-bold text-slate-800 m-0">Ticket #{ticket.ticket_number}</h4>
         </Space>
         <Space>
-          <Tag color={PRIORITY_COLORS[ticket.priority]} style={{ fontSize: 13, padding: '3px 10px' }}>{ticket.priority?.toUpperCase()}</Tag>
-          <Tag color={STATUS_COLORS[ticket.status]} style={{ fontSize: 13, padding: '3px 10px' }}>{ticket.status?.replace('_', ' ').toUpperCase()}</Tag>
+          <Tag color={PRIORITY_COLORS[ticket.priority]} className="!text-xs !px-2.5 !py-0.5">{ticket.priority?.toUpperCase()}</Tag>
+          <Tag color={STATUS_COLORS[ticket.status]} className="!text-xs !px-2.5 !py-0.5">{ticket.status?.replace('_', ' ').toUpperCase()}</Tag>
         </Space>
       </div>
 
       <Row gutter={16}>
         <Col xs={24} lg={16}>
-          <Card title={ticket.subject} size="small" style={{ marginBottom: 16 }}>
-            <Text style={{ fontSize: 14, lineHeight: 1.6 }}>{ticket.description || 'No description provided.'}</Text>
+          <Card title={ticket.subject} size="small" className="mb-4">
+            <Text className="text-sm leading-relaxed">{ticket.description || 'No description provided.'}</Text>
           </Card>
 
-          {/* Activity Timeline */}
-          <Card title="Activity History" size="small" style={{ marginBottom: 16 }}>
+          <Card title="Activity History" size="small" className="mb-4">
             {timelineItems.length > 0
-              ? <Timeline items={timelineItems} style={{ paddingTop: 16 }} />
+              ? <Timeline items={timelineItems} className="pt-4" />
               : <Text type="secondary">No activity yet</Text>
             }
           </Card>
 
-          {/* Add Comment */}
           <Card title="Add Comment / Update" size="small">
             <TextArea
               rows={3}
               value={note}
               onChange={e => setNote(e.target.value)}
               placeholder="Add a note, comment, or update..."
-              style={{ marginBottom: 12 }}
+              className="mb-3"
             />
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="flex justify-between items-center">
               <Upload beforeUpload={() => false} fileList={files} onChange={({ fileList }) => setFiles(fileList)} multiple>
-                <Button icon={<UploadOutlined />} size="small">Attach</Button>
+                <Button icon={<UploadIcon className="w-3.5 h-3.5" />} size="small" className="flex items-center gap-1">Attach</Button>
               </Upload>
-              <Button type="primary" icon={<SendOutlined />} onClick={handleComment} loading={activityMutation.isPending} style={{ background: '#1a6b3a' }}>
+              <Button type="primary" icon={<Send className="w-3.5 h-3.5" />} onClick={handleComment} loading={activityMutation.isPending}
+                className="!bg-brand-dark hover:!bg-brand-light border-none flex items-center gap-1.5">
                 Post Comment
               </Button>
             </div>
@@ -142,8 +142,7 @@ export default function TicketDetailPage() {
         </Col>
 
         <Col xs={24} lg={8}>
-          {/* Ticket Info */}
-          <Card title="Ticket Details" size="small" style={{ marginBottom: 16 }}>
+          <Card title="Ticket Details" size="small" className="mb-4">
             <Descriptions column={1} size="small">
               <Descriptions.Item label="Type">{ticket.ticket_type}</Descriptions.Item>
               <Descriptions.Item label="Channel"><Tag>{ticket.channel}</Tag></Descriptions.Item>
@@ -155,7 +154,7 @@ export default function TicketDetailPage() {
               <Descriptions.Item label="Created">{dayjs(ticket.created_at).format('DD MMM YYYY HH:mm')}</Descriptions.Item>
               <Descriptions.Item label="SLA Deadline">
                 {ticket.sla_deadline
-                  ? <span style={{ color: dayjs(ticket.sla_deadline).isBefore(dayjs()) ? '#f5222d' : '#52c41a' }}>
+                  ? <span className={dayjs(ticket.sla_deadline).isBefore(dayjs()) ? 'text-red-600' : 'text-green-600'}>
                       {dayjs(ticket.sla_deadline).format('DD MMM YYYY HH:mm')}
                     </span>
                   : '—'
@@ -167,12 +166,11 @@ export default function TicketDetailPage() {
             </Descriptions>
           </Card>
 
-          {/* Status Change */}
           {availableTransitions.length > 0 && (
             <Card title="Change Status" size="small">
               <Select
                 placeholder="Select new status"
-                style={{ width: '100%', marginBottom: 12 }}
+                className="w-full mb-3"
                 value={newStatus || undefined}
                 onChange={setNewStatus}
               >
@@ -185,7 +183,7 @@ export default function TicketDetailPage() {
                 placeholder="Optional note for this status change"
                 value={newStatus ? note : ''}
                 onChange={e => setNote(e.target.value)}
-                style={{ marginBottom: 12 }}
+                className="mb-3"
               />
               <Button
                 type="primary"
@@ -193,7 +191,7 @@ export default function TicketDetailPage() {
                 onClick={handleStatusChange}
                 loading={statusMutation.isPending}
                 disabled={!newStatus}
-                style={{ background: '#1a6b3a' }}
+                className="!bg-brand-dark hover:!bg-brand-light border-none"
               >
                 Update Status
               </Button>

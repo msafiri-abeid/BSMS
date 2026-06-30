@@ -12,13 +12,14 @@ cloudinary.config({
 
 const createStorage = (folder) => new CloudinaryStorage({
   cloudinary,
-  params: { folder: `bentabet/${folder}`, allowed_formats: ['jpg', 'jpeg', 'png', 'pdf', 'webp'] },
+  params: { folder: `bentabet/${folder}`, allowed_formats: ['jpg', 'jpeg', 'png', 'pdf', 'webp', 'doc', 'docx', 'xls', 'xlsx'] },
 });
 
 const memStorage = multer.memoryStorage();
 
 module.exports = {
   uploadContract: multer({ storage: createStorage('contracts') }),
+  uploadDocuments: multer({ storage: createStorage('documents'), limits: { fileSize: 10 * 1024 * 1024 } }).array('documents', 5),
   uploadReceipt: multer({ storage: createStorage('receipts') }),
   uploadMeter: multer({ storage: memStorage }),
   uploadAvatar: multer({ storage: createStorage('avatars') }),

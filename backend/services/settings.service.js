@@ -32,6 +32,25 @@ const createRole = async (name) => {
   return Role.create({ name, is_system: false });
 };
 
+const updateRole = async (roleId, { name }) => {
+  const role = await Role.findByPk(roleId);
+  if (!role) throw new Error('Role not found');
+  if (role.is_system) throw new Error('Cannot modify system role');
+  await role.update({ name });
+  return role;
+};
+
+const deleteRole = async (roleId) => {
+  const role = await Role.findByPk(roleId);
+  if (!role) throw new Error('Role not found');
+  if (role.is_system) throw new Error('Cannot delete system role');
+  const userCount = await require('../models').User.count({ where: { role_id: roleId } });
+  if (userCount > 0) throw new Error(`Cannot delete role: ${userCount} user(s) are assigned to it`);
+  await Permission.destroy({ where: { role_id: roleId } });
+  await role.destroy();
+  return { deleted: true };
+};
+
 const updatePermissions = async (roleId, permissions) => {
   const role = await Role.findByPk(roleId);
   if (!role || role.is_system) throw new Error('Cannot modify system role');
@@ -74,4 +93,4 @@ const seedDefaults = async () => {
   }
 };
 
-module.exports = { getAll, get, set, bulkSet, getRoles, createRole, updatePermissions, seedDefaults, DEFAULTS };
+module.exports = { getAll, get, set, bulkSet, getRoles, createRole, updateRole, deleteRole, updatePermissions, seedDefaults, DEFAULTS };

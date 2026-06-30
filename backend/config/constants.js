@@ -49,11 +49,11 @@ module.exports = {
     low: 72,
   },
 
-  ROLES: ['Admin', 'General Manager', 'Director', 'Operations Manager', 'Finance', 'Sales', 'Collector', 'Technician'],
+  ROLES: ['Admin', 'General Manager', 'Director', 'Operations Manager', 'Finance', 'Sales', 'Collector', 'Technician', 'Cashier'],
 
   MODULES: ['partners', 'shops', 'machines', 'collections', 'finance', 'inventory', 'tickets', 'staff', 'reports', 'settings', 'users'],
 
-  ACTIONS: ['read', 'write', 'approve', 'delete'],
+  ACTIONS: ['read', 'create', 'update', 'delete', 'approve'],
 
   PORT: process.env.PORT || 5000,
 };

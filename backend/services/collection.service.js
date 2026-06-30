@@ -1,6 +1,6 @@
 // services/collection.service.js
-const { Op } = require('sequelize');
-const { Collection, Machine, WeeklyTarget, NovomaticReading, CollectorAssignment, Setting } = require('../models');
+const { Op, literal } = require('sequelize');
+const { Collection, Machine, MachineDeployment, WeeklyTarget, NovomaticReading, CollectorAssignment, Setting, Shop, User, Partner, MachineDebt, Address } = require('../models');
 
 const getWeekBounds = (date = new Date()) => {
   const d = new Date(date);
@@ -14,26 +14,50 @@ const getWeekBounds = (date = new Date()) => {
   return { weekStart, weekEnd };
 };
 
-const calculateMeteora = (prevCount, currCount, creditValueTzs, weeklyTargetTzs) => {
+const getMachineWeekBounds = (cycleStartDate, now = new Date()) => {
+  const start = new Date(cycleStartDate);
+  const daysSince = Math.floor((now - start) / (1000 * 60 * 60 * 24));
+  const weeksSince = Math.floor(daysSince / 7);
+  const weekStart = new Date(start);
+  weekStart.setDate(start.getDate() + weeksSince * 7);
+  weekStart.setHours(0, 0, 0, 0);
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekStart.getDate() + 6);
+  weekEnd.setHours(23, 59, 59, 999);
+  return { weekStart, weekEnd };
+};
+
+const getMachineCycleStart = async (machine) => {
+  if (machine.cycle_start_date) return new Date(machine.cycle_start_date);
+  const latestDeploy = await MachineDeployment.findOne({
+    where: { machine_id: machine.id },
+    order: [['deployed_at', 'DESC']],
+  });
+  if (latestDeploy) return new Date(latestDeploy.deployed_at);
+  return null;
+};
+
+const calculateMeteora = (prevCount, currCount, creditValueTzs, weeklyTargetTzs, alreadyCollected = 0) => {
   const difference = currCount - prevCount;
   if (difference < 0) throw new Error('Current count cannot be less than previous count');
   const gross_tzs = difference * creditValueTzs;
-  const office_tzs = Math.min(gross_tzs, weeklyTargetTzs);
-  const owner_tzs = Math.max(0, gross_tzs - weeklyTargetTzs);
+  const remainingTarget = Math.max(0, weeklyTargetTzs - alreadyCollected);
+  const office_tzs = Math.min(gross_tzs, remainingTarget);
+  const owner_tzs = gross_tzs - office_tzs;
   return { difference, gross_tzs, office_tzs, owner_tzs, net_tzs: gross_tzs };
 };
 
-const calculateNovomatic = (totalInTzs, totalOutTzs, weeklyTargetTzs) => {
+const calculateNovomatic = (totalInTzs, totalOutTzs, weeklyTargetTzs, alreadyCollected = 0) => {
   const net_tzs = totalInTzs - totalOutTzs;
   const gross_tzs = net_tzs;
-  const office_tzs = Math.min(gross_tzs, weeklyTargetTzs);
-  const owner_tzs = Math.max(0, gross_tzs - weeklyTargetTzs);
+  const remainingTarget = Math.max(0, weeklyTargetTzs - alreadyCollected);
+  const office_tzs = Math.min(gross_tzs, remainingTarget);
+  const owner_tzs = gross_tzs - office_tzs;
   return { difference: 0, gross_tzs, office_tzs, owner_tzs, net_tzs };
 };
 
-const getOrCreateWeeklyTarget = async (machineId, shopId, weekStart, weekEnd) => {
-  const settingRow = await Setting.findOne({ where: { key: 'weekly_target_tzs' } });
-  const targetTzs = settingRow ? parseInt(settingRow.value) : 120000;
+const getOrCreateWeeklyTarget = async (machineId, shopId, weekStart, weekEnd, machineTargetTzs) => {
+  const targetTzs = machineTargetTzs || 120000;
 
   const [target] = await WeeklyTarget.findOrCreate({
     where: { machine_id: machineId, week_start: weekStart.toISOString().split('T')[0] },
@@ -49,18 +73,70 @@ const getOrCreateWeeklyTarget = async (machineId, shopId, weekStart, weekEnd) =>
   return { target, targetTzs };
 };
 
-const submitCollection = async ({ machineId, shopId, collectorId, currCount, meterImageUrl, novomaticData, assignmentId }) => {
+const payOutstandingDebts = async (machineId, amount) => {
+  if (amount <= 0) return 0;
+
+  const outstandingDebts = await MachineDebt.findAll({
+    where: {
+      machine_id: machineId,
+      status: { [Op.in]: ['pending', 'partial'] },
+    },
+    order: [['created_at', 'ASC']],
+  });
+
+  let remaining = amount;
+
+  for (const debt of outstandingDebts) {
+    if (remaining <= 0) break;
+    const owed = debt.amount - debt.paid_amount;
+    if (owed <= 0) continue;
+
+    const payment = Math.min(remaining, owed);
+    debt.paid_amount += payment;
+    remaining -= payment;
+
+    if (debt.paid_amount >= debt.amount) {
+      debt.status = 'paid';
+      debt.paid_at = new Date();
+    } else {
+      debt.status = 'partial';
+    }
+    await debt.save();
+  }
+
+  return amount - remaining;
+};
+
+const submitCollection = async ({ machineId, shopId, collectorId, currCount, meterImageUrl, novomaticData, assignmentId, skipDebtRepayment }) => {
   const machine = await Machine.findByPk(machineId);
   if (!machine) throw new Error('Machine not found');
 
-  const { weekStart, weekEnd } = getWeekBounds();
-  const { target, targetTzs } = await getOrCreateWeeklyTarget(machineId, shopId, weekStart, weekEnd);
+  const cycleStart = await getMachineCycleStart(machine);
+  const { weekStart, weekEnd } = cycleStart
+    ? getMachineWeekBounds(cycleStart)
+    : getWeekBounds();
 
+  const machineTarget = machine.weekly_target_tzs || null;
+  const finalTarget = machineTarget || (await Setting.findOne({ where: { key: 'weekly_target_tzs' } }));
+
+  const { target, targetTzs } = await getOrCreateWeeklyTarget(
+    machineId, shopId, weekStart, weekEnd,
+    finalTarget ? parseInt(finalTarget.value || finalTarget) : 120000
+  );
+
+  const alreadyCollected = target.collected_tzs || 0;
   let calcData;
   if (machine.manufacturer === 'Novomatic' && novomaticData) {
-    calcData = calculateNovomatic(novomaticData.total_in_tzs, novomaticData.total_out_tzs, targetTzs);
+    calcData = calculateNovomatic(novomaticData.total_in_tzs, novomaticData.total_out_tzs, targetTzs, alreadyCollected);
   } else {
-    calcData = calculateMeteora(machine.previous_count, currCount, machine.credit_value_tzs, targetTzs);
+    calcData = calculateMeteora(machine.previous_count, currCount, machine.credit_value_tzs, targetTzs, alreadyCollected);
+  }
+
+  // Debt-first: apply excess to outstanding debts before creating owner commission
+  let finalOwnerTzs = calcData.owner_tzs;
+  if (!skipDebtRepayment && calcData.owner_tzs > 0) {
+    const repaid = await payOutstandingDebts(machineId, calcData.owner_tzs);
+    finalOwnerTzs = calcData.owner_tzs - repaid;
   }
 
   const collection = await Collection.create({
@@ -73,7 +149,7 @@ const submitCollection = async ({ machineId, shopId, collectorId, currCount, met
     credit_value_tzs: machine.credit_value_tzs,
     gross_tzs: calcData.gross_tzs,
     office_tzs: calcData.office_tzs,
-    owner_tzs: calcData.owner_tzs,
+    owner_tzs: finalOwnerTzs,
     net_tzs: calcData.net_tzs,
     meter_image_url: meterImageUrl,
     collected_at: new Date(),
@@ -111,15 +187,134 @@ const getCollections = async (filters = {}, user) => {
   }
   return Collection.findAndCountAll({
     where,
+    attributes: {
+      include: [
+        [
+          literal(`(
+            SELECT COALESCE(SUM(md.amount - md.paid_amount), 0)
+            FROM machine_debts md
+            WHERE md.machine_id = Collection.machine_id
+              AND md.status IN ('pending', 'partial')
+          )`),
+          'debt_outstanding_tzs',
+        ],
+        [
+          literal(`(
+            SELECT md.id
+            FROM machine_debts md
+            WHERE md.machine_id = Collection.machine_id
+              AND md.status IN ('pending', 'partial')
+            ORDER BY md.created_at ASC
+            LIMIT 1
+          )`),
+          'debt_id',
+        ],
+      ],
+    },
     include: [
-      { model: Machine, as: 'machine', attributes: ['slot_code', 'manufacturer'] },
-      { model: require('../models').Shop, as: 'shop', attributes: ['name'] },
-      { model: require('../models').User, as: 'collector', attributes: ['name'] },
+      {
+        model: Machine, as: 'machine',
+        attributes: ['id', 'slot_code', 'manufacturer', 'credit_value_tzs', 'weekly_target_tzs'],
+      },
+      { model: Shop, as: 'shop', attributes: ['id', 'name'] },
+      { model: User, as: 'collector', attributes: ['id', 'name'] },
+      { model: User, as: 'approver', attributes: ['id', 'name'] },
     ],
     order: [['collected_at', 'DESC']],
-    limit: filters.limit || 50,
-    offset: filters.offset || 0,
+    limit: +(filters.limit || 50),
+    offset: +(filters.offset || 0),
+    distinct: true,
   });
 };
 
-module.exports = { submitCollection, getCollections, getWeekBounds, calculateMeteora, calculateNovomatic };
+const updateCollection = async (id, data) => {
+  const collection = await Collection.findByPk(id);
+  if (!collection) return null;
+  await collection.update(data);
+  return collection;
+};
+
+const removeCollection = async (id) => {
+  const collection = await Collection.findByPk(id);
+  if (!collection) return false;
+  await collection.destroy();
+  return true;
+};
+
+const getAssignments = async (filters = {}) => {
+  const where = {};
+  if (filters.collector_id) where.collector_id = filters.collector_id;
+  if (filters.machine_id) where.machine_id = filters.machine_id;
+  if (filters.status) where.status = filters.status;
+  if (filters.date_from) where.assigned_date = { ...where.assigned_date, [Op.gte]: filters.date_from };
+  if (filters.date_to) where.assigned_date = { ...where.assigned_date, [Op.lte]: filters.date_to };
+  if (filters.date) where.assigned_date = filters.date;
+
+  return CollectorAssignment.findAndCountAll({
+    where,
+    include: [
+      { model: Machine, as: 'machine', attributes: ['id', 'slot_code', 'manufacturer', 'previous_count', 'credit_value_tzs'] },
+      { model: Shop, as: 'shop', attributes: ['id', 'name'] },
+      { model: User, as: 'collector', attributes: ['id', 'name'] },
+    ],
+    order: [['assigned_date', 'DESC'], ['created_at', 'DESC']],
+    limit: +(filters.limit || 50),
+    offset: +(filters.offset || 0),
+    distinct: true,
+  });
+};
+
+const updateAssignment = async (id, data) => {
+  const assignment = await CollectorAssignment.findByPk(id);
+  if (!assignment) return null;
+  await assignment.update(data);
+  return assignment;
+};
+
+const removeAssignment = async (id) => {
+  const assignment = await CollectorAssignment.findByPk(id);
+  if (!assignment) return false;
+  await assignment.destroy();
+  return true;
+};
+
+const ExcelJS = require('exceljs');
+
+const exportAssignmentsExcel = async (filters = {}) => {
+  const assignments = await CollectorAssignment.findAll({
+    where: filters,
+    include: [
+      { model: Machine, as: 'machine', attributes: ['id', 'slot_code', 'manufacturer'] },
+      { model: Shop, as: 'shop', attributes: ['id', 'name'] },
+      { model: User, as: 'collector', attributes: ['id', 'name'] },
+    ],
+    order: [['assigned_date', 'DESC'], ['created_at', 'DESC']],
+  });
+
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('Assignments');
+  ws.columns = [
+    { header: 'Slot Code', key: 'slot_code', width: 15 },
+    { header: 'Shop', key: 'shop', width: 20 },
+    { header: 'Collector', key: 'collector', width: 20 },
+    { header: 'Date', key: 'date', width: 15 },
+    { header: 'Status', key: 'status', width: 12 },
+    { header: 'Opened', key: 'opened', width: 10 },
+  ];
+
+  assignments.forEach(a => {
+    ws.addRow({
+      slot_code: a.machine?.slot_code,
+      shop: a.shop?.name,
+      collector: a.collector?.name,
+      date: a.assigned_date,
+      status: a.status,
+      opened: a.is_opened ? 'Yes' : 'No',
+    });
+  });
+
+  ws.getRow(1).font = { bold: true };
+  return wb.xlsx.writeBuffer();
+};
+
+module.exports = { submitCollection, getCollections, getWeekBounds, getMachineWeekBounds, calculateMeteora, calculateNovomatic, updateCollection, removeCollection, getAssignments, updateAssignment, removeAssignment, exportAssignmentsExcel };

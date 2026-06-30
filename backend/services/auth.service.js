@@ -3,7 +3,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { Op } = require('sequelize');
 const { JWT_SECRET, JWT_REFRESH_SECRET, JWT_EXPIRY, JWT_REFRESH_EXPIRY, BCRYPT_ROUNDS } = require('../config/constants');
-const { User, Role, Permission, RefreshToken } = require('../models');
+const { User, Role, Permission, RefreshToken, Employee, Department, Position } = require('../models');
 
 const generateTokens = (user) => {
   const payload = { id: user.id, email: user.email, roleId: user.role_id };
@@ -16,7 +16,14 @@ const getUserWithRole = async (userId) => {
   return User.findOne({
     where: { id: userId, is_active: true },
     attributes: { exclude: ['password_hash'] },
-    include: [{ model: Role, as: 'role', include: [{ model: Permission, as: 'permissions' }] }],
+    include: [
+      { model: Role, as: 'role', include: [{ model: Permission, as: 'permissions' }] },
+      { model: Employee, as: 'employee', include: [
+        { model: Department, as: 'department' },
+        { model: Position, as: 'position' },
+        { model: Employee, as: 'supervisor', attributes: ['id', 'full_name', 'employee_code'] },
+      ] },
+    ],
   });
 };
 
@@ -79,6 +86,39 @@ const logout = async (refreshToken) => {
   await RefreshToken.update({ is_revoked: true }, { where: { token: refreshToken } });
 };
 
+const updateProfile = async (userId, { name, email, phone, currentPassword, account_holder_name, bank_account, bank_name, bank_code, bank_branch, tax_payer_id }) => {
+  const user = await User.findByPk(userId);
+  if (!user) throw new Error('User not found');
+
+  if (email && email !== user.email) {
+    if (!currentPassword) throw new Error('Current password required to change email');
+    const valid = await bcrypt.compare(currentPassword, user.password_hash);
+    if (!valid) throw new Error('Current password incorrect');
+    const existing = await User.findOne({ where: { email: email.trim() } });
+    if (existing && existing.id !== userId) throw new Error('Email already in use');
+  }
+
+  const payload = {};
+  if (name != null) payload.name = name.trim();
+  if (email != null) payload.email = email.trim();
+  if (phone != null) payload.phone = phone.trim();
+  await user.update(payload);
+
+  const employee = await Employee.findOne({ where: { user_id: userId } });
+  if (employee) {
+    const empPayload = {};
+    if (account_holder_name !== undefined) empPayload.account_holder_name = account_holder_name;
+    if (bank_account !== undefined) empPayload.bank_account = bank_account;
+    if (bank_name !== undefined) empPayload.bank_name = bank_name;
+    if (bank_code !== undefined) empPayload.bank_code = bank_code;
+    if (bank_branch !== undefined) empPayload.bank_branch = bank_branch;
+    if (tax_payer_id !== undefined) empPayload.tax_payer_id = tax_payer_id;
+    if (Object.keys(empPayload).length) await employee.update(empPayload);
+  }
+
+  return getUserWithRole(user.id);
+};
+
 const changePassword = async (userId, currentPassword, newPassword) => {
   const user = await User.findByPk(userId);
   const valid = await bcrypt.compare(currentPassword, user.password_hash);
@@ -87,4 +127,4 @@ const changePassword = async (userId, currentPassword, newPassword) => {
   await user.update({ password_hash });
 };
 
-module.exports = { register, login, refresh, logout, changePassword, getUserWithRole };
+module.exports = { register, login, refresh, logout, changePassword, updateProfile, getUserWithRole };

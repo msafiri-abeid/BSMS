@@ -3,7 +3,6 @@ const cron = require('node-cron');
 const { Op } = require('sequelize');
 const { WeeklyTarget, Machine, Shop, Ticket, Expense, User, Role, Setting, TokenInventory } = require('../models');
 const { sendSMS, TEMPLATES } = require('../services/sms.service');
-const { getWeekBounds } = require('../services/collection.service');
 
 const getOpsManagerPhones = async () => {
   const ops = await User.findAll({
@@ -25,10 +24,9 @@ const getFinancePhones = async () => {
 cron.schedule('0 23 * * 0', async () => {
   console.log('[CRON] Checking weekly targets...');
   try {
-    const { weekStart, weekEnd } = getWeekBounds();
     const targets = await WeeklyTarget.findAll({
       where: {
-        week_start: weekStart.toISOString().split('T')[0],
+        week_end: { [Op.lte]: new Date().toISOString().split('T')[0] },
         status: 'pending',
       },
       include: [

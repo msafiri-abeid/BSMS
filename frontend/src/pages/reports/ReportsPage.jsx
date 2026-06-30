@@ -1,17 +1,25 @@
-// src/pages/reports/ReportsPage.jsx
 import { useState } from 'react';
-import { Tabs, Table, Button, DatePicker, Select, Card, Row, Col, Statistic, Typography, Space, Tag } from 'antd';
-import { DownloadOutlined } from '@ant-design/icons';
+import { Tabs, Table, Button, DatePicker, Select, Card, Typography, Space, Tag } from 'antd';
+import { Download } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { collectionsAPI, financeAPI, ticketsAPI } from '../../services/api';
 import dayjs from 'dayjs';
 
-const { Title } = Typography;
+const { Text } = Typography;
 const { RangePicker } = DatePicker;
 const { Option } = Select;
 
 const fmt = (n) => `TZS ${(n || 0).toLocaleString()}`;
+
+const KpiCard = ({ title, value, formatter, color }) => (
+  <div className="rounded-lg border border-slate-100 p-4 bg-white">
+    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">{title}</p>
+    <p className={`text-2xl font-bold tracking-tight mt-1 ${color || 'text-slate-800'}`}>
+      {formatter ? formatter(value) : (value ?? 0)}
+    </p>
+  </div>
+);
 
 // ── Collections Report ────────────────────────────────────────
 function CollectionsReport() {
@@ -42,31 +50,31 @@ function CollectionsReport() {
   const cols = [
     { title: 'Date', dataIndex: 'collected_at', render: v => dayjs(v).format('DD MMM YYYY'), width: 100 },
     { title: 'Slot Code', dataIndex: ['machine', 'slot_code'], width: 110 },
-    { title: 'Manufacturer', dataIndex: ['machine', 'manufacturer'], render: v => <Tag>{v}</Tag>, width: 110 },
+    { title: 'Manufacturer', dataIndex: ['machine', 'manufacturer'], render: v => <Tag className="!text-[10px]">{v}</Tag>, width: 110 },
     { title: 'Shop', dataIndex: ['shop', 'name'], width: 130 },
     { title: 'Collector', dataIndex: ['collector', 'name'], width: 120 },
     { title: 'Prev Count', dataIndex: 'prev_count', render: v => v?.toLocaleString(), width: 100 },
     { title: 'Curr Count', dataIndex: 'curr_count', render: v => v?.toLocaleString(), width: 100 },
     { title: 'Difference', dataIndex: 'difference', render: v => v?.toLocaleString(), width: 100 },
     { title: 'Gross (TZS)', dataIndex: 'gross_tzs', render: v => v?.toLocaleString(), width: 120 },
-    { title: 'Office (TZS)', dataIndex: 'office_tzs', render: v => <span style={{ color: '#1a6b3a' }}>{v?.toLocaleString()}</span>, width: 120 },
-    { title: 'Owner (TZS)', dataIndex: 'owner_tzs', render: v => <span style={{ color: '#722ed1' }}>{v?.toLocaleString()}</span>, width: 120 },
+    { title: 'Office (TZS)', dataIndex: 'office_tzs', render: v => <span className="text-green-700">{v?.toLocaleString()}</span>, width: 120 },
+    { title: 'Owner (TZS)', dataIndex: 'owner_tzs', render: v => <span className="text-purple-700">{v?.toLocaleString()}</span>, width: 120 },
   ];
 
   return (
     <>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+      <div className="flex justify-between mb-4">
         <Space>
           <RangePicker onChange={d => setFilters(f => ({ ...f, date_from: d?.[0]?.toISOString(), date_to: d?.[1]?.toISOString() }))} />
         </Space>
-        <Button icon={<DownloadOutlined />} onClick={handleExport}>Export Excel</Button>
+        <Button icon={<Download className="w-4 h-4" />} onClick={handleExport} className="flex items-center gap-1.5">Export Excel</Button>
       </div>
-      <Row gutter={16} style={{ marginBottom: 16 }}>
-        <Col span={6}><Card size="small"><Statistic title="Total Gross" value={totals.gross} formatter={fmt} valueStyle={{ color: '#1a6b3a' }} /></Card></Col>
-        <Col span={6}><Card size="small"><Statistic title="Office Total" value={totals.office} formatter={fmt} /></Card></Col>
-        <Col span={6}><Card size="small"><Statistic title="Owner Total" value={totals.owner} formatter={fmt} valueStyle={{ color: '#722ed1' }} /></Card></Col>
-        <Col span={6}><Card size="small"><Statistic title="Records" value={data?.count || 0} /></Card></Col>
-      </Row>
+      <div className="grid grid-cols-4 gap-4 mb-4">
+        <KpiCard title="Total Gross" value={totals.gross} formatter={fmt} color="text-green-700" />
+        <KpiCard title="Office Total" value={totals.office} formatter={fmt} />
+        <KpiCard title="Owner Total" value={totals.owner} formatter={fmt} color="text-purple-700" />
+        <KpiCard title="Records" value={data?.count || 0} />
+      </div>
       <Table
         dataSource={rows}
         columns={cols}
@@ -77,7 +85,7 @@ function CollectionsReport() {
         pagination={{ pageSize: 50, total: data?.count, onChange: p => setFilters(f => ({ ...f, offset: (p - 1) * 50 })) }}
         summary={() => (
           <Table.Summary fixed>
-            <Table.Summary.Row style={{ fontWeight: 600, background: '#f5f5f5' }}>
+            <Table.Summary.Row className="font-semibold bg-slate-100">
               <Table.Summary.Cell index={0} colSpan={7}>TOTALS</Table.Summary.Cell>
               <Table.Summary.Cell index={7}>{totals.diff.toLocaleString()}</Table.Summary.Cell>
               <Table.Summary.Cell index={8}>{totals.gross.toLocaleString()}</Table.Summary.Cell>
@@ -102,13 +110,16 @@ function FinanceReport() {
     { month: 'Jun', income: 4900000, expenses: 1050000 },
   ];
 
+  const totalIncome = chartData.reduce((s, d) => s + d.income, 0);
+  const totalExpenses = chartData.reduce((s, d) => s + d.expenses, 0);
+
   return (
     <>
-      <Row gutter={16} style={{ marginBottom: 24 }}>
-        <Col span={8}><Card size="small"><Statistic title="Total Income (6mo)" value={chartData.reduce((s, d) => s + d.income, 0)} formatter={fmt} valueStyle={{ color: '#52c41a' }} /></Card></Col>
-        <Col span={8}><Card size="small"><Statistic title="Total Expenses (6mo)" value={chartData.reduce((s, d) => s + d.expenses, 0)} formatter={fmt} valueStyle={{ color: '#f5222d' }} /></Card></Col>
-        <Col span={8}><Card size="small"><Statistic title="Net Profit (6mo)" value={chartData.reduce((s, d) => s + d.income - d.expenses, 0)} formatter={fmt} valueStyle={{ color: '#1890ff' }} /></Card></Col>
-      </Row>
+      <div className="grid grid-cols-3 gap-4 mb-6">
+        <KpiCard title="Total Income (6mo)" value={totalIncome} formatter={fmt} color="text-green-600" />
+        <KpiCard title="Total Expenses (6mo)" value={totalExpenses} formatter={fmt} color="text-red-600" />
+        <KpiCard title="Net Profit (6mo)" value={totalIncome - totalExpenses} formatter={fmt} color="text-blue-600" />
+      </div>
       <Card title="Income vs Expenses" size="small">
         <ResponsiveContainer width="100%" height={320}>
           <BarChart data={chartData}>
@@ -135,26 +146,33 @@ function TicketReport() {
     .map(([status, count]) => ({ status, count })) : [];
 
   const cols = [
-    { title: 'Status', dataIndex: 'status', render: v => <Tag color={{ open: 'blue', pending: 'orange', in_progress: 'processing', resolved: 'green', closed: 'default', reopened: 'volcano' }[v]}>{v}</Tag> },
-    { title: 'Count', dataIndex: 'count', render: v => <strong>{v}</strong> },
+    { title: 'Status', dataIndex: 'status', render: v => <Tag color={{ open: 'blue', pending: 'orange', in_progress: 'processing', resolved: 'green', closed: 'default', reopened: 'volcano' }[v]} className="!text-[10px]">{v}</Tag> },
+    { title: 'Count', dataIndex: 'count', render: v => <span className="font-semibold">{v}</span> },
     { title: 'Share %', dataIndex: 'count', render: (v) => `${counts?.total ? Math.round((v / counts.total) * 100) : 0}%` },
   ];
 
   return (
-    <Row gutter={16}>
-      <Col span={12}>
-        <Card size="small" title="Tickets by Status">
-          <Table dataSource={statusData} columns={cols} rowKey="status" size="small" pagination={false} />
-        </Card>
-      </Col>
-      <Col span={12}>
-        <Card size="small" title="Summary">
-          <Statistic title="Total Tickets" value={counts?.total || 0} style={{ marginBottom: 16 }} />
-          <Statistic title="Open + In Progress" value={(counts?.open || 0) + (counts?.in_progress || 0)} valueStyle={{ color: '#faad14' }} style={{ marginBottom: 16 }} />
-          <Statistic title="Resolved" value={counts?.resolved || 0} valueStyle={{ color: '#52c41a' }} />
-        </Card>
-      </Col>
-    </Row>
+    <div className="grid grid-cols-2 gap-4">
+      <Card size="small" title="Tickets by Status">
+        <Table dataSource={statusData} columns={cols} rowKey="status" size="small" pagination={false} />
+      </Card>
+      <Card size="small" title="Summary">
+        <div className="space-y-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Total Tickets</p>
+            <p className="text-2xl font-bold text-slate-800">{counts?.total || 0}</p>
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Open + In Progress</p>
+            <p className="text-2xl font-bold text-amber-500">{(counts?.open || 0) + (counts?.in_progress || 0)}</p>
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Resolved</p>
+            <p className="text-2xl font-bold text-green-600">{counts?.resolved || 0}</p>
+          </div>
+        </div>
+      </Card>
+    </div>
   );
 }
 
@@ -162,8 +180,8 @@ function TicketReport() {
 export default function ReportsPage() {
   return (
     <div>
-      <div className="page-header">
-        <Title level={4} style={{ margin: 0 }}>Reports</Title>
+      <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-200/60">
+        <h4 className="text-base font-bold text-slate-800 m-0">Reports</h4>
       </div>
       <Tabs
         items={[
@@ -175,7 +193,7 @@ export default function ReportsPage() {
             label: 'Expenses',
             children: (
               <Card size="small">
-                <Typography.Text type="secondary">Expense report with category breakdown — uses Expenses module filters.</Typography.Text>
+                <Text type="secondary">Expense report with category breakdown — uses Expenses module filters.</Text>
               </Card>
             ),
           },

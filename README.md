@@ -1,6 +1,6 @@
 # Bentabet Slot Management System
 
-Web application for Bentabet Ltd — managing slot machine operations, collections, finance, inventory, ticketing, staff, and reporting across multiple shops in Tanzania.
+Web application for Bentabet Ltd — managing slot machine operations, collections, sales, finance, inventory, ticketing, staff, and reporting across multiple slot shops in Tanzania.
 
 ---
 
@@ -172,6 +172,13 @@ Owner TZS  = max(0, Net − Weekly target)
 | Collector | Own daily assignments only |
 | Technician | Tickets + machine read |
 
+### Token Debts
+- Machine debts are always **token debts** (type = `token`)
+- Auto-created on machine deployment when `tokens_paid = false`
+- Collections first meet the office weekly target, then remaining amount repays outstanding token debts in FIFO order, then remainder goes to shop owner
+- No auto-commission debts from owner share
+- Debt payments require Operations Manager approval with a receipt attachment uploaded to Cloudinary
+
 ### Collector Scope
 Collectors can only see their own assigned machines for the current day. They cannot view other collectors' assignments or collections.
 
@@ -191,9 +198,35 @@ PUT  /api/auth/password
 ### Partners & Shops
 ```
 GET|POST       /api/partners
-PUT            /api/partners/:id
+PUT|DELETE     /api/partners/:id
 GET|POST       /api/shops
-PUT            /api/shops/:id
+PUT|DELETE     /api/shops/:id
+GET            /api/regions
+GET            /api/wards?region_id=X
+GET            /api/streets?ward_id=X
+```
+
+**Address hierarchy**: Country → Region (select) → Ward (cascading select, filtered by region) → Street (cascading select, filtered by ward). Uses `wards` and `streets` DB tables with FK references.
+
+**Multi-document upload**: Partners and Shops support drag-and-drop upload of multiple documents (contracts, letters, agreements) — PDF, JPG, PNG, WebP, DOC, DOCX, XLS, XLSX. Stored as JSON array in the `documents` field on each model.
+
+### Inventory (POS / Bar Stock)
+```
+GET|POST       /api/inventory/products
+GET            /api/inventory/categories
+POST           /api/inventory/stock/add
+GET|POST       /api/inventory/sales
+POST           /api/inventory/sales/:id/payment
+GET            /api/inventory/sales/report/summary
+GET|POST       /api/inventory/audits
+PUT            /api/inventory/audits/item
+PUT            /api/inventory/audits/:id/complete|verify
+GET|POST       /api/inventory/transfers
+PUT            /api/inventory/transfers/:id/approve|receive|cancel
+GET|POST       /api/inventory/returns
+GET|POST       /api/inventory/alerts
+PUT            /api/inventory/alerts/:id/acknowledge
+GET            /api/inventory/accounting/profit-loss|margins|valuation|daily-report
 ```
 
 ### Machines
@@ -203,6 +236,8 @@ GET|PUT        /api/machines/:id
 POST           /api/machines/:id/deploy
 POST           /api/machines/:id/exchange
 POST           /api/machines/:id/refill
+GET            /api/machines/:id/pdf
+POST           /api/machines/:id/collections
 ```
 
 ### Collections
@@ -210,9 +245,13 @@ POST           /api/machines/:id/refill
 GET|POST       /api/collections
 POST           /api/collections/ocr
 GET            /api/collections/my-assignments
-POST           /api/collections/assignments
+GET|POST       /api/collections/assignments
+PUT|DELETE     /api/collections/assignments/:id
+POST           /api/collections/assignments/:id/open
+GET            /api/collections/assignments/export
 GET            /api/collections/weekly-targets
 ```
+Collections list response includes `debt_outstanding_tzs` and `debt_id` computed fields from outstanding MachineDebt records.
 
 ### Finance
 ```
@@ -236,6 +275,14 @@ PUT            /api/tickets/:id/status
 POST           /api/tickets/:id/activity
 ```
 
+### Debts
+```
+GET|POST       /api/debts
+PUT            /api/debts/:id/pay
+PUT            /api/debts/:id/write-off
+GET            /api/debts/export
+```
+
 ### Settings
 ```
 GET|PUT        /api/settings
@@ -246,7 +293,7 @@ POST           /api/settings/sms-test
 
 ### Dashboards
 ```
-GET /api/dashboard/admin
+GET /api/dashboard/admin       # ?shop_id=&date_from=&date_to=
 GET /api/dashboard/collector
 GET /api/dashboard/finance
 GET /api/dashboard/director
@@ -294,4 +341,3 @@ If OCR confidence < 0.8, the form flags values for manual confirmation — the c
 ## Currency
 
 All monetary amounts are stored and processed as **integers in TZS** (Tanzanian Shillings). No decimal values. The system displays amounts formatted with `.toLocaleString()` for readability.
- | ExcelJS + PDFKit |

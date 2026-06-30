@@ -33,11 +33,12 @@ const approveExpense = async (req, res, next) => {
 
 const listExpenses = async (req, res, next) => {
   try {
-    const { status, category_id, shop_id, limit = 50, offset = 0 } = req.query;
+    const { status, category_id, shop_id, machine_id, limit = 50, offset = 0 } = req.query;
     const where = {};
     if (status) where.status = status;
     if (category_id) where.category_id = category_id;
     if (shop_id) where.shop_id = shop_id;
+    if (machine_id) where.machine_id = machine_id;
     const data = await Expense.findAndCountAll({
       where, limit: +limit, offset: +offset,
       include: [
@@ -103,7 +104,7 @@ const createPayroll = async (req, res, next) => {
 
 const exportCollections = async (req, res, next) => {
   try {
-    const buffer = await financeService.exportCollectionsExcel({});
+    const buffer = await financeService.exportCollectionsExcel(req.query);
     res.set({ 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'Content-Disposition': 'attachment; filename="collections.xlsx"' });
     res.send(buffer);
   } catch (err) { next(err); }

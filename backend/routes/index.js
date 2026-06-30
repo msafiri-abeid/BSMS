@@ -2,7 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const { authenticate, checkPermission } = require('../middleware/auth');
-const { uploadContract, uploadReceipt, uploadMeter, uploadTicket } = require('../middleware/upload');
+const { uploadContract, uploadDocuments, uploadReceipt, uploadMeter, uploadTicket } = require('../middleware/upload');
 
 const authC = require('../controllers/auth.controller');
 const machineC = require('../controllers/machine.controller');
@@ -18,6 +18,7 @@ const transfersC = require('../controllers/inventory.transfers.controller');
 const returnsC = require('../controllers/inventory.returns.controller');
 const accountingC = require('../controllers/inventory.accounting.controller');
 const alertsC = require('../controllers/inventory.alerts.controller');
+const stockC = require('../controllers/inventory.stock.controller');
 
 // ── AUTH ──────────────────────────────────────────────────────
 router.post('/auth/register', authC.register);
@@ -26,41 +27,59 @@ router.post('/auth/refresh', authC.refresh);
 router.post('/auth/logout', authC.logout);
 router.get('/auth/me', authenticate, authC.me);
 router.put('/auth/password', authenticate, authC.changePassword);
+router.put('/auth/profile', authenticate, authC.updateProfile);
 
 // ── USERS ─────────────────────────────────────────────────────
 const usersC = require('../controllers/users.controller');
 router.get('/users', authenticate, checkPermission('users', 'read'), usersC.listUsers);
-router.post('/users', authenticate, checkPermission('users', 'write'), usersC.createUser);
-router.put('/users/:id', authenticate, checkPermission('users', 'write'), usersC.updateUser);
+router.post('/users', authenticate, checkPermission('users', 'create'), usersC.createUser);
+router.put('/users/:id', authenticate, checkPermission('users', 'update'), usersC.updateUser);
 
 // ── PARTNERS & SHOPS ──────────────────────────────────────────
 router.get('/partners', authenticate, checkPermission('partners', 'read'), partnerC.listPartners);
-router.post('/partners', authenticate, checkPermission('partners', 'write'), uploadContract.single('contract'), partnerC.createPartner);
-router.put('/partners/:id', authenticate, checkPermission('partners', 'write'), uploadContract.single('contract'), partnerC.updatePartner);
-router.delete('/partners/:id', authenticate, checkPermission('partners', 'write'), partnerC.deletePartner);
+router.get('/partners/own', authenticate, checkPermission('partners', 'read'), partnerC.listOwnPartners);
+router.post('/partners', authenticate, checkPermission('partners', 'create'), uploadDocuments, partnerC.createPartner);
+router.put('/partners/:id', authenticate, checkPermission('partners', 'update'), uploadDocuments, partnerC.updatePartner);
+router.delete('/partners/:id', authenticate, checkPermission('partners', 'delete'), partnerC.deletePartner);
 router.get('/partners/:id', authenticate, checkPermission('partners', 'read'), partnerC.getPartner);
 router.get('/shops', authenticate, checkPermission('shops', 'read'), partnerC.listShops);
-router.post('/shops', authenticate, checkPermission('shops', 'write'), uploadContract.single('contract'), partnerC.createShop);
-router.put('/shops/:id', authenticate, checkPermission('shops', 'write'), uploadContract.single('contract'), partnerC.updateShop);
-router.delete('/shops/:id', authenticate, checkPermission('shops', 'write'), partnerC.deleteShop);
+router.post('/shops', authenticate, checkPermission('shops', 'create'), uploadDocuments, partnerC.createShop);
+router.put('/shops/:id', authenticate, checkPermission('shops', 'update'), uploadDocuments, partnerC.updateShop);
+router.delete('/shops/:id', authenticate, checkPermission('shops', 'delete'), partnerC.deleteShop);
 router.get('/shops/:id', authenticate, checkPermission('shops', 'read'), partnerC.getShop);
+router.get('/regions', authenticate, partnerC.listRegions);
+router.get('/districts', authenticate, partnerC.listDistricts);
+router.get('/wards', authenticate, partnerC.listWards);
+router.get('/streets', authenticate, partnerC.listStreets);
 
 // ── MACHINES ──────────────────────────────────────────────────
 router.get('/machines', authenticate, checkPermission('machines', 'read'), machineC.list);
-router.post('/machines', authenticate, checkPermission('machines', 'write'), machineC.create);
+router.post('/machines', authenticate, checkPermission('machines', 'create'), machineC.create);
 router.get('/machines/:id', authenticate, checkPermission('machines', 'read'), machineC.getOne);
-router.put('/machines/:id', authenticate, checkPermission('machines', 'write'), machineC.update);
-router.post('/machines/:id/deploy', authenticate, checkPermission('machines', 'write'), machineC.deploy);
-router.post('/machines/:id/exchange', authenticate, checkPermission('machines', 'write'), machineC.exchange);
-router.post('/machines/:id/refill', authenticate, checkPermission('machines', 'write'), machineC.refill);
+router.get('/machines/:id/stats', authenticate, checkPermission('machines', 'read'), machineC.getMachineStats);
+router.put('/machines/:id', authenticate, checkPermission('machines', 'update'), machineC.update);
+router.delete('/machines/:id', authenticate, checkPermission('machines', 'delete'), machineC.remove);
+router.post('/machines/:id/deploy', authenticate, checkPermission('machines', 'create'), machineC.deploy);
+router.post('/machines/:id/exchange', authenticate, checkPermission('machines', 'create'), machineC.exchange);
+router.post('/machines/:id/refill', authenticate, checkPermission('machines', 'create'), machineC.refill);
+router.get('/machines/export', authenticate, checkPermission('machines', 'read'), machineC.exportExcel);
+router.get('/machines/:id/pdf', authenticate, checkPermission('machines', 'read'), machineC.downloadPDF);
+router.post('/machines/:id/collections', authenticate, checkPermission('machines', 'create'), machineC.recordCollection);
 
 // ── COLLECTIONS ───────────────────────────────────────────────
 router.get('/collections/my-assignments', authenticate, collectionC.myAssignments);
-router.post('/collections/assignments', authenticate, checkPermission('collections', 'write'), collectionC.createAssignment);
+router.get('/collections/assignments', authenticate, checkPermission('collections', 'read'), collectionC.listAssignments);
+router.post('/collections/assignments', authenticate, checkPermission('collections', 'create'), collectionC.createAssignment);
+router.put('/collections/assignments/:id', authenticate, checkPermission('collections', 'update'), collectionC.editAssignment);
+router.delete('/collections/assignments/:id', authenticate, checkPermission('collections', 'delete'), collectionC.deleteAssignment);
 router.get('/collections', authenticate, checkPermission('collections', 'read'), collectionC.list);
 router.post('/collections', authenticate, uploadMeter.single('meter_image'), collectionC.submit);
 router.post('/collections/ocr', authenticate, uploadMeter.single('meter_image'), collectionC.ocr);
+router.post('/collections/assignments/:id/open', authenticate, collectionC.openMachine);
+router.get('/collections/assignments/export', authenticate, checkPermission('collections', 'read'), collectionC.exportAssignments);
 router.get('/collections/weekly-targets', authenticate, checkPermission('collections', 'read'), collectionC.weeklyTargets);
+router.put('/collections/:id', authenticate, checkPermission('collections', 'update'), collectionC.update);
+router.delete('/collections/:id', authenticate, checkPermission('collections', 'delete'), collectionC.remove);
 
 // ── FINANCE ───────────────────────────────────────────────────
 router.get('/finance/expenses', authenticate, checkPermission('finance', 'read'), financeC.listExpenses);
@@ -68,11 +87,11 @@ router.post('/finance/expenses', authenticate, uploadReceipt.single('receipt'), 
 router.get('/finance/expenses/pending', authenticate, checkPermission('finance', 'approve'), financeC.getPendingExpenses);
 router.put('/finance/expenses/:id/approve', authenticate, checkPermission('finance', 'approve'), financeC.approveExpense);
 router.get('/finance/invoices', authenticate, checkPermission('finance', 'read'), financeC.listInvoices);
-router.post('/finance/invoices', authenticate, checkPermission('finance', 'write'), financeC.createInvoice);
+router.post('/finance/invoices', authenticate, checkPermission('finance', 'create'), financeC.createInvoice);
 router.get('/finance/invoices/:id/pdf', authenticate, financeC.downloadInvoicePDF);
-router.post('/finance/invoices/:id/payment', authenticate, checkPermission('finance', 'write'), financeC.recordPayment);
+router.post('/finance/invoices/:id/payment', authenticate, checkPermission('finance', 'create'), financeC.recordPayment);
 router.get('/finance/payroll', authenticate, checkPermission('finance', 'read'), financeC.listPayroll);
-router.post('/finance/payroll', authenticate, checkPermission('finance', 'write'), financeC.createPayroll);
+router.post('/finance/payroll', authenticate, checkPermission('finance', 'create'), financeC.createPayroll);
 router.get('/finance/export/collections', authenticate, checkPermission('reports', 'read'), financeC.exportCollections);
 
 // ── TICKETS ───────────────────────────────────────────────────
@@ -84,38 +103,52 @@ router.get('/tickets/:id', authenticate, ticketC.getOne);
 router.put('/tickets/:id/status', authenticate, ticketC.updateStatus);
 router.post('/tickets/:id/activity', authenticate, uploadTicket.array('attachments', 5), ticketC.addActivity);
 
+// ── DEBTS ──────────────────────────────────────────────────────
+const debtC = require('../controllers/debt.controller');
+
+router.get('/debts', authenticate, checkPermission('machines', 'read'), debtC.list);
+router.post('/debts', authenticate, checkPermission('machines', 'create'), debtC.create);
+router.put('/debts/:id/pay', authenticate, checkPermission('machines', 'update'), uploadReceipt.single('receipt'), debtC.recordPayment);
+router.put('/debts/:id/write-off', authenticate, checkPermission('machines', 'update'), debtC.writeOff);
+router.get('/debts/export', authenticate, checkPermission('machines', 'read'), debtC.exportDebts);
+
 // ── SETTINGS ──────────────────────────────────────────────────
 router.get('/settings', authenticate, settingsC.getAll);
-router.put('/settings', authenticate, checkPermission('settings', 'write'), settingsC.bulkUpdate);
+router.put('/settings', authenticate, checkPermission('settings', 'update'), settingsC.bulkUpdate);
 router.get('/settings/roles', authenticate, checkPermission('settings', 'read'), settingsC.getRoles);
-router.post('/settings/roles', authenticate, checkPermission('settings', 'write'), settingsC.createRole);
-router.put('/settings/roles/:roleId/permissions', authenticate, checkPermission('settings', 'write'), settingsC.updatePermissions);
-router.post('/settings/sms-test', authenticate, checkPermission('settings', 'write'), settingsC.testSMS);
+router.post('/settings/roles', authenticate, checkPermission('settings', 'create'), settingsC.createRole);
+router.put('/settings/roles/:roleId', authenticate, checkPermission('settings', 'update'), settingsC.updateRole);
+router.delete('/settings/roles/:roleId', authenticate, checkPermission('settings', 'delete'), settingsC.deleteRole);
+router.put('/settings/roles/:roleId/permissions', authenticate, checkPermission('settings', 'update'), settingsC.updatePermissions);
+router.post('/settings/sms-test', authenticate, checkPermission('settings', 'create'), settingsC.testSMS);
+
+// Settings – Modules list
+router.get('/settings/modules', authenticate, settingsC.listModules);
+
+// Settings – Business management (own-partners)
+router.get('/settings/businesses', authenticate, checkPermission('settings', 'read'), settingsC.listBusinesses);
+router.put('/settings/businesses/:id', authenticate, checkPermission('settings', 'update'), settingsC.updateBusiness);
 
 // ── INVENTORY ─────────────────────────────────────────────────
-const { TokenInventory, Product, StockMovement, StockLevel } = require('../models');
+const { Product, StockMovement, StockLevel } = require('../models');
 
-// Basic inventory (tokens, products)
-router.get('/inventory/tokens', authenticate, checkPermission('inventory', 'read'), async (req, res, next) => {
-  try {
-    const movements = await TokenInventory.findAll({ order: [['created_at', 'DESC']], limit: 100 });
-    const current = await TokenInventory.sum('qty');
-    res.json({ success: true, data: { current, movements } });
-  } catch (err) { next(err); }
-});
-router.post('/inventory/tokens', authenticate, checkPermission('inventory', 'write'), async (req, res, next) => {
-  try {
-    const m = await TokenInventory.create({ ...req.body, created_by: req.user.id });
-    res.status(201).json({ success: true, data: m });
-  } catch (err) { next(err); }
-});
+// Token-specific controller
+const tokenC = require('../controllers/token.controller');
+
+// Token operations
+router.get('/inventory/tokens', authenticate, checkPermission('inventory', 'read'), tokenC.movements);
+router.post('/inventory/tokens', authenticate, checkPermission('inventory', 'create'), tokenC.addMovement);
+router.get('/tokens/balances', authenticate, checkPermission('inventory', 'read'), tokenC.balances);
+router.post('/tokens/distribute', authenticate, checkPermission('inventory', 'create'), tokenC.distribute);
+router.post('/tokens/return', authenticate, checkPermission('inventory', 'create'), tokenC.returnTokens);
+router.post('/tokens/lend', authenticate, checkPermission('inventory', 'create'), tokenC.lend);
 router.get('/inventory/products', authenticate, checkPermission('inventory', 'read'), async (req, res, next) => {
   try {
     const products = await Product.findAll({ where: req.query.shop_id ? { shop_id: req.query.shop_id } : {}, include: [{ model: StockLevel, as: 'stockLevel' }] });
     res.json({ success: true, data: products });
   } catch (err) { next(err); }
 });
-router.post('/inventory/products', authenticate, checkPermission('inventory', 'write'), async (req, res, next) => {
+router.post('/inventory/products', authenticate, checkPermission('inventory', 'create'), async (req, res, next) => {
   try {
     const { shop_id, name, category, unit, purchase_price, selling_price, expiry_date } = req.body;
     if (!shop_id || !name || !purchase_price || !selling_price) {
@@ -141,12 +174,13 @@ router.get('/inventory/categories', authenticate, checkPermission('inventory', '
     res.json({ success: true, data: categories.filter(c => c.value) });
   } catch (err) { next(err); }
 });
+router.post('/inventory/stock/add', authenticate, checkPermission('inventory', 'create'), uploadReceipt.single('receipt'), stockC.addStock);
 
 // Sales
 router.get('/inventory/sales', authenticate, checkPermission('inventory', 'read'), salesC.listSales);
 router.get('/inventory/sales/:id', authenticate, checkPermission('inventory', 'read'), salesC.getSale);
-router.post('/inventory/sales', authenticate, checkPermission('inventory', 'write'), salesC.recordSale);
-router.post('/inventory/sales/:id/payment', authenticate, checkPermission('inventory', 'write'), salesC.recordPayment);
+router.post('/inventory/sales', authenticate, checkPermission('inventory', 'create'), salesC.recordSale);
+router.post('/inventory/sales/:id/payment', authenticate, checkPermission('inventory', 'create'), salesC.recordPayment);
 router.get('/inventory/sales/report/summary', authenticate, checkPermission('inventory', 'read'), salesC.getSaleReport);
 
 // Stock Audits
@@ -158,17 +192,17 @@ router.put('/inventory/audits/:id/complete', authenticate, checkPermission('inve
 router.put('/inventory/audits/:id/verify', authenticate, checkPermission('inventory', 'audit'), auditsC.verifyAudit);
 
 // Stock Transfers
-router.get('/inventory/transfers', authenticate, checkPermission('inventory', 'write'), transfersC.listTransfers);
-router.get('/inventory/transfers/:id', authenticate, checkPermission('inventory', 'write'), transfersC.getTransfer);
-router.post('/inventory/transfers', authenticate, checkPermission('inventory', 'write'), transfersC.initializeTransfer);
+router.get('/inventory/transfers', authenticate, checkPermission('inventory', 'read'), transfersC.listTransfers);
+router.get('/inventory/transfers/:id', authenticate, checkPermission('inventory', 'read'), transfersC.getTransfer);
+router.post('/inventory/transfers', authenticate, checkPermission('inventory', 'create'), transfersC.initializeTransfer);
 router.put('/inventory/transfers/:id/approve', authenticate, checkPermission('inventory', 'audit'), transfersC.approveTransfer);
-router.put('/inventory/transfers/:id/receive', authenticate, checkPermission('inventory', 'write'), transfersC.receiveTransfer);
-router.put('/inventory/transfers/:id/cancel', authenticate, checkPermission('inventory', 'write'), transfersC.cancelTransfer);
+router.put('/inventory/transfers/:id/receive', authenticate, checkPermission('inventory', 'update'), transfersC.receiveTransfer);
+router.put('/inventory/transfers/:id/cancel', authenticate, checkPermission('inventory', 'update'), transfersC.cancelTransfer);
 
 // Sales Returns
 router.get('/inventory/returns', authenticate, checkPermission('inventory', 'read'), returnsC.listReturns);
 router.get('/inventory/returns/:id', authenticate, checkPermission('inventory', 'read'), returnsC.getReturn);
-router.post('/inventory/returns', authenticate, checkPermission('inventory', 'write'), returnsC.processReturn);
+router.post('/inventory/returns', authenticate, checkPermission('inventory', 'create'), returnsC.processReturn);
 router.put('/inventory/returns/:id/approve', authenticate, checkPermission('inventory', 'approve'), returnsC.approveReturn);
 
 // Low Stock Alerts
@@ -189,25 +223,30 @@ router.get('/dashboard/admin', authenticate, dashC.adminDashboard);
 router.get('/dashboard/collector', authenticate, dashC.collectorDashboard);
 router.get('/dashboard/finance', authenticate, dashC.financeDashboard);
 router.get('/dashboard/director', authenticate, dashC.directorDashboard);
+router.get('/dashboard/cashier', authenticate, dashC.cashierDashboard);
+router.get('/dashboard/sales', authenticate, dashC.salesDashboard);
+router.get('/dashboard/technician', authenticate, dashC.technicianDashboard);
 
 // ── STAFF ─────────────────────────────────────────────────────
 const staffC = require('../controllers/staff.controller');
 const { uploadEmployee } = require('../middleware/upload');
 
-router.get('/staff/organization', authenticate, checkPermission('staff', 'read'), staffC.getOrganization);
 router.get('/staff/departments', authenticate, checkPermission('staff', 'read'), staffC.listDepartments);
-router.post('/staff/departments', authenticate, checkPermission('staff', 'write'), staffC.createDepartment);
-router.put('/staff/departments/:id', authenticate, checkPermission('staff', 'write'), staffC.updateDepartment);
-router.delete('/staff/departments/:id', authenticate, checkPermission('staff', 'write'), staffC.deleteDepartment);
+router.post('/staff/departments', authenticate, checkPermission('staff', 'create'), staffC.createDepartment);
+router.put('/staff/departments/:id', authenticate, checkPermission('staff', 'update'), staffC.updateDepartment);
+router.delete('/staff/departments/:id', authenticate, checkPermission('staff', 'delete'), staffC.deleteDepartment);
 router.get('/staff/positions', authenticate, checkPermission('staff', 'read'), staffC.listPositions);
-router.post('/staff/positions', authenticate, checkPermission('staff', 'write'), staffC.createPosition);
-router.put('/staff/positions/:id', authenticate, checkPermission('staff', 'write'), staffC.updatePosition);
-router.delete('/staff/positions/:id', authenticate, checkPermission('staff', 'write'), staffC.deletePosition);
+router.post('/staff/positions', authenticate, checkPermission('staff', 'create'), staffC.createPosition);
+router.put('/staff/positions/:id', authenticate, checkPermission('staff', 'update'), staffC.updatePosition);
+router.delete('/staff/positions/:id', authenticate, checkPermission('staff', 'delete'), staffC.deletePosition);
 router.get('/staff/employees', authenticate, checkPermission('staff', 'read'), staffC.listEmployees);
+router.get('/staff/employees/export', authenticate, checkPermission('staff', 'read'), staffC.exportEmployeesExcel);
 router.get('/staff/employees/:id', authenticate, checkPermission('staff', 'read'), staffC.getEmployee);
-router.post('/staff/employees', authenticate, checkPermission('staff', 'write'), uploadEmployee, staffC.createEmployee);
-router.put('/staff/employees/:id', authenticate, checkPermission('staff', 'write'), uploadEmployee, staffC.updateEmployee);
-router.delete('/staff/employees/:id', authenticate, checkPermission('staff', 'write'), staffC.deleteEmployee);
+router.post('/staff/employees', authenticate, checkPermission('staff', 'create'), uploadEmployee, staffC.createEmployee);
+router.put('/staff/employees/:id', authenticate, checkPermission('staff', 'update'), uploadEmployee, staffC.updateEmployee);
+router.delete('/staff/employees/:id', authenticate, checkPermission('staff', 'delete'), staffC.deleteEmployee);
+router.delete('/staff/employees/:id/documents', authenticate, checkPermission('staff', 'delete'), staffC.deleteDocument);
+router.get('/staff/documents/proxy', authenticate, staffC.proxyDocument);
 router.get('/staff/roles', authenticate, checkPermission('staff', 'read'), usersC.listRoles);
 
 module.exports = router;

@@ -1,27 +1,73 @@
 # dependencies
 node_modules/
+**/node_modules/
 
 # environment variables
 .env
 
 # logs
-logs
+logs/
 *.log
 
 # build files
 build/
 dist/
+coverage/
+.tmp/
+temp/
+.cache/
 
-# IDE
+frontend/dist/
+
+# runtime files
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# IDE / Editor
 .vscode/
 .idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+*.swo
 
 # OS files
 .DS_Store
 Thumbs.db
+desktop.ini
 
+# Testing
+coverage/
+.nyc_output/
+
+# Package Manager Caches
+.npm/
+.pnpm-store/
+.yarn/
+.yarn/cache/
+.yarn/unplugged/
+
+
+# Documentation
 CLAUDE.md
+AGENTS.md
 
+# Local Configuration
+opencode.json
+skills-lock.json
+
+# Claude / OpenCode generated state
 .claudeignore
 
-notes.txt
+# Local projects files
+/location-files
+
+
+# AI Agents Tooling
+.agents/
+.claude/
+.opencode/

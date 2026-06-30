@@ -1,35 +1,15 @@
-// controllers/machine.controller.js
-const { Machine, MachineDeployment, MachineExchange, MachineRefill, Shop } = require('../models');
-const { Op } = require('sequelize');
-const { DEFAULT_CREDIT_VALUES } = require('../config/constants');
+const machineService = require('../services/machine.service');
 
 const list = async (req, res, next) => {
   try {
-    const { shop_id, status, manufacturer, search, limit = 50, offset = 0 } = req.query;
-    const where = {};
-    if (shop_id) where.current_shop_id = shop_id;
-    if (status) where.status = status;
-    if (manufacturer) where.manufacturer = manufacturer;
-    if (search) where.slot_code = { [Op.like]: `%${search}%` };
-
-    const data = await Machine.findAndCountAll({
-      where, limit: +limit, offset: +offset,
-      include: [{ model: Shop, as: 'currentShop', attributes: ['name'] }],
-      order: [['slot_code', 'ASC']],
-    });
+    const data = await machineService.list(req.query);
     res.json({ success: true, data });
   } catch (err) { next(err); }
 };
 
 const getOne = async (req, res, next) => {
   try {
-    const machine = await Machine.findByPk(req.params.id, {
-      include: [
-        { model: Shop, as: 'currentShop', attributes: ['name'] },
-        { model: MachineDeployment, as: 'deployments', include: [{ model: Shop, as: 'shop', attributes: ['name'] }], order: [['deployed_at', 'DESC']] },
-        { model: MachineExchange, as: 'exchanges' },
-      ],
-    });
+    const machine = await machineService.getOne(req.params.id);
     if (!machine) return res.status(404).json({ success: false, message: 'Machine not found' });
     res.json({ success: true, data: machine });
   } catch (err) { next(err); }
@@ -37,65 +17,97 @@ const getOne = async (req, res, next) => {
 
 const create = async (req, res, next) => {
   try {
-    const { manufacturer } = req.body;
-    if (!req.body.credit_value_tzs) {
-      req.body.credit_value_tzs = DEFAULT_CREDIT_VALUES[manufacturer] || 100;
-    }
-    const machine = await Machine.create(req.body);
+    const machine = await machineService.create(req.body);
     res.status(201).json({ success: true, data: machine });
   } catch (err) { next(err); }
 };
 
 const update = async (req, res, next) => {
   try {
-    const machine = await Machine.findByPk(req.params.id);
+    const machine = await machineService.update(req.params.id, req.body);
     if (!machine) return res.status(404).json({ success: false, message: 'Machine not found' });
-    await machine.update(req.body);
     res.json({ success: true, data: machine });
   } catch (err) { next(err); }
 };
 
 const deploy = async (req, res, next) => {
   try {
-    const machine = await Machine.findByPk(req.params.id);
-    if (!machine) return res.status(404).json({ success: false, message: 'Machine not found' });
-    const { shop_id, opening_count, initial_load_tzs } = req.body;
-    const deployment = await MachineDeployment.create({
-      machine_id: machine.id, shop_id, deployed_by: req.user.id,
-      opening_count: opening_count || 0, initial_load_tzs: initial_load_tzs || 0,
-      deployed_at: new Date(),
-    });
-    await machine.update({ current_shop_id: shop_id, status: 'active', previous_count: opening_count || 0 });
-    res.json({ success: true, data: deployment });
+    const result = await machineService.deploy(req.params.id, req.body, req.user.id);
+    if (!result) return res.status(404).json({ success: false, message: 'Machine not found' });
+    res.json({ success: true, data: result });
   } catch (err) { next(err); }
 };
 
 const exchange = async (req, res, next) => {
   try {
-    const machine = await Machine.findByPk(req.params.id);
-    if (!machine) return res.status(404).json({ success: false, message: 'Machine not found' });
-    const { to_shop_id, reason } = req.body;
-    const exchangeRecord = await MachineExchange.create({
-      machine_id: machine.id, from_shop_id: machine.current_shop_id,
-      to_shop_id, transferred_by: req.user.id, reason, exchanged_at: new Date(),
-    });
-    await machine.update({ current_shop_id: to_shop_id });
-    res.json({ success: true, data: exchangeRecord });
+    const result = await machineService.exchange(req.params.id, req.body, req.user.id);
+    if (!result) return res.status(404).json({ success: false, message: 'Machine not found' });
+    res.json({ success: true, data: result });
   } catch (err) { next(err); }
 };
 
 const refill = async (req, res, next) => {
   try {
-    const machine = await Machine.findByPk(req.params.id);
-    if (!machine) return res.status(404).json({ success: false, message: 'Machine not found' });
-    const { token_qty, token_value_tzs, notes } = req.body;
-    const refillRecord = await MachineRefill.create({
-      machine_id: machine.id, shop_id: machine.current_shop_id,
-      refilled_by: req.user.id, token_qty, token_value_tzs,
-      total_tzs: token_qty * token_value_tzs, notes, refilled_at: new Date(),
-    });
-    res.json({ success: true, data: refillRecord });
+    const result = await machineService.refill(req.params.id, req.body, req.user.id);
+    if (!result) return res.status(404).json({ success: false, message: 'Machine not found' });
+    res.json({ success: true, data: result });
   } catch (err) { next(err); }
 };
 
-module.exports = { list, getOne, create, update, deploy, exchange, refill };
+const getMachineStats = async (req, res, next) => {
+  try {
+    const stats = await machineService.getMachineStats(req.params.id, req.query);
+    res.json({ success: true, data: stats });
+  } catch (err) { next(err); }
+};
+
+const remove = async (req, res, next) => {
+  try {
+    const deleted = await machineService.remove(req.params.id);
+    if (!deleted) return res.status(404).json({ success: false, message: 'Machine not found' });
+    res.json({ success: true, message: 'Machine deleted successfully' });
+  } catch (err) { next(err); }
+};
+
+
+
+const exportExcel = async (req, res, next) => {
+  try {
+    const buffer = await machineService.exportExcel();
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': 'attachment; filename="machines.xlsx"',
+    });
+    res.send(buffer);
+  } catch (err) { next(err); }
+};
+
+const downloadPDF = async (req, res, next) => {
+  try {
+    const buffer = await machineService.generateMachinePDF(req.params.id);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="machine-${req.params.id}-report.pdf"`,
+    });
+    res.send(buffer);
+  } catch (err) { next(err); }
+};
+
+const recordCollection = async (req, res, next) => {
+  try {
+    const allowed = ['Admin', 'General Manager', 'Operations Manager'];
+    if (!allowed.includes(req.user.role?.name)) {
+      return res.status(403).json({ success: false, message: 'Only Admin, General Manager, or Operations Manager can record collections manually' });
+    }
+    const collection = await machineService.recordCollection({
+      machineId: req.params.id,
+      shopId: req.body.shop_id,
+      userId: req.user.id,
+      currCount: req.body.curr_count,
+      novomaticData: req.body.novomatic_data ? JSON.parse(req.body.novomatic_data) : null,
+    });
+    res.status(201).json({ success: true, data: collection });
+  } catch (err) { next(err); }
+};
+
+module.exports = { list, getOne, getMachineStats, create, update, remove, deploy, exchange, refill, exportExcel, downloadPDF, recordCollection };

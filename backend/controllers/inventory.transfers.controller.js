@@ -45,6 +45,14 @@ const initializeTransfer = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Missing required fields' });
     }
 
+    // Verify product belongs to source shop
+    const product = await Product.findOne({
+      where: { id: product_id, shop_id: from_shop_id },
+    });
+    if (!product) {
+      return res.status(400).json({ success: false, message: 'Product does not belong to the source shop' });
+    }
+
     // Check if stock is available
     const stockLevel = await StockLevel.findOne({
       where: { product_id },
@@ -79,6 +87,21 @@ const approveTransfer = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Only pending transfers can be approved' });
     }
 
+    // Verify product still belongs to source shop and has enough stock
+    const product = await Product.findOne({
+      where: { id: transfer.product_id, shop_id: transfer.from_shop_id },
+    });
+    if (!product) {
+      return res.status(400).json({ success: false, message: 'Source product not found in the source shop' });
+    }
+
+    const stockLevel = await StockLevel.findOne({
+      where: { product_id: transfer.product_id },
+    });
+    if (!stockLevel || stockLevel.current_qty < transfer.qty) {
+      return res.status(400).json({ success: false, message: 'Insufficient stock to complete transfer' });
+    }
+
     // Deduct from source shop
     await StockLevel.decrement('current_qty', {
       by: transfer.qty,
@@ -89,7 +112,7 @@ const approveTransfer = async (req, res, next) => {
     await StockMovement.create({
       product_id: transfer.product_id,
       qty_change: -transfer.qty,
-      movement_type: 'adjustment',
+      movement_type: 'transfer',
       reference_no: `TRANSFER-OUT-${transfer.id}`,
       created_by: req.user.id,
     });
@@ -138,7 +161,7 @@ const receiveTransfer = async (req, res, next) => {
     await StockMovement.create({
       product_id: destProduct.id,
       qty_change: transfer.qty,
-      movement_type: 'adjustment',
+      movement_type: 'transfer',
       reference_no: `TRANSFER-IN-${transfer.id}`,
       created_by: req.user.id,
     });

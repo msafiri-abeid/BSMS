@@ -10,14 +10,14 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <ConfigProvider
       theme={{
         token: {
-          colorPrimary: '#1a6b3a',
-          colorLink: '#1a6b3a',
+          colorPrimary: '#021559',
+          colorLink: '#021559',
           borderRadius: 6,
           fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
         },
         components: {
-          Layout: { siderBg: '#0f1f14', headerBg: '#ffffff' },
-          Menu: { darkItemBg: '#0f1f14', darkSubMenuItemBg: '#162b1c', darkItemSelectedBg: '#1a6b3a' },
+          Layout: { siderBg: '#021559', headerBg: '#ffffff' },
+          Menu: { darkItemBg: '#021559', darkSubMenuItemBg: '#0a237a', darkItemSelectedBg: 'rgba(255,255,255,0.12)' },
         },
       }}
     >

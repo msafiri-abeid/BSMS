@@ -82,6 +82,7 @@ export const authAPI = {
   logout: (refreshToken) => api.post('/auth/logout', { refreshToken }),
   me: () => api.get('/auth/me'),
   changePassword: (d) => api.put('/auth/password', d),
+  updateProfile: (d) => api.put('/auth/profile', d),
 };
 
 export const usersAPI = {
@@ -92,6 +93,7 @@ export const usersAPI = {
 
 export const partnersAPI = {
   list: (p) => api.get('/partners', { params: p }),
+  listOwn: () => api.get('/partners/own'),
   get: (id) => api.get(`/partners/${id}`),
   create: (d) => api.post('/partners', d),
   update: (id, d) => api.put(`/partners/${id}`, d),
@@ -106,14 +108,35 @@ export const shopsAPI = {
   delete: (id) => api.delete(`/shops/${id}`),
 };
 
+export const regionsAPI = {
+  list: () => api.get('/regions'),
+};
+
+export const districtsAPI = {
+  list: (regionId) => api.get('/districts', { params: { region_id: regionId } }),
+};
+
+export const wardsAPI = {
+  list: (districtId) => api.get('/wards', { params: { district_id: districtId } }),
+};
+
+export const streetsAPI = {
+  list: (wardId) => api.get('/streets', { params: { ward_id: wardId } }),
+};
+
 export const machinesAPI = {
   list: (p) => api.get('/machines', { params: p }),
   get: (id) => api.get(`/machines/${id}`),
+  stats: (id, p) => api.get(`/machines/${id}/stats`, { params: p }),
   create: (d) => api.post('/machines', d),
   update: (id, d) => api.put(`/machines/${id}`, d),
+  remove: (id) => api.delete(`/machines/${id}`),
   deploy: (id, d) => api.post(`/machines/${id}/deploy`, d),
   exchange: (id, d) => api.post(`/machines/${id}/exchange`, d),
   refill: (id, d) => api.post(`/machines/${id}/refill`, d),
+  export: () => api.get('/machines/export', { responseType: 'blob' }),
+  exportPDF: (id) => api.get(`/machines/${id}/pdf`, { responseType: 'blob' }),
+  recordCollection: (id, d) => api.post(`/machines/${id}/collections`, d),
 };
 
 export const collectionsAPI = {
@@ -121,8 +144,15 @@ export const collectionsAPI = {
   submit: (d) => api.post('/collections', d, { headers: { 'Content-Type': 'multipart/form-data' } }),
   ocr: (d) => api.post('/collections/ocr', d, { headers: { 'Content-Type': 'multipart/form-data' } }),
   myAssignments: (p) => api.get('/collections/my-assignments', { params: p }),
+  listAssignments: (p) => api.get('/collections/assignments', { params: p }),
   createAssignment: (d) => api.post('/collections/assignments', d),
+  updateAssignment: (id, d) => api.put(`/collections/assignments/${id}`, d),
+  removeAssignment: (id) => api.delete(`/collections/assignments/${id}`),
+  openMachine: (id) => api.post(`/collections/assignments/${id}/open`),
+  update: (id, d) => api.put(`/collections/${id}`, d),
+  remove: (id) => api.delete(`/collections/${id}`),
   weeklyTargets: (p) => api.get('/collections/weekly-targets', { params: p }),
+  exportAssignments: (p) => api.get('/collections/assignments/export', { params: p, responseType: 'blob' }),
 };
 
 export const financeAPI = {
@@ -135,7 +165,7 @@ export const financeAPI = {
   recordPayment: (id, d) => api.post(`/finance/invoices/${id}/payment`, d),
   listPayroll: () => api.get('/finance/payroll'),
   createPayroll: (d) => api.post('/finance/payroll', d),
-  exportCollections: () => api.get('/finance/export/collections', { responseType: 'blob' }),
+  exportCollections: (p) => api.get('/finance/export/collections', { params: p, responseType: 'blob' }),
 };
 
 export const ticketsAPI = {
@@ -153,15 +183,23 @@ export const settingsAPI = {
   update: (d) => api.put('/settings', d),
   getRoles: () => api.get('/settings/roles'),
   createRole: (d) => api.post('/settings/roles', d),
+  updateRole: (id, d) => api.put(`/settings/roles/${id}`, d),
+  deleteRole: (id) => api.delete(`/settings/roles/${id}`),
   updatePermissions: (roleId, d) => api.put(`/settings/roles/${roleId}/permissions`, d),
   testSMS: (d) => api.post('/settings/sms-test', d),
+  getBusinesses: () => api.get('/settings/businesses'),
+  updateBusiness: (id, d) => api.put(`/settings/businesses/${id}`, d),
+  getModules: () => api.get('/settings/modules'),
 };
 
 export const dashboardAPI = {
-  admin: () => api.get('/dashboard/admin'),
+  admin: (p) => api.get('/dashboard/admin', { params: p }),
   collector: () => api.get('/dashboard/collector'),
   finance: () => api.get('/dashboard/finance'),
   director: () => api.get('/dashboard/director'),
+  cashier: (p) => api.get('/dashboard/cashier', { params: p }),
+  sales: () => api.get('/dashboard/sales'),
+  technician: () => api.get('/dashboard/technician'),
 };
 
 export const inventoryAPI = {
@@ -171,7 +209,8 @@ export const inventoryAPI = {
   products: (p) => api.get('/inventory/products', { params: p }),
   createProduct: (d) => api.post('/inventory/products', d),
   categories: (shopId) => api.get('/inventory/categories', { params: { shop_id: shopId } }),
-  
+  addStock: (formData) => api.post('/inventory/stock/add', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+
   // Sales
   listSales: (p) => api.get('/inventory/sales', { params: p }),
   getSale: (id) => api.get(`/inventory/sales/${id}`),
@@ -215,17 +254,36 @@ export const inventoryAPI = {
   getDailyReport: (p) => api.get('/inventory/accounting/daily-report', { params: p }),
 };
 
+export const tokensAPI = {
+  balances: () => api.get('/tokens/balances'),
+  movements: (p) => api.get('/inventory/tokens', { params: p }),
+  distribute: (d) => api.post('/tokens/distribute', d),
+  returnTokens: (d) => api.post('/tokens/return', d),
+  lend: (d) => api.post('/tokens/lend', d),
+  addMovement: (d) => api.post('/inventory/tokens', d),
+};
+
+export const debtsAPI = {
+  list: (p) => api.get('/debts', { params: p }),
+  create: (d) => api.post('/debts', d),
+  recordPayment: (id, formData) => api.put(`/debts/${id}/pay`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  writeOff: (id, d) => api.put(`/debts/${id}/write-off`, d),
+  exportDebts: (p) => api.get('/debts/export', { params: p, responseType: 'blob' }),
+};
+
 export const staffAPI = {
-  employees: () => api.get('/staff/employees'),
+  employees: (p) => api.get('/staff/employees', { params: p }),
   getEmployee: (id) => api.get(`/staff/employees/${id}`),
   createEmployee: (d, config) => api.post('/staff/employees', d, config),
   updateEmployee: (id, d, config) => api.put(`/staff/employees/${id}`, d, config),
   deleteEmployee: (id) => api.delete(`/staff/employees/${id}`),
+  getSignedDocumentUrl: (url) => api.get('/staff/documents/proxy', { params: { url } }),
+  deleteEmployeeDocument: (empId, docUrl) => api.delete(`/staff/employees/${empId}/documents`, { data: { url: docUrl } }),
+  exportEmployees: () => api.get('/staff/employees/export', { responseType: 'blob' }),
   departments: () => api.get('/staff/departments'),
   createDepartment: (d) => api.post('/staff/departments', d),
   updateDepartment: (id, d) => api.put(`/staff/departments/${id}`, d),
   deleteDepartment: (id) => api.delete(`/staff/departments/${id}`),
-  organization: () => api.get('/staff/organization'),
   positions: () => api.get('/staff/positions'),
   createPosition: (d) => api.post('/staff/positions', d),
   updatePosition: (id, d) => api.put(`/staff/positions/${id}`, d),

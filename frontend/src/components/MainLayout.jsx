@@ -1,40 +1,14 @@
 import { useState, useEffect } from "react";
-import {
-  Layout,
-  Menu,
-  Avatar,
-  Dropdown,
-  Space,
-  Badge,
-  Typography,
-  Button,
-} from "antd";
+import { Layout, Menu, Avatar, Dropdown, Space, Badge, Typography, Button } from "antd";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import {
-  DashboardOutlined,
-  TeamOutlined,
-  ShopOutlined,
-  ThunderboltOutlined,
-  MoneyCollectOutlined,
-  DollarOutlined,
-  InboxOutlined,
-  CustomerServiceOutlined,
-  BarChartOutlined,
-  SettingOutlined,
-  UserOutlined,
-  LogoutOutlined,
-  MenuFoldOutlined,
-  MenuUnfoldOutlined,
-  BellOutlined,
-  FileDoneOutlined,
-  AimOutlined,
-  SafetyOutlined,
-  ToolOutlined,
-  CheckSquareOutlined,
-  ShoppingOutlined,
-  UndoOutlined,
-  AlertOutlined,
-} from "@ant-design/icons";
+  LayoutDashboard, Wallet, ClipboardList, ListChecks, Crosshair,
+  Cpu, Monitor, FileText, Users, Handshake, Store,
+  DollarSign, Receipt, FileSignature, Banknote, Headphones,
+  Package, Coins, ShoppingCart, ClipboardCheck, TrendingUp, Undo2, AlertTriangle, BarChart3,
+  Shield, UserCheck, Building2, Briefcase,
+  Settings, User, LogOut, PanelLeftClose, PanelLeftOpen, Bell, Plus,
+} from "lucide-react";
 import { useAuthStore } from "../store/authStore";
 import { authAPI } from "../services/api";
 import { App } from "antd";
@@ -44,94 +18,102 @@ const { Sider, Header, Content } = Layout;
 const { Text } = Typography;
 
 const ALL_NAV = [
-  { key: "/", label: "Dashboard", icon: <DashboardOutlined />, module: null },
-  {
-    key: "partners-group",
-    label: "Partners & Shops",
-    icon: <TeamOutlined />,
-    module: "partners",
-    children: [
-      { key: "/partners", label: "Partners", module: "partners" },
-      { key: "/shops", label: "Shops", module: "shops" },
-    ],
-  },
-  {
-    key: "/machines",
-    label: "Machines",
-    icon: <ThunderboltOutlined />,
-    module: "machines",
-  },
+  { key: "/", label: "Dashboard", icon: <LayoutDashboard size={16} />, module: null },
   {
     key: "collections-group",
     label: "Collections",
-    icon: <MoneyCollectOutlined />,
+    icon: <Wallet size={16} />,
     module: "collections",
     children: [
-      { key: "/my-assignments", label: "My Assignments", module: null },
-      { key: "/collections", label: "All Collections", module: "collections" },
-      {
-        key: "/weekly-targets",
-        label: "Weekly Targets",
-        module: "collections",
-      },
+      { key: "/my-assignments", label: "Assignments", icon: <ClipboardList size={16} />, module: null },
+      { key: "/collections", label: "All Collections", icon: <ListChecks size={16} />, module: "collections" },
+      { key: "/weekly-targets", label: "Weekly Targets", icon: <Crosshair size={16} />, module: "collections" },
+    ],
+  },
+  {
+    key: "machines-group",
+    label: "Machines",
+    icon: <Cpu size={16} />,
+    module: "machines",
+    children: [
+      { key: "/machines", label: "All Machines", icon: <Monitor size={16} />, module: "machines" },
+      { key: "/debts", label: "Debts", icon: <FileText size={16} />, module: "machines" },
+    ],
+  },
+  {
+    key: "partners-group",
+    label: "Partners & Shops",
+    icon: <Users size={16} />,
+    module: "partners",
+    children: [
+      { key: "/partners", label: "Partners", icon: <Handshake size={16} />, module: "partners" },
+      { key: "/shops", label: "Shops", icon: <Store size={16} />, module: "shops" },
     ],
   },
   {
     key: "finance-group",
     label: "Finance",
-    icon: <DollarOutlined />,
+    icon: <DollarSign size={16} />,
     module: "finance",
     children: [
-      { key: "/finance/expenses", label: "Expenses", module: "finance" },
-      { key: "/finance/invoices", label: "Invoices", module: "finance" },
-      { key: "/finance/payroll", label: "Payroll", module: "finance" },
-    ],
-  },
-  {
-    key: "inventory-group",
-    label: "Inventory",
-    icon: <InboxOutlined />,
-    module: "inventory",
-    children: [
-      { key: "/inventory/tokens", label: "Token Stock", icon: <DollarOutlined />, module: "inventory" },
-      { key: "/inventory/products", label: "Products", icon: <ShoppingOutlined />, module: "inventory" },
-      { key: "/inventory/stock", label: "Stock Management", icon: <CheckSquareOutlined />, module: "inventory" },
-      { key: "/inventory/sales", label: "Sales", icon: <ShoppingOutlined />, module: "inventory" },
-      { key: "/inventory/returns", label: "Returns", icon: <UndoOutlined />, module: "inventory" },
-      { key: "/inventory/alerts", label: "Alerts", icon: <AlertOutlined />, module: "inventory" },
-      { key: "/inventory/accounting", label: "Accounting", icon: <BarChartOutlined />, module: "inventory" },
+      { key: "/finance/expenses", label: "Expenses", icon: <Receipt size={16} />, module: "finance" },
+      { key: "/finance/invoices", label: "Invoices", icon: <FileSignature size={16} />, module: "finance" },
+      { key: "/finance/payroll", label: "Payroll", icon: <Banknote size={16} />, module: "finance" },
     ],
   },
   {
     key: "/tickets",
     label: "Tickets",
-    icon: <CustomerServiceOutlined />,
+    icon: <Headphones size={16} />,
     module: "tickets",
+  },
+  {
+    key: "inventory-group",
+    label: "Inventory",
+    icon: <Package size={16} />,
+    module: "inventory",
+    children: [
+      { key: "/inventory/tokens", label: "Token Stock", icon: <Coins size={16} />, module: "inventory" },
+      { key: "/inventory/products", label: "Products", icon: <ShoppingCart size={16} />, module: "inventory" },
+      { key: "/inventory/stock", label: "Stock Management", icon: <ClipboardCheck size={16} />, module: "inventory" },
+      { key: "/inventory/sales", label: "Sales", icon: <TrendingUp size={16} />, module: "inventory" },
+      { key: "/inventory/returns", label: "Returns", icon: <Undo2 size={16} />, module: "inventory" },
+      { key: "/inventory/alerts", label: "Alerts", icon: <AlertTriangle size={16} />, module: "inventory" },
+      { key: "/inventory/accounting", label: "Accounting", icon: <BarChart3 size={16} />, module: "inventory" },
+    ],
   },
   {
     key: "staff-group",
     label: "Staff & HR",
-    icon: <SafetyOutlined />,
+    icon: <Shield size={16} />,
     module: "staff",
     children: [
-      { key: "/staff/employees", label: "Employees", module: "staff" },
-      { key: "/staff/departments", label: "Departments", module: "staff" },
-      { key: "/staff/positions", label: "Positions", module: "staff" },
-      { key: "/staff/organization", label: "Organization", module: "staff" },
-      { key: "/staff/users", label: "System Users", module: "users" },
+      { key: "/staff/employees", label: "Employees", icon: <UserCheck size={16} />, module: "staff" },
+      { key: "/staff/departments", label: "Departments", icon: <Building2 size={16} />, module: "staff" },
+      { key: "/staff/positions", label: "Positions", icon: <Briefcase size={16} />, module: "staff" },
     ],
   },
   {
     key: "/reports",
     label: "Reports",
-    icon: <BarChartOutlined />,
+    icon: <BarChart3 size={16} />,
     module: "reports",
   },
   {
-    key: "/settings",
+    key: "settings-group",
     label: "Settings",
-    icon: <SettingOutlined />,
-    module: "settings",
+    icon: <Settings size={16} />,
+    module: null,
+    children: [
+      { key: "/settings/profile", label: "My Profile", icon: <User size={16} />, module: null },
+      { key: "/settings/company", label: "Company Profile", icon: <Building2 size={16} />, module: null },
+      { key: "/settings/machines", label: "Machine Settings", icon: <Cpu size={16} />, module: null },
+      { key: "/settings/finance", label: "Finance & SLA", icon: <DollarSign size={16} />, module: null },
+      { key: "/settings/notifications", label: "Notifications & SMS", icon: <Bell size={16} />, module: null },
+      { key: "/settings/roles", label: "Role Builder", icon: <Shield size={16} />, module: null },
+      { key: "/settings/businesses", label: "Business Management", icon: <Store size={16} />, module: null },
+      { key: "/settings/system", label: "System", icon: <Settings size={16} />, module: null },
+    ],
   },
 ];
 
@@ -140,26 +122,18 @@ export default function MainLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const { message } = App.useApp();
-  const { user, refreshToken, clearAuth, hasPermission, getRoleName } =
-    useAuthStore();
+  const { user, refreshToken, clearAuth, hasPermission, getRoleName } = useAuthStore();
 
   const handleLogout = async () => {
-    try {
-      await authAPI.logout(refreshToken);
-    } catch {}
+    try { await authAPI.logout(refreshToken); } catch {}
     clearAuth();
     navigate("/login");
   };
 
   const filterNav = (items) =>
     items
-      .filter(
-        (item) => item.module === null || hasPermission(item.module, "read"),
-      )
-      .map((item) => ({
-        ...item,
-        children: item.children ? filterNav(item.children) : undefined,
-      }))
+      .filter((item) => item.module === null || hasPermission(item.module, "read"))
+      .map((item) => ({ ...item, children: item.children ? filterNav(item.children) : undefined }))
       .filter((item) => !item.children || item.children.length > 0);
 
   const navItems = filterNav(ALL_NAV);
@@ -175,11 +149,7 @@ export default function MainLayout() {
 
   const selectedKey =
     collectNavKeys(navItems)
-      .filter(
-        (k) =>
-          location.pathname === k ||
-          location.pathname.startsWith(`${k}/`),
-      )
+      .filter((k) => location.pathname === k || location.pathname.startsWith(`${k}/`))
       .sort((a, b) => b.length - a.length)[0] ?? location.pathname;
 
   const selectedKeys = [selectedKey];
@@ -188,19 +158,10 @@ export default function MainLayout() {
   ).map((item) => item.key);
 
   const userMenuItems = [
-    {
-      key: "profile",
-      label: `${user?.name} (${getRoleName()})`,
-      disabled: true,
-    },
+    { key: "profile", label: `${user?.name}`, disabled: true },
     { type: "divider" },
-    {
-      key: "logout",
-      label: "Sign Out",
-      icon: <LogoutOutlined />,
-      danger: true,
-      onClick: handleLogout,
-    },
+    { key: "my-profile", label: "My Profile", icon: <User size={14} />, onClick: () => navigate('/settings/profile') },
+    { key: "logout", label: "Sign Out", icon: <LogOut size={14} />, danger: true, onClick: handleLogout },
   ];
 
   return (
@@ -215,30 +176,15 @@ export default function MainLayout() {
       >
         <div className="px-4 py-5 border-b border-white/10">
           {!collapsed ? (
-            <>
-              <div className="flex items-center gap-3">
-                <img
-                  src={logo}
-                  alt="Bentabet Logo"
-                  className="w-8 h-8 object-contain"
-                />
-
-                <div>
-                  <h1 className="text-white font-bold text-base leading-none">
-                    BENTABET
-                  </h1>
-                  <p className="text-[11px] text-slate-400 mt-1">
-                    Slot Management System
-                  </p>
-                </div>
+            <div className="flex items-center gap-3">
+              <img src={logo} alt="Bentabet Logo" className="w-8 h-8 object-contain" />
+              <div>
+                <h1 className="text-white font-bold text-base leading-none">BENTABET</h1>
+                <p className="text-[11px] text-slate-400 mt-1">Slot Management System</p>
               </div>
-            </>
+            </div>
           ) : (
-            <img
-              src={logo}
-              alt="Bentabet Logo"
-              className="w-10 h-10 object-contain mx-auto"
-            />
+            <img src={logo} alt="Bentabet Logo" className="w-10 h-10 object-contain mx-auto" />
           )}
         </div>
         <Menu
@@ -247,36 +193,37 @@ export default function MainLayout() {
           selectedKeys={selectedKeys}
           defaultOpenKeys={openKeys}
           items={navItems}
-          onClick={({ key }) => {
-            if (!key.includes("-group")) navigate(key);
-          }}
+          onClick={({ key }) => { if (!key.includes("-group")) navigate(key); }}
           className="!bg-brand-dark border-none pt-2"
         />
       </Sider>
 
-      <Layout
-        className={`transition-all duration-200 ${collapsed ? "ml-[80px]" : "ml-[260px]"}`}
-      >
+      <Layout className={`transition-all duration-200 ${collapsed ? "ml-[80px]" : "ml-[260px]"}`}>
         <Header className="sticky top-0 z-40 flex items-center justify-between bg-white px-6 border-b border-slate-200 h-14">
           <Button
             type="text"
-            icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+            icon={collapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
             onClick={() => setCollapsed(!collapsed)}
           />
           <Space>
+            {['Admin', 'General Manager', 'Operations Manager', 'Cashier'].includes(getRoleName()) && (
+              <Button
+                type="primary"
+                size="small"
+                icon={<Plus size={14} />}
+                onClick={() => navigate('/inventory/sales?quick=1')}
+                className="!bg-brand-dark !border-0 !font-semibold !shadow-sm hover:!bg-brand-light !flex !items-center !gap-1.5 !px-3"
+              >
+                Record Sale
+              </Button>
+            )}
             <Badge count={0} size="small">
-              <Button type="text" icon={<BellOutlined />} />
+              <Button type="text" icon={<Bell size={18} />} />
             </Badge>
             <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
               <Space style={{ cursor: "pointer" }}>
-                <Avatar
-                  size={32}
-                  className="!bg-brand-dark"
-                  icon={<UserOutlined />}
-                />
-                {!collapsed && (
-                  <Text style={{ fontSize: 13 }}>{user?.name}</Text>
-                )}
+                <Avatar size={32} className="!bg-brand-dark" icon={<User size={16} />} />
+                {!collapsed && <Text style={{ fontSize: 13 }}>{user?.name}</Text>}
               </Space>
             </Dropdown>
           </Space>

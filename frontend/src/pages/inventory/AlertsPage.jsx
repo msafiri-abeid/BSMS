@@ -1,7 +1,7 @@
 // src/pages/inventory/AlertsPage.jsx
-import { useState, useEffect } from 'react';
-import { Table, Button, Select, Alert, Typography, Space, Card, Statistic, Tag, Empty } from 'antd';
-import { CheckOutlined, BellOutlined, ReloadOutlined } from '@ant-design/icons';
+import { useState } from 'react';
+import { Table, Button, Select, Alert, Typography, Space, Card, Statistic, Tag, Empty, Modal, InputNumber, Input, Upload, message as antMsg } from 'antd';
+import { CheckOutlined, BellOutlined, ReloadOutlined, PlusOutlined, UploadOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { inventoryAPI, shopsAPI } from '../../services/api';
 
@@ -10,6 +10,10 @@ const { Option } = Select;
 
 export default function AlertsPage() {
   const [selectedShop, setSelectedShop] = useState(null);
+  const [stockModalAlert, setStockModalAlert] = useState(null);
+  const [stockQty, setStockQty] = useState(1);
+  const [stockRef, setStockRef] = useState('');
+  const [stockReceipt, setStockReceipt] = useState(null);
   const qc = useQueryClient();
 
   const { data: shopsData } = useQuery({ queryKey: ['shops-list'], queryFn: () => shopsAPI.list().then(r => r.data.data) });
@@ -43,6 +47,20 @@ export default function AlertsPage() {
     },
   });
 
+  const addStockMutation = useMutation({
+    mutationFn: (fd) => inventoryAPI.addStock(fd),
+    onSuccess: () => {
+      antMsg.success('Stock added');
+      qc.invalidateQueries({ queryKey: ['alerts'] });
+      qc.invalidateQueries({ queryKey: ['alert-summary'] });
+      setStockModalAlert(null);
+      setStockQty(1);
+      setStockRef('');
+      setStockReceipt(null);
+    },
+    onError: (e) => antMsg.error(e.response?.data?.message || 'Failed to add stock'),
+  });
+
   const columns = [
     { title: 'Product', dataIndex: ['product', 'name'] },
     { title: 'Current Qty', dataIndex: 'current_qty' },
@@ -61,14 +79,25 @@ export default function AlertsPage() {
     {
       title: 'Actions',
       render: (_, record) => (
-        <Button
-          size="small"
-          icon={<CheckOutlined />}
-          onClick={() => acknowledgeAlertMutation.mutate(record.id)}
-          loading={acknowledgeAlertMutation.isPending}
-        >
-          Acknowledge
-        </Button>
+        <Space>
+          <Button
+            size="small"
+            icon={<CheckOutlined />}
+            onClick={() => acknowledgeAlertMutation.mutate(record.id)}
+            loading={acknowledgeAlertMutation.isPending}
+          >
+            Acknowledge
+          </Button>
+          <Button
+            size="small"
+            icon={<PlusOutlined />}
+            type="primary"
+            ghost
+            onClick={() => setStockModalAlert(record)}
+          >
+            Add Stock
+          </Button>
+        </Space>
       ),
     },
   ];
@@ -149,6 +178,49 @@ export default function AlertsPage() {
       {!selectedShop && (
         <Alert message="Select a shop to view low stock alerts" type="info" showIcon />
       )}
+
+      <Modal
+        title={`Add Stock — ${stockModalAlert?.product?.name || ''}`}
+        open={!!stockModalAlert}
+        onCancel={() => { setStockModalAlert(null); setStockReceipt(null); }}
+        onOk={() => {
+          const fd = new FormData();
+          fd.append('product_id', stockModalAlert.product_id);
+          fd.append('qty', stockQty);
+          if (stockRef) fd.append('reference_no', stockRef);
+          if (stockReceipt) fd.append('receipt', stockReceipt);
+          addStockMutation.mutate(fd);
+        }}
+        confirmLoading={addStockMutation.isPending}
+      >
+        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          <div>
+            <span className="text-gray-500 text-sm">Current stock:</span>{' '}
+            <strong>{stockModalAlert?.current_qty}</strong>{' '}
+            <span className="text-gray-500 text-sm">Reorder at:</span>{' '}
+            <strong>{stockModalAlert?.reorder_level}</strong>
+          </div>
+          <div>
+            <span className="text-gray-500 text-sm">Quantity to add</span>
+            <InputNumber min={1} value={stockQty} onChange={setStockQty} style={{ width: '100%' }} />
+          </div>
+          <div>
+            <span className="text-gray-500 text-sm">Reference (optional)</span>
+            <Input placeholder="Invoice / PO number" value={stockRef} onChange={(e) => setStockRef(e.target.value)} />
+          </div>
+          <div>
+            <span className="text-gray-500 text-sm">Receipt (optional)</span>
+            <Upload
+              maxCount={1}
+              beforeUpload={(file) => { setStockReceipt(file); return false; }}
+              onRemove={() => setStockReceipt(null)}
+              accept="image/*,application/pdf"
+            >
+              <Button icon={<UploadOutlined />}>Upload Receipt</Button>
+            </Upload>
+          </div>
+        </Space>
+      </Modal>
     </div>
   );
 }

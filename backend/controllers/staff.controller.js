@@ -10,8 +10,8 @@ const createEmployee = async (req, res, next) => {
 
 const listEmployees = async (req, res, next) => {
   try {
-    const data = await staffService.listEmployees();
-    res.json({ success: true, data });
+    const data = await staffService.listEmployees(req.query);
+    res.json({ success: true, ...data });
   } catch (err) { next(err); }
 };
 
@@ -38,16 +38,18 @@ const deleteEmployee = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-const listDepartments = async (req, res, next) => {
+const exportEmployeesExcel = async (req, res, next) => {
   try {
-    const data = await staffService.listDepartments();
-    res.json({ success: true, data });
+    const buf = await staffService.exportEmployees();
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="employees.xlsx"');
+    res.send(Buffer.from(buf));
   } catch (err) { next(err); }
 };
 
-const getOrganization = async (req, res, next) => {
+const listDepartments = async (req, res, next) => {
   try {
-    const data = await staffService.getOrganization();
+    const data = await staffService.listDepartments();
     res.json({ success: true, data });
   } catch (err) { next(err); }
 };
@@ -101,14 +103,31 @@ const listPositions = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+const proxyDocument = async (req, res, next) => {
+  try {
+    const { url } = req.query;
+    if (!url) return res.status(400).json({ message: 'Document URL is required' });
+    const signedUrl = await staffService.getDocumentProxyUrl(url);
+    res.json({ url: signedUrl });
+  } catch (err) { next(err); }
+};
+
+const deleteDocument = async (req, res, next) => {
+  try {
+    const { url } = req.body;
+    const data = await staffService.deleteEmployeeDocument(req.params.id, url);
+    res.json({ success: true, data });
+  } catch (err) { next(err); }
+};
+
 module.exports = {
   createEmployee,
   listEmployees,
   getEmployee,
   updateEmployee,
   deleteEmployee,
+  exportEmployeesExcel,
   listDepartments,
-  getOrganization,
   createDepartment,
   updateDepartment,
   deleteDepartment,
@@ -116,4 +135,6 @@ module.exports = {
   updatePosition,
   deletePosition,
   listPositions,
+  proxyDocument,
+  deleteDocument,
 };

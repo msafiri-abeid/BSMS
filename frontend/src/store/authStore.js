@@ -26,6 +26,12 @@ export const useAuthStore = create(
       },
 
       getRoleName: () => get().user?.role?.name || '',
+
+      updateAuthUser: (userData) => {
+        const current = get().user;
+        if (!current) return;
+        set({ user: { ...current, ...userData } });
+      },
     }),
     {
       name: 'bentabet-auth',
