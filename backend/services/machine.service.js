@@ -193,7 +193,11 @@ const getMachineStats = async (id, filters = {}) => {
 const create = async (body) => {
   const { manufacturer } = body;
   if (!body.credit_value_tzs) {
-    body.credit_value_tzs = DEFAULT_CREDIT_VALUES[manufacturer] || 100;
+    body.credit_value_tzs = DEFAULT_CREDIT_VALUES[manufacturer] || 10;
+  }
+  // Novomatic machines don't have weekly targets
+  if (manufacturer === 'Novomatic') {
+    delete body.weekly_target_tzs;
   }
   return Machine.create(body);
 };

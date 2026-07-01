@@ -1,5 +1,6 @@
 // src/services/api.js
 import axios from 'axios';
+import { useAuthStore } from '../store/authStore';
 
 const api = axios.create({
   baseURL: '/api',
@@ -49,13 +50,12 @@ api.interceptors.response.use(
         const stored = localStorage.getItem('bentabet-auth');
         const { state } = JSON.parse(stored);
         const { data } = await axios.post('/api/auth/refresh', { refreshToken: state.refreshToken });
-        const newToken = data.data.accessToken;
+        const { tokens, user } = data.data;
+        const newToken = tokens.accessToken;
+        const newRefreshToken = tokens.refreshToken;
 
-        // Update store
-        const authState = JSON.parse(localStorage.getItem('bentabet-auth'));
-        authState.state.accessToken = newToken;
-        if (data.data.refreshToken) authState.state.refreshToken = data.data.refreshToken;
-        localStorage.setItem('bentabet-auth', JSON.stringify(authState));
+        // Update Zustand store (also persists to localStorage via partialize)
+        useAuthStore.getState().setAuth(user || state.user, newToken, newRefreshToken);
 
         processQueue(null, newToken);
         original.headers.Authorization = `Bearer ${newToken}`;
@@ -150,6 +150,7 @@ export const collectionsAPI = {
   removeAssignment: (id) => api.delete(`/collections/assignments/${id}`),
   openMachine: (id) => api.post(`/collections/assignments/${id}/open`),
   update: (id, d) => api.put(`/collections/${id}`, d),
+  supervisorApprove: (id) => api.put(`/collections/${id}/supervisor-approve`),
   remove: (id) => api.delete(`/collections/${id}`),
   weeklyTargets: (p) => api.get('/collections/weekly-targets', { params: p }),
   exportAssignments: (p) => api.get('/collections/assignments/export', { params: p, responseType: 'blob' }),

@@ -59,9 +59,11 @@ const Partner = sequelize.define('Partner', {
 
 const Shop = sequelize.define('Shop', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
-  partner_id: { type: DataTypes.INTEGER, allowNull: false },
+  partner_id: { type: DataTypes.INTEGER, allowNull: true },
   name: { type: DataTypes.STRING(150), allowNull: false },
-  type: { type: DataTypes.ENUM('slot_only', 'bar', 'grocery', 'mixed'), defaultValue: 'slot_only' },
+  business_type: { type: DataTypes.ENUM('meteora', 'slot'), defaultValue: 'meteora' },
+  contact_person: { type: DataTypes.STRING(150) },
+  supervisor_id: { type: DataTypes.INTEGER },
   lat: { type: DataTypes.DECIMAL(10, 8) },
   lng: { type: DataTypes.DECIMAL(11, 8) },
   contract_url: { type: DataTypes.TEXT },
@@ -112,7 +114,7 @@ const Machine = sequelize.define('Machine', {
   slot_code: { type: DataTypes.STRING(50), allowNull: false, unique: true },
   serial_number: { type: DataTypes.STRING(100) },
   sticker_no: { type: DataTypes.STRING(50) },
-  manufacturer: { type: DataTypes.ENUM('Meteora', 'Novomatic', 'EGT'), allowNull: false },
+  manufacturer: { type: DataTypes.ENUM('Meteora', 'Novomatic'), allowNull: false },
   credit_value_tzs: { type: DataTypes.INTEGER, allowNull: false },
   weekly_target_tzs: { type: DataTypes.INTEGER },
   cycle_start_date: { type: DataTypes.DATEONLY },
@@ -190,18 +192,18 @@ const Collection = sequelize.define('Collection', {
   meter_image_url: { type: DataTypes.TEXT },
   collected_at: { type: DataTypes.DATE, allowNull: false },
   approved_by: { type: DataTypes.INTEGER },
-  status: { type: DataTypes.ENUM('pending', 'approved', 'disputed'), defaultValue: 'pending' },
+  approved_at: { type: DataTypes.DATE },
+  supervisor_approved_by: { type: DataTypes.INTEGER },
+  supervisor_approved_at: { type: DataTypes.DATE },
+  status: { type: DataTypes.ENUM('pending', 'supervisor_approved', 'approved', 'disputed'), defaultValue: 'pending' },
 }, { tableName: 'collections' });
 
 const NovomaticReading = sequelize.define('NovomaticReading', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
   collection_id: { type: DataTypes.INTEGER, allowNull: false },
-  total_in_tzs: { type: DataTypes.INTEGER, allowNull: false },
-  total_out_tzs: { type: DataTypes.INTEGER, allowNull: false },
-  net_tzs: { type: DataTypes.INTEGER, allowNull: false },
-  coins_in_tzs: { type: DataTypes.INTEGER, defaultValue: 0 },
-  remote_in_tzs: { type: DataTypes.INTEGER, defaultValue: 0 },
-  handpay_out_tzs: { type: DataTypes.INTEGER, defaultValue: 0 },
+  opening_credits: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+  closing_credits: { type: DataTypes.INTEGER, allowNull: false },
+  total_credits: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
   screenshot_url: { type: DataTypes.TEXT },
   read_at: { type: DataTypes.DATE, allowNull: false },
 }, { tableName: 'novomatic_readings', updatedAt: false });
@@ -583,6 +585,7 @@ Address.belongsTo(District, { foreignKey: 'district_id', as: 'districtData' });
 Address.belongsTo(Ward, { foreignKey: 'ward_id', as: 'wardData' });
 Address.belongsTo(Street, { foreignKey: 'street_id', as: 'streetData' });
 
+Shop.belongsTo(Employee, { foreignKey: 'supervisor_id', as: 'supervisor' });
 Shop.hasMany(Machine, { foreignKey: 'current_shop_id', as: 'machines' });
 Machine.belongsTo(Shop, { foreignKey: 'current_shop_id', as: 'currentShop' });
 
@@ -599,6 +602,7 @@ Collection.belongsTo(Machine, { foreignKey: 'machine_id', as: 'machine' });
 Collection.belongsTo(Shop, { foreignKey: 'shop_id', as: 'shop' });
 Collection.belongsTo(User, { foreignKey: 'collector_id', as: 'collector' });
 Collection.belongsTo(User, { foreignKey: 'approved_by', as: 'approver' });
+Collection.belongsTo(User, { foreignKey: 'supervisor_approved_by', as: 'supervisorApprover' });
 
 // Performance association for machine performance tab
 Machine.hasMany(Collection, {

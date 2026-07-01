@@ -8,9 +8,11 @@ import LoginPage from './pages/auth/LoginPage';
 import Dashboard from './pages/dashboard/Dashboard';
 import PartnersPage from './pages/partners/PartnersPage';
 import PartnerDetailPage from './pages/partners/PartnerDetailPage';
-import ShopsPage from './pages/partners/ShopsPage';
+import MeteoraShopsPage from './pages/partners/MeteoraShopsPage';
+import SlotShopsPage from './pages/partners/SlotShopsPage';
 import ShopDetailPage from './pages/partners/ShopDetailPage';
-import MachinesPage from './pages/machines/MachinesPage';
+import MeteoraMachinesPage from './pages/machines/MeteoraMachinesPage';
+import NovomaticMachinesPage from './pages/machines/NovomaticMachinesPage';
 import MachineDetailPage from './pages/machines/MachineDetailPage';
 import CollectionsPage from './pages/collections/CollectionsPage';
 import MyAssignmentsPage from './pages/collections/MyAssignmentsPage';
@@ -76,9 +78,15 @@ export default function App() {
               <Route index element={<Dashboard />} />
               <Route path="partners" element={<PartnersPage />} />
               <Route path="partners/:id" element={<PartnerDetailPage />} />
-              <Route path="shops" element={<ShopsPage />} />
+              <Route path="shops/meteora" element={<MeteoraShopsPage />} />
+              <Route path="shops/slot" element={<SlotShopsPage />} />
+              <Route path="shops/meteora/:id" element={<ShopDetailPage />} />
+              <Route path="shops/slot/:id" element={<ShopDetailPage />} />
               <Route path="shops/:id" element={<ShopDetailPage />} />
-              <Route path="machines" element={<MachinesPage />} />
+              <Route path="machines/meteora" element={<MeteoraMachinesPage />} />
+              <Route path="machines/novomatic" element={<NovomaticMachinesPage />} />
+              <Route path="machines/meteora/:id" element={<MachineDetailPage />} />
+              <Route path="machines/novomatic/:id" element={<MachineDetailPage />} />
               <Route path="machines/:id" element={<MachineDetailPage />} />
               <Route path="collections" element={<CollectionsPage />} />
               <Route path="my-assignments" element={<MyAssignmentsPage />} />

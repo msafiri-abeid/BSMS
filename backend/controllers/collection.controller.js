@@ -1,5 +1,5 @@
 // controllers/collection.controller.js
-const { submitCollection, getCollections, updateCollection, removeCollection, getAssignments, updateAssignment, removeAssignment } = require('../services/collection.service');
+const { submitCollection, getCollections, updateCollection, removeCollection, supervisorApprove, getAssignments, updateAssignment, removeAssignment } = require('../services/collection.service');
 const { extractMeterReading } = require('../services/ocr.service');
 const { Machine, CollectorAssignment, WeeklyTarget, Collection } = require('../models');
 const { Op } = require('sequelize');
@@ -113,6 +113,10 @@ const update = async (req, res, next) => {
     if (!allowed.includes(req.user.role?.name)) {
       return res.status(403).json({ success: false, message: 'Permission denied' });
     }
+    if (req.body.status === 'approved') {
+      req.body.approved_by = req.user.id;
+      req.body.approved_at = new Date();
+    }
     const collection = await updateCollection(req.params.id, req.body);
     if (!collection) return res.status(404).json({ success: false, message: 'Collection not found' });
     res.json({ success: true, data: collection });
@@ -177,6 +181,18 @@ const deleteAssignment = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+const supervisorApproveHandler = async (req, res, next) => {
+  try {
+    const allowed = ['Supervisor', 'Admin', 'General Manager', 'Operations Manager'];
+    if (!allowed.includes(req.user.role?.name)) {
+      return res.status(403).json({ success: false, message: 'Permission denied' });
+    }
+    const collection = await supervisorApprove(req.params.id, req.user.id);
+    if (!collection) return res.status(404).json({ success: false, message: 'Collection not found' });
+    res.json({ success: true, data: collection });
+  } catch (err) { next(err); }
+};
+
 const exportAssignments = async (req, res, next) => {
   try {
     if (!assignAllowed(req.user)) return res.status(403).json({ success: false, message: 'Permission denied' });
@@ -187,4 +203,4 @@ const exportAssignments = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { submit, ocr, list, myAssignments, createAssignment, openMachine, update, remove, weeklyTargets, listAssignments, editAssignment, deleteAssignment, exportAssignments };
+module.exports = { submit, ocr, list, myAssignments, createAssignment, openMachine, update, remove, weeklyTargets, listAssignments, editAssignment, deleteAssignment, supervisorApprove: supervisorApproveHandler, exportAssignments };

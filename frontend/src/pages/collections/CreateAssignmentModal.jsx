@@ -43,6 +43,7 @@ export default function CreateAssignmentModal({ open, onClose }) {
   const machines = machinesData?.rows || [];
 
   const filteredMachines = machines
+    .filter((m) => m.manufacturer === 'Meteora')
     .filter((m) => {
       const search = machineSearch.toLowerCase();
       return (

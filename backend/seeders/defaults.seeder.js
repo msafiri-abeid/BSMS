@@ -108,6 +108,16 @@ module.exports = async () => {
         await Permission.findOrCreate({ where: { role_id: role.id, module: mod, action: 'read' } });
       }
     }
+
+    // Supervisor: approve novomatic collections + read machines
+    if (name === 'Supervisor') {
+      for (const mod of ['collections', 'machines']) {
+        for (const act of ['read', 'approve']) {
+          await Permission.findOrCreate({ where: { role_id: role.id, module: mod, action: act } });
+        }
+      }
+      await Permission.findOrCreate({ where: { role_id: role.id, module: 'shops', action: 'read' } });
+    }
   }
 
   // Seed default admin user + employee record

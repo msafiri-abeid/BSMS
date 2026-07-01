@@ -23,13 +23,15 @@ const start = async () => {
     console.log('[DB] MySQL connection established');
 
     if (process.env.NODE_ENV === 'development') {
+      const force = process.env.DB_FORCE_SYNC === 'true';
+      if (force) console.log('[DB] Force sync enabled — dropping all tables');
       try {
-        await sequelize.sync({ alter: true });
+        await sequelize.sync({ alter: !force, force });
       } catch (err) {
         console.log('[DB] Alter failed, falling back to force sync...');
         await sequelize.sync({ force: true });
       }
-      console.log('[DB] Models synced');
+      console.log('[DB] Models synced' + (force ? ' (tables recreated)' : ''));
     }
 
     await seedDefaults();

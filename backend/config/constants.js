@@ -39,7 +39,6 @@ module.exports = {
   DEFAULT_CREDIT_VALUES: {
     Meteora: 200,
     Novomatic: 10,
-    EGT: 100,
   },
 
   SLA_HOURS: {
@@ -49,7 +48,7 @@ module.exports = {
     low: 72,
   },
 
-  ROLES: ['Admin', 'General Manager', 'Director', 'Operations Manager', 'Finance', 'Sales', 'Collector', 'Technician', 'Cashier'],
+  ROLES: ['Admin', 'General Manager', 'Director', 'Operations Manager', 'Finance', 'Sales', 'Collector', 'Technician', 'Cashier', 'Supervisor'],
 
   MODULES: ['partners', 'shops', 'machines', 'collections', 'finance', 'inventory', 'tickets', 'staff', 'reports', 'settings', 'users'],
 

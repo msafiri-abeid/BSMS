@@ -79,6 +79,7 @@ router.post('/collections/assignments/:id/open', authenticate, collectionC.openM
 router.get('/collections/assignments/export', authenticate, checkPermission('collections', 'read'), collectionC.exportAssignments);
 router.get('/collections/weekly-targets', authenticate, checkPermission('collections', 'read'), collectionC.weeklyTargets);
 router.put('/collections/:id', authenticate, checkPermission('collections', 'update'), collectionC.update);
+router.put('/collections/:id/supervisor-approve', authenticate, checkPermission('collections', 'approve'), collectionC.supervisorApprove);
 router.delete('/collections/:id', authenticate, checkPermission('collections', 'delete'), collectionC.remove);
 
 // ── FINANCE ───────────────────────────────────────────────────

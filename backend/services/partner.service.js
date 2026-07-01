@@ -1,4 +1,4 @@
-const { Partner, Shop, Region, District, Ward, Street, Address, Machine, Collection } = require('../models');
+const { Partner, Shop, Region, District, Ward, Street, Address, Machine, Collection, Employee } = require('../models');
 const { Op } = require('sequelize');
 
 const partnerIncludes = (includeShops = false) => {
@@ -8,7 +8,7 @@ const partnerIncludes = (includeShops = false) => {
     { model: Ward, as: 'wardData' },
     { model: Street, as: 'streetData' },
   ] }];
-  if (includeShops) inc.push({ model: Shop, as: 'shops', attributes: ['id', 'name', 'status', 'type'] });
+  if (includeShops) inc.push({ model: Shop, as: 'shops', attributes: ['id', 'name', 'status', 'business_type'] });
   return inc;
 };
 
@@ -20,6 +20,7 @@ const shopIncludes = () => [
     { model: Street, as: 'streetData' },
   ] },
   { model: Partner, as: 'partner', attributes: ['id', 'name', 'type', 'label', 'contract_url'] },
+  { model: Employee, as: 'supervisor', attributes: ['id', 'full_name', 'phone'] },
   {
     model: Machine, as: 'machines',
     attributes: ['id', 'slot_code', 'manufacturer', 'credit_value_tzs', 'status', 'previous_count', 'opening_count'],
@@ -93,16 +94,23 @@ exports.deletePartner = async (id) => {
   return true;
 };
 
-exports.listShops = async ({ partner_id, status, type }) => {
+exports.listShops = async ({ partner_id, status, business_type, search, supervisor_id }) => {
   const where = {};
   if (partner_id) where.partner_id = partner_id;
   if (status) where.status = status;
-  if (type) where.type = type;
+  if (business_type) where.business_type = business_type;
+  if (search) where.name = { [Op.like]: `%${search}%` };
+  if (supervisor_id) where.supervisor_id = supervisor_id;
   const data = await Shop.findAndCountAll({
     where,
     include: [
-      { model: Address, as: 'address', include: [{ model: Region, as: 'region' }] },
+      { model: Address, as: 'address', include: [
+        { model: Region, as: 'region' },
+        { model: Ward, as: 'wardData' },
+        { model: Street, as: 'streetData' },
+      ] },
       { model: Partner, as: 'partner', attributes: ['id', 'name', 'label', 'type'] },
+      { model: Employee, as: 'supervisor', attributes: ['id', 'full_name', 'phone'] },
     ],
     order: [['name', 'ASC']],
   });

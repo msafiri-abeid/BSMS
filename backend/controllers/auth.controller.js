@@ -20,8 +20,8 @@ const login = async (req, res, next) => {
 
 const refresh = async (req, res, next) => {
   try {
-    const tokens = await authService.refresh(req.body.refreshToken);
-    res.json({ success: true, data: tokens });
+    const result = await authService.refresh(req.body.refreshToken);
+    res.json({ success: true, data: result });
   } catch (err) {
     res.status(401).json({ success: false, message: err.message });
   }

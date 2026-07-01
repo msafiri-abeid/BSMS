@@ -36,7 +36,8 @@ const ALL_NAV = [
     icon: <Cpu size={16} />,
     module: "machines",
     children: [
-      { key: "/machines", label: "All Machines", icon: <Monitor size={16} />, module: "machines" },
+      { key: "/machines/meteora", label: "Meteora", icon: <Monitor size={16} />, module: "machines" },
+      { key: "/machines/novomatic", label: "Novomatic", icon: <Monitor size={16} />, module: "machines" },
       { key: "/debts", label: "Debts", icon: <FileText size={16} />, module: "machines" },
     ],
   },
@@ -47,7 +48,8 @@ const ALL_NAV = [
     module: "partners",
     children: [
       { key: "/partners", label: "Partners", icon: <Handshake size={16} />, module: "partners" },
-      { key: "/shops", label: "Shops", icon: <Store size={16} />, module: "shops" },
+      { key: "/shops/meteora", label: "Meteora Shops", icon: <Store size={16} />, module: "shops" },
+      { key: "/shops/slot", label: "Slot Shops", icon: <Store size={16} />, module: "shops" },
     ],
   },
   {

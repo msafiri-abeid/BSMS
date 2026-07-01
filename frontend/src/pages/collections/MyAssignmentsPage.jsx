@@ -49,12 +49,13 @@ export default function MyAssignmentsPage() {
   const canWrite = ['create', 'update', 'delete'].some(a => hasPermission('collections', a));
 
   // ── Collector view: my assignments ──
-  const { data: assignments, isLoading: loadingMy } = useQuery({
+  const { data: assignmentsRaw, isLoading: loadingMy } = useQuery({
     queryKey: ['my-assignments'],
     queryFn: () => collectionsAPI.myAssignments().then(r => r.data.data),
     refetchInterval: 60000,
     enabled: !isAssigner,
   });
+  const assignments = (assignmentsRaw || []).filter(a => a.machine?.manufacturer === 'Meteora');
 
   // ── Management view: all assignments ──
   const { data: allAssignments, isLoading: loadingAll } = useQuery({
@@ -383,7 +384,7 @@ export default function MyAssignmentsPage() {
   }
 
   // ── RENDER: Management table view ──
-  const rows = allAssignments?.rows || [];
+  const rows = (allAssignments?.rows || []).filter(a => a.machine?.manufacturer !== 'Novomatic');
   const mgmtPending = rows.filter(a => a.status === 'pending');
   const mgmtDone = rows.filter(a => a.status === 'done');
   const mgmtSkipped = rows.filter(a => a.status === 'skipped');

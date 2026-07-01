@@ -71,7 +71,10 @@ const refresh = async (refreshToken) => {
   });
   if (!stored || stored.expires_at < new Date()) throw new Error('Invalid or expired refresh token');
 
-  const user = await User.findOne({ where: { id: decoded.id, is_active: true } });
+  const user = await User.findOne({
+    where: { id: decoded.id, is_active: true },
+    include: [{ model: Role, as: 'role', include: [{ model: Permission, as: 'permissions' }] }],
+  });
   if (!user) throw new Error('User not found');
 
   const tokens = generateTokens(user);
@@ -79,7 +82,8 @@ const refresh = async (refreshToken) => {
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
   await RefreshToken.create({ user_id: user.id, token: tokens.refreshToken, expires_at: expiresAt });
 
-  return tokens;
+  const { password_hash, ...userData } = user.toJSON();
+  return { tokens, user: userData };
 };
 
 const logout = async (refreshToken) => {

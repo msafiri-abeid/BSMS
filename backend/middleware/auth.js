@@ -18,7 +18,7 @@ const authenticate = async (req, res, next) => {
       include: [{ model: Role, as: 'role', include: [{ model: Permission, as: 'permissions' }] }],
     });
 
-    if (!user) return res.status(401).json({ success: false, message: 'User not found or inactive' });
+    if (!user) return res.status(401).json({ success: false, message: 'User not found or inactive', code: 'TOKEN_EXPIRED' });
 
     req.user = user;
     req.permissions = user.role?.permissions || [];

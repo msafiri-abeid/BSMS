@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, Tag, Table, Button, Typography, Space, Modal, Form, Input, InputNumber, Select, Checkbox, DatePicker, App, Empty, Image, Tooltip } from 'antd';
 import { ArrowLeft, Download, Plus, Pencil, Trash2, Eye, Edit3, X, CheckCircle, XCircle, Cpu, DollarSign, MapPin, Target, Receipt, BarChart3, History } from 'lucide-react';
@@ -14,16 +14,18 @@ const { Option } = Select;
 const { RangePicker } = DatePicker;
 
 const STATUS_COLORS = { active: 'success', inactive: 'default', maintenance: 'warning', transferred: 'processing' };
-const MANUFACTURERS = ['Meteora', 'Novomatic', 'EGT'];
-const DEFAULT_CV = { Meteora: 200, Novomatic: 10, EGT: 100 };
+const MANUFACTURERS = ['Meteora', 'Novomatic'];
+const DEFAULT_CV = { Meteora: 200, Novomatic: 10 };
 
 const fmt = (n) => `TZS ${(n || 0).toLocaleString()}`;
 
 const filterActive = (f) => f.date_from || f.date_to;
 
+
 export default function MachineDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
   const { message } = App.useApp();
   const { hasPermission, user } = useAuthStore();
@@ -36,7 +38,6 @@ export default function MachineDetailPage() {
   const [selectedRowKeys, setSelectedRowKeys] = useState([]);
   const [viewRecord, setViewRecord] = useState(null);
   const [editRecord, setEditRecord] = useState(null);
-
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deployOpen, setDeployOpen] = useState(false);
@@ -47,6 +48,9 @@ export default function MachineDetailPage() {
     queryKey: ['machine', id],
     queryFn: () => machinesAPI.get(id).then(r => r.data.data),
   });
+
+  const isNovomatic = machine?.manufacturer === 'Novomatic' || location.pathname.startsWith('/machines/novomatic/');
+  const backPath = isNovomatic ? '/machines/novomatic' : '/machines/meteora';
 
   const { data: shopsData } = useQuery({ queryKey: ['shops-list'], queryFn: () => shopsAPI.list().then(r => r.data.data) });
   const shops = shopsData?.rows || [];
@@ -71,6 +75,13 @@ export default function MachineDetailPage() {
   });
   const collections = collData?.rows || [];
 
+  const { data: expensesData, isLoading: expLoading } = useQuery({
+    queryKey: ['machine-expenses', id],
+    queryFn: () => financeAPI.listExpenses({ machine_id: id }).then(r => r.data.data || []),
+    enabled: !!id && isNovomatic,
+  });
+  const expenses = Array.isArray(expensesData) ? expensesData : [];
+
   const totals = useMemo(() => collections.reduce((acc, c) => ({
     gross: acc.gross + (c.gross_tzs || 0),
     office: acc.office + (c.office_tzs || 0),
@@ -91,7 +102,7 @@ export default function MachineDetailPage() {
 
   const deleteMutation = useMutation({
     mutationFn: (id) => machinesAPI.remove(id),
-    onSuccess: () => { message.success('Machine deleted'); navigate('/machines'); },
+    onSuccess: () => { message.success('Machine deleted'); navigate(backPath); },
     onError: (e) => message.error(e.response?.data?.message || 'Error deleting machine'),
   });
 
@@ -208,7 +219,7 @@ export default function MachineDetailPage() {
   if (isError || !machine) {
     return (
       <div className="p-6 max-w-7xl mx-auto">
-        <Button icon={<ArrowLeft size={16} />} onClick={() => navigate('/machines')} className="flex items-center gap-1.5 mb-6">Back</Button>
+        <Button icon={<ArrowLeft size={16} />} onClick={() => navigate(backPath)} className="flex items-center gap-1.5 mb-6">Back</Button>
         <Card className="text-center py-12 border-dashed border-2 border-slate-200">
           <Text type={isError ? 'danger' : 'secondary'} className="text-lg font-medium block mb-2">
             {isError ? (error?.response?.data?.message || error?.message || 'Machine not found') : 'Machine not found'}
@@ -270,7 +281,7 @@ export default function MachineDetailPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-200 pb-5">
         <div className="flex items-center gap-4">
           <Button type="text" icon={<ArrowLeft size={18} className="text-slate-600" />}
-            onClick={() => navigate('/machines')}
+            onClick={() => navigate(backPath)}
             className="hover:bg-slate-100 p-2 h-auto flex items-center justify-center rounded-lg" />
           <div>
             <div className="flex items-center gap-2.5 mb-1">
@@ -314,18 +325,26 @@ export default function MachineDetailPage() {
       </div>
 
       {/* ── KPI Row ──────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-        <KpiCard title="Total Gross" value={statsData?.kpis?.totalGross} formatter={fmt} bgColor="bg-slate-50" iconColor="text-slate-600" />
-        <KpiCard title="Net Revenue" value={statsData?.kpis?.netRevenue} formatter={fmt} bgColor="bg-emerald-50" iconColor="text-emerald-600" />
-        <KpiCard title="Office Share" value={statsData?.kpis?.totalOffice} formatter={fmt} bgColor="bg-blue-50" iconColor="text-blue-600" />
-        <KpiCard title="Expenses" value={statsData?.kpis?.totalExpenses} formatter={fmt} bgColor="bg-red-50" iconColor="text-red-600" />
-        <KpiCard
-          title={filterActive(filters) ? 'Target Attainment (filtered)' : 'Target Attainment'}
-          value={statsData?.targetAttainment ? `${statsData.targetAttainment.rate}%` : '—'}
-          bgColor="bg-amber-50"
-          iconColor="text-amber-600"
-        />
-      </div>
+      {isNovomatic ? (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <KpiCard title="Total Gross" value={statsData?.kpis?.totalGross} formatter={fmt} bgColor="bg-slate-50" iconColor="text-slate-600" />
+          <KpiCard title="Net Revenue" value={statsData?.kpis?.netRevenue} formatter={fmt} bgColor="bg-emerald-50" iconColor="text-emerald-600" />
+          <KpiCard title="Expenses" value={statsData?.kpis?.totalExpenses} formatter={fmt} bgColor="bg-red-50" iconColor="text-red-600" />
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          <KpiCard title="Total Gross" value={statsData?.kpis?.totalGross} formatter={fmt} bgColor="bg-slate-50" iconColor="text-slate-600" />
+          <KpiCard title="Net Revenue" value={statsData?.kpis?.netRevenue} formatter={fmt} bgColor="bg-emerald-50" iconColor="text-emerald-600" />
+          <KpiCard title="Office Share" value={statsData?.kpis?.totalOffice} formatter={fmt} bgColor="bg-blue-50" iconColor="text-blue-600" />
+          <KpiCard title="Expenses" value={statsData?.kpis?.totalExpenses} formatter={fmt} bgColor="bg-red-50" iconColor="text-red-600" />
+          <KpiCard
+            title={filterActive(filters) ? 'Target Attainment (filtered)' : 'Target Attainment'}
+            value={statsData?.targetAttainment ? `${statsData.targetAttainment.rate}%` : '—'}
+            bgColor="bg-amber-50"
+            iconColor="text-amber-600"
+          />
+        </div>
+      )}
       {filterActive(filters) && (
         <div className="text-xs text-slate-400 italic -mt-3">KPIs scoped to selected date range</div>
       )}
@@ -386,7 +405,7 @@ export default function MachineDetailPage() {
           <div className="space-y-3 divide-y divide-slate-50">
             <div className="flex justify-between items-center text-sm pt-1">
               <span className="text-slate-400">Manufacturer</span>
-              <Tag color={machine.manufacturer === 'Meteora' ? 'blue' : machine.manufacturer === 'Novomatic' ? 'purple' : 'orange'}
+              <Tag color={machine.manufacturer === 'Meteora' ? 'blue' : 'purple'}
                 className="m-0 border-0 font-medium rounded-md">{machine.manufacturer}</Tag>
             </div>
             <div className="flex justify-between items-center text-sm py-2.5">
@@ -397,10 +416,12 @@ export default function MachineDetailPage() {
               <span className="text-slate-400">Credit Value</span>
               <span className="font-bold text-slate-700">{machine.credit_value_tzs?.toLocaleString()} TZS</span>
             </div>
-            <div className="flex justify-between items-center text-sm py-2.5">
-              <span className="text-slate-400">Weekly Target</span>
-              <span className="font-bold text-slate-700">TZS {(machine.weekly_target_tzs || 120000).toLocaleString()}</span>
-            </div>
+            {!isNovomatic && (
+              <div className="flex justify-between items-center text-sm py-2.5">
+                <span className="text-slate-400">Weekly Target</span>
+                <span className="font-bold text-slate-700">TZS {(machine.weekly_target_tzs || 120000).toLocaleString()}</span>
+              </div>
+            )}
             <div className="flex justify-between items-center text-sm py-2.5">
               <span className="text-slate-400">Location</span>
               <span className="font-semibold text-slate-700 flex items-center gap-1">
@@ -412,16 +433,18 @@ export default function MachineDetailPage() {
               <span className="text-slate-400">Collections</span>
               <span className="font-bold text-slate-700">{statsData?.kpis?.collectionCount || 0}</span>
             </div>
-            <div className="flex justify-between items-center text-sm pb-1 pt-2.5">
-              <span className="text-slate-400">Debt</span>
-              <span className="font-bold text-red-600">{fmt(statsData?.kpis?.outstandingDebt)}</span>
-            </div>
+            {!isNovomatic && (
+              <div className="flex justify-between items-center text-sm pb-1 pt-2.5">
+                <span className="text-slate-400">Debt</span>
+                <span className="font-bold text-red-600">{fmt(statsData?.kpis?.outstandingDebt)}</span>
+              </div>
+            )}
           </div>
         </Card>
       </div>
 
-      {/* ── Weekly Targets ───────────────────────────────────── */}
-      {statsData?.weeklyTargets?.length > 0 && (
+      {/* ── Weekly Targets (Meteora only) ────────────────────── */}
+      {!isNovomatic && statsData?.weeklyTargets?.length > 0 && (
         <Card className="shadow-sm border-slate-100 rounded-xl" size="small"
           title={<div className="flex items-center gap-2 font-semibold text-slate-700"><Target size={16} className="text-amber-500" /> Weekly Target Performance</div>}
           extra={
@@ -460,7 +483,8 @@ export default function MachineDetailPage() {
         </Card>
       )}
 
-      {/* ── Collections Table ────────────────────────────────── */}
+      {/* ── Collections Table (Meteora only) ──────────────────── */}
+      {!isNovomatic && (
       <Card className="shadow-sm border-slate-100 rounded-xl" size="small"
         title={<div className="flex items-center gap-2 font-semibold text-slate-700"><DollarSign size={16} className="text-emerald-500" /> Collection History</div>}>
         <Table
@@ -485,15 +509,12 @@ export default function MachineDetailPage() {
                 <Table.Summary.Cell index={4}>{fmt(totals.gross)}</Table.Summary.Cell>
                 <Table.Summary.Cell index={5}>{fmt(totals.office)}</Table.Summary.Cell>
                 <Table.Summary.Cell index={6}>{fmt(totals.owner)}</Table.Summary.Cell>
-                <Table.Summary.Cell index={7} />
-                <Table.Summary.Cell index={8} />
-                <Table.Summary.Cell index={9} />
-                <Table.Summary.Cell index={10} />
               </Table.Summary.Row>
             </Table.Summary>
           ) : null}
         />
       </Card>
+      )}
 
       {/* ── Bottom: Location + Debt/Expenses ─────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -517,43 +538,74 @@ export default function MachineDetailPage() {
           )}
         </Card>
 
-        <Card className="shadow-sm border-slate-100 rounded-xl" size="small"
-          title={<div className="flex items-center gap-2 font-semibold text-slate-700"><Receipt size={16} className="text-red-500" /> Debt & Expenses</div>}>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-red-50/50 border border-red-100 rounded-lg p-4 text-center">
-                <Text className="text-xs font-semibold uppercase tracking-wider text-slate-500 block mb-1">Outstanding Debt</Text>
-                <Text className="text-xl font-bold text-red-600">{fmt(statsData?.kpis?.outstandingDebt)}</Text>
-                <Text className="text-xs text-slate-400 block mt-1">{statsData?.kpis?.debtCount || 0} pending debt(s)</Text>
-              </div>
+        {isNovomatic ? (
+          <Card className="shadow-sm border-slate-100 rounded-xl" size="small"
+            title={<div className="flex items-center gap-2 font-semibold text-slate-700"><Receipt size={16} className="text-red-500" /> Expenses Summary</div>}>
+            <div className="space-y-4">
               <div className="bg-orange-50/50 border border-orange-100 rounded-lg p-4 text-center">
                 <Text className="text-xs font-semibold uppercase tracking-wider text-slate-500 block mb-1">Total Expenses</Text>
                 <Text className="text-xl font-bold text-orange-600">{fmt(statsData?.kpis?.totalExpenses)}</Text>
                 <Text className="text-xs text-slate-400 block mt-1">{statsData?.kpis?.expenseCount || 0} expense(s)</Text>
               </div>
-            </div>
-            <div className="bg-slate-50 border border-slate-100 rounded-lg p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <Text className="text-xs font-semibold uppercase tracking-wider text-slate-500 block">Owner Share</Text>
-                  <Text className="text-lg font-bold text-purple-700">{fmt(statsData?.kpis?.totalOwner)}</Text>
+              {expenses.length > 0 && (
+                <div className="border border-slate-100 rounded-lg overflow-hidden">
+                  <Table
+                    dataSource={expenses}
+                    columns={[
+                      { title: 'Date', dataIndex: 'date', width: 100, render: v => dayjs(v).format('DD MMM') },
+                      { title: 'Category', dataIndex: 'category', width: 90 },
+                      { title: 'Amount', dataIndex: 'amount_tzs', width: 100, render: v => <span className="font-semibold">{fmt(v)}</span> },
+                      { title: 'Status', dataIndex: 'status', width: 80, render: v => <Tag className="!text-[10px]">{v}</Tag> },
+                      { title: 'Description', dataIndex: 'description', ellipsis: true },
+                    ]}
+                    rowKey="id"
+                    size="small"
+                    pagination={false}
+                    loading={expLoading}
+                  />
                 </div>
-                <div className="text-right">
-                  <Text className="text-xs font-semibold uppercase tracking-wider text-slate-500 block">Collection Count</Text>
-                  <Text className="text-lg font-bold text-slate-700">{statsData?.kpis?.collectionCount || 0}</Text>
+              )}
+            </div>
+          </Card>
+        ) : (
+          <Card className="shadow-sm border-slate-100 rounded-xl" size="small"
+            title={<div className="flex items-center gap-2 font-semibold text-slate-700"><Receipt size={16} className="text-red-500" /> Debt & Expenses</div>}>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-red-50/50 border border-red-100 rounded-lg p-4 text-center">
+                  <Text className="text-xs font-semibold uppercase tracking-wider text-slate-500 block mb-1">Outstanding Debt</Text>
+                  <Text className="text-xl font-bold text-red-600">{fmt(statsData?.kpis?.outstandingDebt)}</Text>
+                  <Text className="text-xs text-slate-400 block mt-1">{statsData?.kpis?.debtCount || 0} pending debt(s)</Text>
+                </div>
+                <div className="bg-orange-50/50 border border-orange-100 rounded-lg p-4 text-center">
+                  <Text className="text-xs font-semibold uppercase tracking-wider text-slate-500 block mb-1">Total Expenses</Text>
+                  <Text className="text-xl font-bold text-orange-600">{fmt(statsData?.kpis?.totalExpenses)}</Text>
+                  <Text className="text-xs text-slate-400 block mt-1">{statsData?.kpis?.expenseCount || 0} expense(s)</Text>
+                </div>
+              </div>
+              <div className="bg-slate-50 border border-slate-100 rounded-lg p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Text className="text-xs font-semibold uppercase tracking-wider text-slate-500 block">Owner Share</Text>
+                    <Text className="text-lg font-bold text-purple-700">{fmt(statsData?.kpis?.totalOwner)}</Text>
+                  </div>
+                  <div className="text-right">
+                    <Text className="text-xs font-semibold uppercase tracking-wider text-slate-500 block">Collection Count</Text>
+                    <Text className="text-lg font-bold text-slate-700">{statsData?.kpis?.collectionCount || 0}</Text>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-amber-50/50 border border-amber-100 rounded-lg p-3">
+                <div className="flex items-center gap-2">
+                  <Target className="w-4 h-4 text-amber-500 shrink-0" />
+                  <Text className="text-xs text-amber-700">
+                    <strong>{statsData?.targetAttainment?.metWeeks || 0}</strong> of <strong>{statsData?.targetAttainment?.totalWeeks || 0}</strong> weekly targets met ({statsData?.targetAttainment?.rate || 0}% attainment)
+                  </Text>
                 </div>
               </div>
             </div>
-            <div className="bg-amber-50/50 border border-amber-100 rounded-lg p-3">
-              <div className="flex items-center gap-2">
-                <Target className="w-4 h-4 text-amber-500 shrink-0" />
-                <Text className="text-xs text-amber-700">
-                  <strong>{statsData?.targetAttainment?.metWeeks || 0}</strong> of <strong>{statsData?.targetAttainment?.totalWeeks || 0}</strong> weekly targets met ({statsData?.targetAttainment?.rate || 0}% attainment)
-                </Text>
-              </div>
-            </div>
-          </div>
-        </Card>
+          </Card>
+        )}
       </div>
 
       {/* ── View Collection Modal ────────────────────────────── */}
@@ -696,9 +748,11 @@ export default function MachineDetailPage() {
             <Form.Item name="credit_value_tzs" label={<span className="text-slate-600 font-medium text-xs">Credit Value (TZS)</span>} rules={[{ required: true }]}>
               <InputNumber min={1} className="w-full rounded-lg h-9" />
             </Form.Item>
-            <Form.Item name="weekly_target_tzs" label={<span className="text-slate-600 font-medium text-xs">Weekly Target (TZS)</span>} tooltip="Defaults to 120,000 TZS">
-              <InputNumber min={0} placeholder="120,000" className="w-full rounded-lg h-9" />
-            </Form.Item>
+            {!isNovomatic && (
+              <Form.Item name="weekly_target_tzs" label={<span className="text-slate-600 font-medium text-xs">Weekly Target (TZS)</span>} tooltip="Defaults to 120,000 TZS">
+                <InputNumber min={0} placeholder="120,000" className="w-full rounded-lg h-9" />
+              </Form.Item>
+            )}
           </div>
         </Form>
       </Modal>
@@ -738,24 +792,30 @@ export default function MachineDetailPage() {
               {shops.map(s => <Option key={s.id} value={s.id}>{s.name}</Option>)}
             </Select>
           </Form.Item>
-          <Form.Item name="opening_count" label={<span className="text-slate-600 font-medium text-xs">Opening Mechanical Counter Register</span>} initialValue={0}>
-            <InputNumber min={0} className="w-full rounded-lg h-9 font-mono" />
-          </Form.Item>
-          <div className="bg-slate-50 border border-slate-100 rounded-lg p-3 my-2">
-            <span className="text-[11px] uppercase tracking-wider font-bold text-slate-400 block mb-2">Token Initial Liquidity Allocation</span>
-            <div className="grid grid-cols-2 gap-4">
-              <Form.Item name="machine_load_tzs" label={<span className="text-slate-500 text-xs">Internal Hopper (TZS)</span>} initialValue={30000} className="!mb-0">
-                <InputNumber min={0} className="w-full rounded-lg h-9" />
-              </Form.Item>
-              <Form.Item name="tray_tzs" label={<span className="text-slate-500 text-xs">Player Tray (TZS)</span>} initialValue={60000} className="!mb-0">
-                <InputNumber min={0} className="w-full rounded-lg h-9" />
-              </Form.Item>
+          {!isNovomatic && (
+            <Form.Item name="opening_count" label={<span className="text-slate-600 font-medium text-xs">Opening Mechanical Counter Register</span>} initialValue={0}>
+              <InputNumber min={0} className="w-full rounded-lg h-9 font-mono" />
+            </Form.Item>
+          )}
+          {!isNovomatic && (
+            <div className="bg-slate-50 border border-slate-100 rounded-lg p-3 my-2">
+              <span className="text-[11px] uppercase tracking-wider font-bold text-slate-400 block mb-2">Token Initial Liquidity Allocation</span>
+              <div className="grid grid-cols-2 gap-4">
+                <Form.Item name="machine_load_tzs" label={<span className="text-slate-500 text-xs">Internal Hopper (TZS)</span>} initialValue={30000} className="!mb-0">
+                  <InputNumber min={0} className="w-full rounded-lg h-9" />
+                </Form.Item>
+                <Form.Item name="tray_tzs" label={<span className="text-slate-500 text-xs">Player Tray (TZS)</span>} initialValue={60000} className="!mb-0">
+                  <InputNumber min={0} className="w-full rounded-lg h-9" />
+                </Form.Item>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-2.5 mb-0 italic">Standard aggregate initial provision: 90,000 TZS total.</p>
             </div>
-            <p className="text-[11px] text-slate-400 mt-2.5 mb-0 italic">Standard aggregate initial provision: 90,000 TZS total.</p>
-          </div>
-          <Form.Item name="tokens_paid" valuePropName="checked" initialValue={true}>
-            <Checkbox>Tokens paid upfront (uncheck to create token debt)</Checkbox>
-          </Form.Item>
+          )}
+          {!isNovomatic && (
+            <Form.Item name="tokens_paid" valuePropName="checked" initialValue={true}>
+              <Checkbox>Tokens paid upfront (uncheck to create token debt)</Checkbox>
+            </Form.Item>
+          )}
         </Form>
       </Modal>
     </div>
