@@ -22,6 +22,12 @@ import DebtsPage from './pages/debts/DebtsPage';
 import ExpensesPage from './pages/finance/ExpensesPage';
 import InvoicesPage from './pages/finance/InvoicesPage';
 import PayrollPage from './pages/finance/PayrollPage';
+import AccountsPage from './pages/finance/AccountsPage';
+import AccountDetailPage from './pages/finance/AccountDetailPage';
+import BalanceSheetPage from './pages/finance/BalanceSheetPage';
+import TrialBalancePage from './pages/finance/TrialBalancePage';
+import CashFlowPage from './pages/finance/CashFlowPage';
+import AccountReportPage from './pages/finance/AccountReportPage';
 import TokenInventoryPage from './pages/inventory/TokenInventoryPage';
 import ShopInventoryPage from './pages/inventory/ShopInventoryPage';
 import StockManagementPage from './pages/inventory/StockManagementPage';
@@ -52,7 +58,7 @@ import NotFoundPage from './pages/NotFoundPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
-    queries: { retry: 1, staleTime: 30000, refetchOnWindowFocus: false },
+    queries: { retry: 1, staleTime: 5000, refetchOnWindowFocus: true },
     mutations: { retry: 0 },
   },
 });
@@ -95,6 +101,12 @@ export default function App() {
               <Route path="finance/expenses" element={<ExpensesPage />} />
               <Route path="finance/invoices" element={<InvoicesPage />} />
               <Route path="finance/payroll" element={<PayrollPage />} />
+              <Route path="finance/accounts" element={<AccountsPage />} />
+              <Route path="finance/accounts/:id" element={<AccountDetailPage />} />
+              <Route path="finance/reports/balance-sheet" element={<BalanceSheetPage />} />
+              <Route path="finance/reports/trial-balance" element={<TrialBalancePage />} />
+              <Route path="finance/reports/cash-flow" element={<CashFlowPage />} />
+              <Route path="finance/reports/account-report" element={<AccountReportPage />} />
               <Route path="inventory">
                 <Route path="products" element={<ShopInventoryPage />} />
                 <Route path="tokens" element={<TokenInventoryPage />} />

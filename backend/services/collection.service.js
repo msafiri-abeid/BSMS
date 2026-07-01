@@ -1,6 +1,6 @@
 // services/collection.service.js
 const { Op, literal } = require('sequelize');
-const { Collection, Machine, MachineDeployment, WeeklyTarget, NovomaticReading, CollectorAssignment, Setting, Shop, User, Partner, MachineDebt, Address } = require('../models');
+const { Collection, Machine, MachineDeployment, WeeklyTarget, NovomaticReading, CollectorAssignment, Setting, Shop, User, Partner, MachineDebt, Address, Account, AccountTransaction } = require('../models');
 
 const getWeekBounds = (date = new Date()) => {
   const d = new Date(date);
@@ -50,7 +50,6 @@ const calculateMeteora = (prevCount, currCount, creditValueTzs, weeklyTargetTzs,
 // Novomatic: no weekly target, no debt. Gross = (closing - opening) * credit_value. Office fixed at 50%.
 const calculateNovomatic = (openingCredits, closingCredits, creditValueTzs) => {
   const totalCredits = closingCredits - openingCredits;
-  if (totalCredits < 0) throw new Error('Closing credits cannot be less than opening credits');
   const gross_tzs = totalCredits * creditValueTzs;
   const net_tzs = gross_tzs;
   const office_tzs = Math.round(gross_tzs * 0.5);
@@ -109,7 +108,7 @@ const payOutstandingDebts = async (machineId, amount) => {
   return amount - remaining;
 };
 
-const submitCollection = async ({ machineId, shopId, collectorId, currCount, meterImageUrl, novomaticData, assignmentId, skipDebtRepayment }) => {
+const submitCollection = async ({ machineId, shopId, collectorId, currCount, meterImageUrl, novomaticData, assignmentId, skipDebtRepayment, collectionDate }) => {
   const machine = await Machine.findByPk(machineId);
   if (!machine) throw new Error('Machine not found');
 
@@ -129,7 +128,7 @@ const submitCollection = async ({ machineId, shopId, collectorId, currCount, met
         order: [['collected_at', 'DESC']],
         include: [{ model: NovomaticReading, as: 'novomaticReading' }],
       });
-      openingCredits = prevCollection?.novomaticReading?.closing_credits || 0;
+      openingCredits = prevCollection?.novomaticReading?.closing_credits || machine.previous_count || machine.opening_count || 0;
     }
     calcData = calculateNovomatic(openingCredits, closingCredits, machine.credit_value_tzs);
     currCountFinal = closingCredits;
@@ -163,6 +162,8 @@ const submitCollection = async ({ machineId, shopId, collectorId, currCount, met
     await machine.update({ previous_count: currCount });
   }
 
+  const colDate = collectionDate || new Date(Date.now() - 86400000).toISOString().split('T')[0];
+
   const collection = await Collection.create({
     machine_id: machineId,
     shop_id: shopId,
@@ -176,6 +177,7 @@ const submitCollection = async ({ machineId, shopId, collectorId, currCount, met
     owner_tzs: calcData.owner_tzs,
     net_tzs: calcData.net_tzs,
     meter_image_url: meterImageUrl,
+    collection_date: colDate,
     collected_at: new Date(),
   });
 
@@ -202,16 +204,11 @@ const getCollections = async (filters = {}, user) => {
   if (filters.machine_id) where.machine_id = filters.machine_id;
   if (filters.shop_id) where.shop_id = filters.shop_id;
   if (filters.collector_id) where.collector_id = filters.collector_id;
-  if (filters.manufacturer) {
-    where['$machine.manufacturer$'] = filters.manufacturer;
-  }
+  // manufacturer filter handled via include.where below
   if (filters.date) {
-    const d = new Date(filters.date);
-    const next = new Date(d);
-    next.setDate(d.getDate() + 1);
-    where.collected_at = { [Op.between]: [d, next] };
+    where.collection_date = filters.date;
   } else if (filters.date_from && filters.date_to) {
-    where.collected_at = { [Op.between]: [new Date(filters.date_from), new Date(filters.date_to)] };
+    where.collection_date = { [Op.between]: [filters.date_from, filters.date_to] };
   }
   return Collection.findAndCountAll({
     where,
@@ -243,6 +240,7 @@ const getCollections = async (filters = {}, user) => {
       {
         model: Machine, as: 'machine',
         attributes: ['id', 'slot_code', 'manufacturer', 'credit_value_tzs', 'weekly_target_tzs'],
+        ...(filters.manufacturer ? { where: { manufacturer: filters.manufacturer } } : {}),
       },
       { model: Shop, as: 'shop', attributes: ['id', 'name'] },
       { model: User, as: 'collector', attributes: ['id', 'name'] },

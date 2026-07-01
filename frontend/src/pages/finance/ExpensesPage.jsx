@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { Table, Button, Modal, Form, Input, Select, InputNumber, Upload, Tag, Space, Tabs, App, Typography, List, Empty } from 'antd';
-import { Plus, CheckCircle, XCircle, Upload as UploadIcon, FileDown, Search, X } from 'lucide-react';
+import { Table, Button, Modal, Form, Input, Select, InputNumber, Upload, Tag, Space, App, Typography, List, Empty, Segmented, DatePicker } from 'antd';
+import { Plus, CheckCircle, XCircle, Upload as UploadIcon, FileDown, Search, X, Store, Cpu, Smartphone, Wallet } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { financeAPI } from '../../services/api';
+import { financeAPI, shopsAPI, machinesAPI } from '../../services/api';
 import { useAuthStore } from '../../store/authStore';
 import KpiCard from '../../components/KpiCard';
 import MobileCard from '../../components/MobileCard';
@@ -21,6 +21,9 @@ export default function ExpensesPage() {
   const [selectedRowKeys, setSelectedRowKeys] = useState([]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [selectedShop, setSelectedShop] = useState(undefined);
+  const [bizTypeFilter, setBizTypeFilter] = useState('');
+  const [dateFilter, setDateFilter] = useState('');
   const { message } = App.useApp();
   const qc = useQueryClient();
   const { hasPermission } = useAuthStore();
@@ -29,9 +32,21 @@ export default function ExpensesPage() {
   const params = {};
   if (search) params.search = search;
   if (statusFilter) params.status = statusFilter;
+  if (bizTypeFilter) params.business_type = bizTypeFilter;
+  if (dateFilter) params.date = dateFilter;
 
-  const { data: expenses, isLoading } = useQuery({ queryKey: ['expenses', params], queryFn: () => financeAPI.listExpenses(params).then(r => r.data.data) });
+  const { data: expenses, isLoading } = useQuery({
+    queryKey: ['expenses', params],
+    queryFn: () => financeAPI.listExpenses(params).then(r => r.data.data),
+  });
   const { data: pending } = useQuery({ queryKey: ['pending-expenses'], queryFn: () => financeAPI.pendingExpenses().then(r => r.data.data), enabled: canApprove });
+  const { data: categories } = useQuery({ queryKey: ['expense-categories'], queryFn: () => financeAPI.listCategories().then(r => r.data.data) });
+  const { data: shopsList } = useQuery({ queryKey: ['shops'], queryFn: () => shopsAPI.list().then(r => r.data.data) });
+  const { data: machinesByShop } = useQuery({
+    queryKey: ['machines-by-shop', selectedShop],
+    queryFn: () => machinesAPI.list({ shop_id: selectedShop, limit: 200 }).then(r => r.data.data),
+    enabled: !!selectedShop,
+  });
 
   const rows = expenses?.rows || [];
   const totals = { total: 0, approved: 0, pending: 0, rejected: 0 };
@@ -44,19 +59,23 @@ export default function ExpensesPage() {
 
   const submitMutation = useMutation({
     mutationFn: (fd) => financeAPI.submitExpense(fd),
-    onSuccess: () => { message.success('Expense submitted'); qc.invalidateQueries({ queryKey: ['expenses'] }); setOpen(false); form.resetFields(); },
+    onSuccess: () => { message.success('Expense submitted'); qc.invalidateQueries({ queryKey: ['expenses'] }); qc.invalidateQueries({ queryKey: ['shop-expenses'] }); qc.invalidateQueries({ queryKey: ['machine-expenses'] }); setOpen(false); form.resetFields(); },
     onError: (e) => message.error(e.response?.data?.message || 'Error'),
   });
 
   const approveMutation = useMutation({
     mutationFn: ({ id, action, reason }) => financeAPI.approveExpense(id, { action, reason }),
-    onSuccess: (_, v) => { message.success(v.action === 'approve' ? 'Approved' : 'Rejected'); qc.invalidateQueries({ queryKey: ['expenses', 'pending-expenses'] }); setRejectModal(null); },
+    onSuccess: (_, v) => { message.success(v.action === 'approve' ? 'Approved' : 'Rejected'); qc.invalidateQueries({ queryKey: ['expenses'] }); qc.invalidateQueries({ queryKey: ['pending-expenses'] }); qc.invalidateQueries({ queryKey: ['shop-expenses'] }); qc.invalidateQueries({ queryKey: ['machine-expenses'] }); setRejectModal(null); },
     onError: (e) => message.error(e.response?.data?.message || 'Error'),
   });
 
   const onSubmit = (values) => {
     const fd = new FormData();
-    Object.entries(values).forEach(([k, v]) => { if (k !== 'receipt' && v !== undefined) fd.append(k, v); });
+    Object.entries(values).forEach(([k, v]) => {
+      if (k === 'receipt' || v === undefined) return;
+      if (k === 'expense_date' && v) { fd.append(k, dayjs(v).format('YYYY-MM-DD')); return; }
+      fd.append(k, v);
+    });
     if (values.receipt?.file) fd.append('receipt', values.receipt.file);
     submitMutation.mutate(fd);
   };
@@ -65,9 +84,9 @@ export default function ExpensesPage() {
     const selected = rows.filter(r => selectedRowKeys.includes(r.id));
     if (selected.length === 0) return;
     const csv = [
-      ['Date', 'Category', 'Description', 'Amount', 'Status'].join(','),
+      ['Date', 'Category', 'Description', 'Amount', 'Status', 'Business Type'].join(','),
       ...selected.map(r =>
-        [dayjs(r.created_at).format('DD MMM YYYY'), r.category?.name, r.description, r.amount, r.status].join(',')
+        [dayjs(r.created_at).format('DD MMM YYYY'), r.category?.name, r.description, r.amount, r.status, r.business_type].join(',')
       ),
     ].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
@@ -77,11 +96,12 @@ export default function ExpensesPage() {
   };
 
   const cols = [
-    { title: 'Date', dataIndex: 'created_at', render: v => dayjs(v).format('DD MMM YYYY'), width: 110 },
-    { title: 'Category', dataIndex: ['category', 'name'], width: 120 },
+    { title: 'Date', dataIndex: 'expense_date', render: v => dayjs(v).format('DD MMM YYYY'), width: 110 },
+    { title: 'Category', key: 'category', render: (_, r) => r.category?.name || '—', width: 120 },
     { title: 'Description', dataIndex: 'description', ellipsis: true, width: 200 },
     { title: 'Amount', dataIndex: 'amount', render: v => <span className="font-semibold">{fmt(v)}</span>, width: 120 },
-    { title: 'Submitted By', dataIndex: ['submitter', 'name'], width: 130, responsive: ['md'] },
+    { title: 'Business', dataIndex: 'business_type', render: v => <Tag color={v === 'bentabet' ? 'purple' : 'blue'} className="!text-[10px] uppercase">{v}</Tag>, width: 90 },
+    { title: 'Submitted By', key: 'submitter', render: (_, r) => r.submitter?.name || r.submitted_by || '—', width: 130, responsive: ['md'] },
     { title: 'Status', dataIndex: 'status', render: v => <Tag color={STATUS_COLORS[v]} className="!text-[10px] uppercase">{v}</Tag>, width: 90 },
     ...(canApprove ? [{
       title: 'Actions', width: 160,
@@ -108,7 +128,7 @@ export default function ExpensesPage() {
     { key: 'amount', label: 'Amount', dataIndex: 'amount' },
   ];
 
-  const hasFilters = search || statusFilter;
+  const hasFilters = search || statusFilter || bizTypeFilter || dateFilter;
 
   return (
     <div>
@@ -139,6 +159,17 @@ export default function ExpensesPage() {
             defaultValue={search}
             onSearch={(v) => setSearch(v || '')}
             className="w-full sm:w-56" />
+          <Select size="small" allowClear placeholder="Business Type"
+            value={bizTypeFilter || undefined}
+            onChange={(v) => setBizTypeFilter(v || '')}
+            className="w-36">
+            <Option value="meteora">Meteora</Option>
+            <Option value="bentabet">Bentabet</Option>
+          </Select>
+          <DatePicker size="small" className="w-36"
+            value={dateFilter ? dayjs(dateFilter) : null}
+            onChange={(d) => setDateFilter(d ? d.format('YYYY-MM-DD') : '')}
+            placeholder="Filter date" />
           <Select size="small" allowClear placeholder="Status"
             value={statusFilter || undefined}
             onChange={(v) => setStatusFilter(v || '')}
@@ -148,7 +179,7 @@ export default function ExpensesPage() {
             <Option value="rejected">Rejected</Option>
           </Select>
           {hasFilters && (
-            <Button size="small" icon={<X className="w-3 h-3" />} onClick={() => { setSearch(''); setStatusFilter(''); }}
+            <Button size="small" icon={<X className="w-3 h-3" />} onClick={() => { setSearch(''); setStatusFilter(''); setBizTypeFilter(''); setDateFilter(''); }}
               className="flex items-center gap-1 !text-xs hover:!border-brand-dark hover:!text-brand-dark">
               Clear
             </Button>
@@ -175,7 +206,7 @@ export default function ExpensesPage() {
 
       {/* Desktop Table */}
       <div className="hidden md:block">
-        <Table dataSource={rows} columns={cols} rowKey="id" loading={isLoading}
+        <Table dataSource={rows} columns={cols} rowKey={(r) => r.id} loading={isLoading}
           size="middle"
           rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}
           pagination={{ total: expenses?.count, pageSize: 20 }} />
@@ -200,35 +231,57 @@ export default function ExpensesPage() {
         )}
       </div>
 
-      <Tabs items={canApprove ? [
-        {
-          key: 'all', label: `All (${expenses?.count || 0})`,
-          children: null,
-        },
-        {
-          key: 'pending', label: <span className="text-amber-500">Pending ({pending?.count || 0})</span>,
-          children: null,
-        },
-      ] : []} className="!hidden" />
-
       {/* Submit Modal */}
       <Modal title={<span className="text-sm font-bold text-slate-700">Submit Expense</span>}
-        open={open} onCancel={() => { setOpen(false); form.resetFields(); }}
+        open={open} onCancel={() => { setOpen(false); form.resetFields(); setSelectedShop(undefined); }}
         onOk={() => form.submit()} confirmLoading={submitMutation.isPending}
         className="top-8">
         <Form form={form} layout="vertical" onFinish={onSubmit} className="mt-4">
+          <Form.Item name="business_type" label={<span className="text-xs font-semibold text-slate-600">Business Type</span>} rules={[{ required: true }]} initialValue="meteora">
+            <Select>
+              <Option value="meteora">Meteora</Option>
+              <Option value="bentabet">Bentabet</Option>
+            </Select>
+          </Form.Item>
+          <Form.Item name="payment_source" label={<span className="text-xs font-semibold text-slate-600">Payment Source</span>} rules={[{ required: true }]} initialValue="cash">
+            <Select>
+              <Option value="cash">Cash (from float/collection)</Option>
+              <Option value="selcom">Selcom Account</Option>
+            </Select>
+          </Form.Item>
+          <Form.Item name="shop_id" label={<span className="text-xs font-semibold text-slate-600">Shop</span>} rules={[{ required: true }]}>
+            <Select placeholder="Select shop" showSearch optionFilterProp="children"
+              onChange={(v) => { setSelectedShop(v); form.setFieldValue('machine_id', undefined); }}>
+              {(shopsList?.rows || shopsList || []).map(s => (
+                <Option key={s.id} value={s.id}>{s.name}</Option>
+              ))}
+            </Select>
+          </Form.Item>
+          <Form.Item name="machine_id" label={<span className="text-xs font-semibold text-slate-600">Machine <span className="text-slate-400 font-normal">(optional)</span></span>}>
+            <Select placeholder="Select machine (optional)" allowClear showSearch optionFilterProp="children"
+              disabled={!selectedShop}>
+              {(machinesByShop?.rows || machinesByShop || []).map(m => (
+                <Option key={m.id} value={m.id}>{m.slot_code}</Option>
+              ))}
+            </Select>
+          </Form.Item>
+          <Form.Item name="expense_date" label={<span className="text-xs font-semibold text-slate-600">Expense Date</span>} rules={[{ required: true }]} initialValue={dayjs()}>
+            <DatePicker className="w-full rounded-lg h-9" disabledDate={(d) => d.isAfter(dayjs())} />
+          </Form.Item>
           <Form.Item name="category_id" label={<span className="text-xs font-semibold text-slate-600">Category</span>} rules={[{ required: true }]}>
             <Select placeholder="Select category">
-              <Option value={1}>Fuel</Option><Option value={2}>Maintenance</Option>
-              <Option value={3}>Office Supplies</Option><Option value={4}>Utilities</Option>
-              <Option value={5}>Other</Option>
+              {(categories || []).map(c => (
+                <Option key={c.id} value={c.id}>{c.name}</Option>
+              ))}
             </Select>
           </Form.Item>
           <Form.Item name="description" label={<span className="text-xs font-semibold text-slate-600">Description</span>} rules={[{ required: true }]}>
             <Input.TextArea rows={2} />
           </Form.Item>
           <Form.Item name="amount" label={<span className="text-xs font-semibold text-slate-600">Amount (TZS)</span>} rules={[{ required: true }]}>
-            <InputNumber min={1} className="w-full" formatter={v => `TZS ${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')} />
+            <InputNumber min={1} className="w-full"
+              formatter={v => `TZS ${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+              parser={v => Number(v.replace(/[^0-9]/g, ''))} />
           </Form.Item>
           <Form.Item name="receipt" label={<span className="text-xs font-semibold text-slate-600">Receipt</span>}>
             <Upload beforeUpload={() => false} maxCount={1}>

@@ -8,6 +8,7 @@ import {
   Package, Coins, ShoppingCart, ClipboardCheck, TrendingUp, Undo2, AlertTriangle, BarChart3,
   Shield, UserCheck, Building2, Briefcase,
   Settings, User, LogOut, PanelLeftClose, PanelLeftOpen, Bell, Plus,
+  Landmark,
 } from "lucide-react";
 import { useAuthStore } from "../store/authStore";
 import { authAPI } from "../services/api";
@@ -25,9 +26,9 @@ const ALL_NAV = [
     icon: <Wallet size={16} />,
     module: "collections",
     children: [
-      { key: "/my-assignments", label: "Assignments", icon: <ClipboardList size={16} />, module: null },
       { key: "/collections", label: "All Collections", icon: <ListChecks size={16} />, module: "collections" },
-      { key: "/weekly-targets", label: "Weekly Targets", icon: <Crosshair size={16} />, module: "collections" },
+      { key: "/my-assignments", label: "Assignments", icon: <ClipboardList size={16} />, module: "collections", roles: ['Admin', 'General Manager', 'Operations Manager', 'Collector'] },
+      { key: "/weekly-targets", label: "Weekly Targets", icon: <Crosshair size={16} />, module: "collections", roles: ['Admin', 'General Manager', 'Operations Manager'] },
     ],
   },
   {
@@ -36,20 +37,20 @@ const ALL_NAV = [
     icon: <Cpu size={16} />,
     module: "machines",
     children: [
-      { key: "/machines/meteora", label: "Meteora", icon: <Monitor size={16} />, module: "machines" },
       { key: "/machines/novomatic", label: "Novomatic", icon: <Monitor size={16} />, module: "machines" },
-      { key: "/debts", label: "Debts", icon: <FileText size={16} />, module: "machines" },
+      { key: "/machines/meteora", label: "Meteora", icon: <Monitor size={16} />, module: "machines", roles: ['Admin', 'General Manager', 'Operations Manager'] },
+      { key: "/debts", label: "Debts", icon: <FileText size={16} />, module: "machines", roles: ['Admin', 'General Manager', 'Operations Manager'] },
     ],
   },
   {
     key: "partners-group",
-    label: "Partners & Shops",
+    label: "Shops & Partners",
     icon: <Users size={16} />,
     module: "partners",
     children: [
-      { key: "/partners", label: "Partners", icon: <Handshake size={16} />, module: "partners" },
-      { key: "/shops/meteora", label: "Meteora Shops", icon: <Store size={16} />, module: "shops" },
       { key: "/shops/slot", label: "Slot Shops", icon: <Store size={16} />, module: "shops" },
+      { key: "/shops/meteora", label: "Meteora Shops", icon: <Store size={16} />, module: "shops" },
+      { key: "/partners", label: "Partners", icon: <Handshake size={16} />, module: "partners" },
     ],
   },
   {
@@ -59,8 +60,8 @@ const ALL_NAV = [
     module: "finance",
     children: [
       { key: "/finance/expenses", label: "Expenses", icon: <Receipt size={16} />, module: "finance" },
-      { key: "/finance/invoices", label: "Invoices", icon: <FileSignature size={16} />, module: "finance" },
-      { key: "/finance/payroll", label: "Payroll", icon: <Banknote size={16} />, module: "finance" },
+      { key: "/finance/invoices", label: "Invoices", icon: <FileSignature size={16} />, module: "finance", roles: ['Admin', 'General Manager', 'Finance'] },
+      { key: "/finance/payroll", label: "Payroll", icon: <Banknote size={16} />, module: "finance", roles: ['Admin', 'General Manager', 'Finance'] },
     ],
   },
   {
@@ -74,6 +75,7 @@ const ALL_NAV = [
     label: "Inventory",
     icon: <Package size={16} />,
     module: "inventory",
+    roles: ['Admin', 'General Manager', 'Operations Manager', 'Sales'],
     children: [
       { key: "/inventory/tokens", label: "Token Stock", icon: <Coins size={16} />, module: "inventory" },
       { key: "/inventory/products", label: "Products", icon: <ShoppingCart size={16} />, module: "inventory" },
@@ -102,19 +104,32 @@ const ALL_NAV = [
     module: "reports",
   },
   {
+    key: "accounting-group",
+    label: "Accounting",
+    icon: <Landmark size={16} />,
+    module: "accounts",
+    children: [
+      { key: "/finance/accounts", label: "Accounts", icon: <Landmark size={16} />, module: "accounts" },
+      { key: "/finance/reports/balance-sheet", label: "Balance Sheet", icon: <BarChart3 size={16} />, module: "accounts", roles: ['Admin', 'General Manager', 'Finance', 'Director'] },
+      { key: "/finance/reports/trial-balance", label: "Trial Balance", icon: <BarChart3 size={16} />, module: "accounts", roles: ['Admin', 'General Manager', 'Finance', 'Director'] },
+      { key: "/finance/reports/cash-flow", label: "Cash Flow", icon: <BarChart3 size={16} />, module: "accounts", roles: ['Admin', 'General Manager', 'Finance', 'Director'] },
+      { key: "/finance/reports/account-report", label: "Account Report", icon: <BarChart3 size={16} />, module: "accounts", roles: ['Admin', 'General Manager', 'Finance', 'Director'] },
+    ],
+  },
+  {
     key: "settings-group",
     label: "Settings",
     icon: <Settings size={16} />,
     module: null,
     children: [
       { key: "/settings/profile", label: "My Profile", icon: <User size={16} />, module: null },
-      { key: "/settings/company", label: "Company Profile", icon: <Building2 size={16} />, module: null },
-      { key: "/settings/machines", label: "Machine Settings", icon: <Cpu size={16} />, module: null },
-      { key: "/settings/finance", label: "Finance & SLA", icon: <DollarSign size={16} />, module: null },
-      { key: "/settings/notifications", label: "Notifications & SMS", icon: <Bell size={16} />, module: null },
-      { key: "/settings/roles", label: "Role Builder", icon: <Shield size={16} />, module: null },
-      { key: "/settings/businesses", label: "Business Management", icon: <Store size={16} />, module: null },
-      { key: "/settings/system", label: "System", icon: <Settings size={16} />, module: null },
+      { key: "/settings/company", label: "Company Profile", icon: <Building2 size={16} />, module: "settings" },
+      { key: "/settings/machines", label: "Machine Settings", icon: <Cpu size={16} />, module: "settings" },
+      { key: "/settings/finance", label: "Finance & SLA", icon: <DollarSign size={16} />, module: "settings" },
+      { key: "/settings/notifications", label: "Notifications & SMS", icon: <Bell size={16} />, module: "settings" },
+      { key: "/settings/roles", label: "Role Builder", icon: <Shield size={16} />, module: "settings" },
+      { key: "/settings/businesses", label: "Business Management", icon: <Store size={16} />, module: "settings" },
+      { key: "/settings/system", label: "System", icon: <Settings size={16} />, module: "settings" },
     ],
   },
 ];
@@ -134,7 +149,10 @@ export default function MainLayout() {
 
   const filterNav = (items) =>
     items
-      .filter((item) => item.module === null || hasPermission(item.module, "read"))
+      .filter((item) => {
+        if (item.roles && !item.roles.includes(getRoleName())) return false;
+        return item.module === null || hasPermission(item.module, "read");
+      })
       .map((item) => ({ ...item, children: item.children ? filterNav(item.children) : undefined }))
       .filter((item) => !item.children || item.children.length > 0);
 

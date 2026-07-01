@@ -47,14 +47,20 @@ export default function CollectionsPage() {
   const isNovomaticFilter = filters.manufacturer === 'Novomatic';
 
   useEffect(() => {
+    if (roleName === 'Cashier') {
+      setFilters(f => ({ ...f, manufacturer: 'Novomatic', date: dayjs().format('YYYY-MM-DD') }));
+    }
+  }, [roleName]);
+  useEffect(() => {
     if (isNovomaticFilter && !filters.date) {
       setFilters(f => ({ ...f, date: dayjs().format('YYYY-MM-DD') }));
     }
   }, [isNovomaticFilter]);
+  const approvedRows = rows.filter(c => c.status === 'approved');
   const totals = rows.reduce((acc, c) => ({
-    gross: acc.gross + (c.gross_tzs || 0),
-    office: acc.office + (c.office_tzs || 0),
-    owner: acc.owner + (c.owner_tzs || 0),
+    gross: acc.gross + (c.status === 'approved' ? (c.gross_tzs || 0) : 0),
+    office: acc.office + (c.status === 'approved' ? (c.office_tzs || 0) : 0),
+    owner: acc.owner + (c.status === 'approved' ? (c.owner_tzs || 0) : 0),
   }), { gross: 0, office: 0, owner: 0 });
 
   const removeMutation = useMutation({
@@ -62,6 +68,7 @@ export default function CollectionsPage() {
     onSuccess: () => {
       message.success('Collection deleted');
       qc.invalidateQueries({ queryKey: ['collections'] });
+      qc.invalidateQueries({ queryKey: ['machine-stats'] });
     },
     onError: (e) => message.error(e.response?.data?.message || 'Delete failed'),
   });
@@ -71,6 +78,7 @@ export default function CollectionsPage() {
     onSuccess: () => {
       message.success('Collection reviewed');
       qc.invalidateQueries({ queryKey: ['collections'] });
+      qc.invalidateQueries({ queryKey: ['machine-stats'] });
     },
     onError: (e) => message.error(e.response?.data?.message || 'Review failed'),
   });
@@ -86,19 +94,21 @@ export default function CollectionsPage() {
     const selected = rows.filter(r => selectedRowKeys.includes(r.id));
     if (selected.length === 0) return;
     const headers = isNovomaticFilter
-      ? ['Slot Code', 'Manufacturer', 'Shop', 'Cashier', 'Opening', 'Closing', 'Total Credits', 'Amount TZS', 'Status']
-      : ['Slot Code', 'Manufacturer', 'Gross', 'Office', 'Owner', 'Status', 'Date'];
+      ? ['Date', 'Slot Code', 'Manufacturer', 'Shop', 'Cashier', 'Opening', 'Closing', 'Total Credits', 'Gross TZS', 'Status']
+      : ['Date', 'Slot Code', 'Manufacturer', 'Gross', 'Office', 'Owner', 'Status'];
     const csv = [
       headers.join(','),
-      ...selected.map(r => isNovomaticFilter
-        ? [r.machine?.slot_code, r.machine?.manufacturer,
-           r.shop?.name || '', r.collector?.name || '',
-           r.novomaticReading?.opening_credits || 0, r.novomaticReading?.closing_credits || 0,
-           r.novomaticReading?.total_credits || 0, r.gross_tzs, r.status].join(',')
-        : [r.machine?.slot_code, r.machine?.manufacturer,
-           r.gross_tzs, r.office_tzs, r.owner_tzs, r.status,
-           dayjs(r.collected_at).format('YYYY-MM-DD HH:mm')].join(',')
-      ),
+      ...selected.map(r => {
+        const date = r.collection_date || dayjs(r.collected_at).format('YYYY-MM-DD');
+        return isNovomaticFilter
+          ? [date, r.machine?.slot_code, r.machine?.manufacturer,
+             r.shop?.name || '', r.collector?.name || '',
+             r.novomaticReading?.opening_credits || 0, r.novomaticReading?.closing_credits || 0,
+             r.novomaticReading?.total_credits || 0,
+             r.gross_tzs, r.status].join(',')
+          : [date, r.machine?.slot_code, r.machine?.manufacturer,
+             r.gross_tzs, r.office_tzs, r.owner_tzs, r.status].join(',');
+      }),
     ].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -132,6 +142,7 @@ export default function CollectionsPage() {
     onSuccess: () => {
       message.success('Collection supervisor-approved');
       qc.invalidateQueries({ queryKey: ['collections'] });
+      qc.invalidateQueries({ queryKey: ['machine-stats'] });
     },
     onError: (e) => message.error(e.response?.data?.message || 'Failed'),
   });
@@ -154,6 +165,10 @@ export default function CollectionsPage() {
   const cols = useMemo(() => {
     if (isNovomaticFilter) {
       return [
+        {
+          title: 'Date', key: 'collection_date', width: 100,
+          render: (_, r) => <span className="text-xs">{r.collection_date ? dayjs(r.collection_date).format('DD MMM') : dayjs(r.collected_at).format('DD MMM')}</span>,
+        },
         {
           title: 'Slot Code', dataIndex: ['machine', 'slot_code'],
           render: (v, r) => (
@@ -226,11 +241,12 @@ export default function CollectionsPage() {
 
   const mobileFields = isNovomaticFilter
     ? [
+        { key: 'date', label: 'Date', render: (_, r) => r.collection_date ? dayjs(r.collection_date).format('DD MMM') : dayjs(r.collected_at).format('DD MMM') },
         { key: 'slot_code', dataIndex: 'machine.slot_code' },
-        { key: 'manufacturer', label: 'Manufacturer', render: (_, r) => r.machine?.manufacturer || '—' },
         { key: 'shop', label: 'Shop', render: (_, r) => r.shop?.name || '—' },
         { key: 'cashier', label: 'Cashier', render: (_, r) => r.collector?.name || '—' },
-        { key: 'amount', label: 'Amount', render: (_, r) => fmt(r.gross_tzs) },
+        { key: 'credits', label: 'Credits', render: (_, r) => (r.novomaticReading?.total_credits || 0).toLocaleString() },
+        { key: 'amount', label: 'Gross', render: (_, r) => fmt(r.gross_tzs) },
       ]
     : [
         { key: 'slot_code', dataIndex: 'machine.slot_code' },
@@ -241,20 +257,27 @@ export default function CollectionsPage() {
   return (
     <div>
       {/* Mode Toggle */}
-      <div className="mb-4">
-        <Segmented
-          value={filters.manufacturer}
-          onChange={(v) => {
-            setFilters(f => ({
-              ...f,
-              manufacturer: v,
-              date: v === 'Novomatic' ? dayjs().format('YYYY-MM-DD') : undefined,
-              offset: 0,
-            }));
-          }}
-          options={['Novomatic', 'Meteora']}
-          size="small"
-        />
+      <div className="mb-4 flex items-center gap-2">
+        {roleName === 'Cashier' ? (
+          <div className="flex items-center gap-2 px-3 py-1 rounded-md bg-slate-100 text-xs text-slate-500">
+            <span className="font-semibold text-slate-700">Novomatic</span>
+            <span className="text-slate-400">— Cashier restricted</span>
+          </div>
+        ) : (
+          <Segmented
+            value={filters.manufacturer}
+            onChange={(v) => {
+              setFilters(f => ({
+                ...f,
+                manufacturer: v,
+                date: v === 'Novomatic' ? dayjs().format('YYYY-MM-DD') : undefined,
+                offset: 0,
+              }));
+            }}
+            options={['Novomatic', 'Meteora']}
+            size="small"
+          />
+        )}
       </div>
 
       {/* Header */}
@@ -290,7 +313,7 @@ export default function CollectionsPage() {
       <div className={`grid grid-cols-1 gap-4 mb-6 ${isNovomaticFilter ? 'sm:grid-cols-2' : 'sm:grid-cols-3'}`}>
         {isNovomaticFilter ? (
           <>
-            <KpiCard title="Total Collections" value={rows.length} icon={ClipboardList} bgColor="bg-slate-50" iconColor="text-slate-600" />
+            <KpiCard title="Total Collections" value={approvedRows.length} icon={ClipboardList} bgColor="bg-slate-50" iconColor="text-slate-600" />
             <KpiCard title="Total Amount" value={totals.gross} icon={Download} bgColor="bg-emerald-50" iconColor="text-emerald-600" formatter={fmt} />
           </>
         ) : (
@@ -392,8 +415,8 @@ export default function CollectionsPage() {
               <Table.Summary.Row className="bg-slate-50 font-semibold">
                 {isNovomaticFilter ? (
                   <>
-                    <Table.Summary.Cell index={0} colSpan={7}>TOTAL ({data?.count || 0} records)</Table.Summary.Cell>
-                    <Table.Summary.Cell index={7}>{fmt(totals.gross)}</Table.Summary.Cell>
+                    <Table.Summary.Cell index={0} colSpan={8}>TOTAL ({data?.count || 0} records)</Table.Summary.Cell>
+                    <Table.Summary.Cell index={8}>{fmt(totals.gross)}</Table.Summary.Cell>
                   </>
                 ) : (
                   <>
@@ -487,7 +510,7 @@ export default function CollectionsPage() {
               </div>
             )}
             <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
-              <div><span className="text-xs font-semibold text-slate-500 block">Date</span><span>{dayjs(viewRecord.collected_at).format('DD MMM YYYY HH:mm')}</span></div>
+              <div><span className="text-xs font-semibold text-slate-500 block">Collection Date</span><span>{viewRecord.collection_date ? dayjs(viewRecord.collection_date).format('DD MMM YYYY') : dayjs(viewRecord.collected_at).format('DD MMM YYYY')}</span></div>
               <div><span className="text-xs font-semibold text-slate-500 block">Slot Code</span><span className="font-medium">{viewRecord.machine?.slot_code}</span></div>
               <div><span className="text-xs font-semibold text-slate-500 block">Manufacturer</span><Tag className="!text-[10px]">{viewRecord.machine?.manufacturer}</Tag></div>
               <div><span className="text-xs font-semibold text-slate-500 block">Credit Value</span><span>TZS {viewRecord.machine?.credit_value_tzs?.toLocaleString()}</span></div>
@@ -510,15 +533,17 @@ export default function CollectionsPage() {
             </div>
             <div className="border-t border-slate-100 pt-3">
               <Text className="text-xs font-semibold uppercase tracking-wider text-slate-500 block mb-2">Financial Breakdown</Text>
-              <div className={`grid gap-4 ${isNovomaticFilter ? 'grid-cols-1' : 'grid-cols-3'}`}>
-                <KpiCard title={isNovomaticFilter ? 'Amount' : 'Gross'} value={viewRecord.gross_tzs} bgColor="bg-slate-50" iconColor="text-slate-600" formatter={fmt} />
-                {!isNovomaticFilter && (
-                  <>
-                    <KpiCard title="Office" value={viewRecord.office_tzs} bgColor="bg-emerald-50" iconColor="text-emerald-600" formatter={fmt} />
-                    <KpiCard title="Owner" value={viewRecord.owner_tzs} bgColor="bg-purple-50" iconColor="text-purple-600" formatter={fmt} />
-                  </>
-                )}
-              </div>
+              {isNovomaticFilter ? (
+                <div className="grid gap-4 grid-cols-1">
+                  <KpiCard title="Gross" value={viewRecord.gross_tzs} bgColor="bg-slate-50" iconColor="text-slate-600" formatter={fmt} />
+                </div>
+              ) : (
+                <div className="grid gap-4 grid-cols-3">
+                  <KpiCard title="Gross" value={viewRecord.gross_tzs} bgColor="bg-slate-50" iconColor="text-slate-600" formatter={fmt} />
+                  <KpiCard title="Office" value={viewRecord.office_tzs} bgColor="bg-emerald-50" iconColor="text-emerald-600" formatter={fmt} />
+                  <KpiCard title="Owner" value={viewRecord.owner_tzs} bgColor="bg-purple-50" iconColor="text-purple-600" formatter={fmt} />
+                </div>
+              )}
             </div>
           </div>
         )}

@@ -190,6 +190,7 @@ const Collection = sequelize.define('Collection', {
   operator_tzs: { type: DataTypes.INTEGER, defaultValue: 0 },
   net_tzs: { type: DataTypes.INTEGER, defaultValue: 0 },
   meter_image_url: { type: DataTypes.TEXT },
+  collection_date: { type: DataTypes.DATEONLY, allowNull: false },
   collected_at: { type: DataTypes.DATE, allowNull: false },
   approved_by: { type: DataTypes.INTEGER },
   approved_at: { type: DataTypes.DATE },
@@ -247,9 +248,13 @@ const Expense = sequelize.define('Expense', {
   category_id: { type: DataTypes.INTEGER, allowNull: false },
   shop_id: { type: DataTypes.INTEGER },
   machine_id: { type: DataTypes.INTEGER },
+  collection_id: { type: DataTypes.INTEGER },
   amount: { type: DataTypes.INTEGER, allowNull: false },
   description: { type: DataTypes.TEXT, allowNull: false },
   receipt_url: { type: DataTypes.TEXT },
+  expense_date: { type: DataTypes.DATEONLY, allowNull: false },
+  business_type: { type: DataTypes.ENUM('meteora', 'bentabet'), defaultValue: 'meteora' },
+  payment_source: { type: DataTypes.ENUM('cash', 'selcom'), defaultValue: 'cash' },
   submitted_by: { type: DataTypes.INTEGER, allowNull: false },
   approved_by: { type: DataTypes.INTEGER },
   approved_at: { type: DataTypes.DATE },
@@ -554,6 +559,66 @@ const SmsLog = sequelize.define('SmsLog', {
   sent_at: { type: DataTypes.DATE },
 }, { tableName: 'sms_logs', updatedAt: false });
 
+// ─── ACCOUNTING ───────────────────────────────────────────────
+const Account = sequelize.define('Account', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  name: { type: DataTypes.STRING(150), allowNull: false },
+  account_type: { type: DataTypes.ENUM('cash', 'bank', 'mobile_money', 'selcom'), allowNull: false },
+  business_type: { type: DataTypes.ENUM('meteora', 'bentabet'), defaultValue: 'meteora' },
+  shop_id: { type: DataTypes.INTEGER },
+  opening_balance: { type: DataTypes.INTEGER, defaultValue: 0 },
+  current_balance: { type: DataTypes.INTEGER, defaultValue: 0 },
+  is_active: { type: DataTypes.BOOLEAN, defaultValue: true },
+  description: { type: DataTypes.TEXT },
+  created_by: { type: DataTypes.INTEGER, allowNull: false },
+}, { tableName: 'accounts' });
+
+const AccountTransaction = sequelize.define('AccountTransaction', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  account_id: { type: DataTypes.INTEGER, allowNull: false },
+  type: { type: DataTypes.ENUM('in', 'out'), allowNull: false },
+  amount: { type: DataTypes.INTEGER, allowNull: false },
+  balance_before: { type: DataTypes.INTEGER, allowNull: false },
+  balance_after: { type: DataTypes.INTEGER, allowNull: false },
+  reference_type: { type: DataTypes.ENUM('expense', 'collection', 'sale', 'transfer', 'opening_balance', 'adjustment', 'cash_disposition'), allowNull: false },
+  reference_id: { type: DataTypes.INTEGER },
+  payment_method: { type: DataTypes.ENUM('cash', 'bank_transfer', 'mobile_money', 'cheque', 'internal') },
+  description: { type: DataTypes.TEXT },
+  recorded_by: { type: DataTypes.INTEGER, allowNull: false },
+  transaction_date: { type: DataTypes.DATEONLY, allowNull: false },
+}, { tableName: 'account_transactions' });
+
+const AccountTransfer = sequelize.define('AccountTransfer', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  from_account_id: { type: DataTypes.INTEGER, allowNull: false },
+  to_account_id: { type: DataTypes.INTEGER, allowNull: false },
+  amount: { type: DataTypes.INTEGER, allowNull: false },
+  description: { type: DataTypes.TEXT },
+  approved_by: { type: DataTypes.INTEGER },
+  status: { type: DataTypes.ENUM('pending', 'approved', 'rejected'), defaultValue: 'pending' },
+  recorded_by: { type: DataTypes.INTEGER, allowNull: false },
+}, { tableName: 'account_transfers' });
+
+// ─── SHOP CASH DISPOSITION ────────────────────────────────────
+const ShopCashDisposition = sequelize.define('ShopCashDisposition', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  shop_id: { type: DataTypes.INTEGER, allowNull: false },
+  date: { type: DataTypes.DATEONLY, allowNull: false },
+  total_gross_tzs: { type: DataTypes.INTEGER, defaultValue: 0 },
+  selcom_tzs: { type: DataTypes.INTEGER, defaultValue: 0 },
+  cash_at_hand_tzs: { type: DataTypes.INTEGER, defaultValue: 0 },
+  selcom_receipt_url: { type: DataTypes.TEXT },
+  cash_allocation: { type: DataTypes.ENUM('float', 'deposit') },
+  bank_deposit_receipt_url: { type: DataTypes.TEXT },
+  bank_deposit_amount: { type: DataTypes.INTEGER },
+  status: { type: DataTypes.ENUM('pending', 'approved', 'rejected'), defaultValue: 'pending' },
+  submitted_by: { type: DataTypes.INTEGER, allowNull: false },
+  approved_by: { type: DataTypes.INTEGER },
+  approved_at: { type: DataTypes.DATE },
+  rejection_reason: { type: DataTypes.TEXT },
+  notes: { type: DataTypes.TEXT },
+}, { tableName: 'shop_cash_dispositions', indexes: [{ unique: true, fields: ['shop_id', 'date'] }] });
+
 // ─── ASSOCIATIONS ─────────────────────────────────────────────
 Role.hasMany(Permission, { foreignKey: 'role_id', as: 'permissions' });
 Permission.belongsTo(Role, { foreignKey: 'role_id' });
@@ -635,6 +700,8 @@ MachineDebt.hasMany(TokenInventory, { foreignKey: 'debt_id', as: 'tokenMovements
 Expense.belongsTo(User, { foreignKey: 'submitted_by', as: 'submitter' });
 Expense.belongsTo(User, { foreignKey: 'approved_by', as: 'approver' });
 Expense.belongsTo(ExpenseCategory, { foreignKey: 'category_id', as: 'category' });
+Expense.belongsTo(Collection, { foreignKey: 'collection_id', as: 'collection' });
+Collection.hasMany(Expense, { foreignKey: 'collection_id', as: 'expenses' });
 
 Invoice.belongsTo(Partner, { foreignKey: 'partner_id', as: 'partner' });
 Invoice.belongsTo(Shop, { foreignKey: 'shop_id', as: 'shop' });
@@ -697,6 +764,24 @@ Employee.hasMany(Attendance, { foreignKey: 'employee_id', as: 'attendance' });
 Attendance.belongsTo(Employee, { foreignKey: 'employee_id', as: 'employee' });
 Position.belongsTo(Department, { foreignKey: 'department_id', as: 'department' });
 
+Account.belongsTo(Shop, { foreignKey: 'shop_id', as: 'shop' });
+Account.belongsTo(User, { foreignKey: 'created_by', as: 'creator' });
+Account.hasMany(AccountTransaction, { foreignKey: 'account_id', as: 'transactions' });
+
+AccountTransaction.belongsTo(Account, { foreignKey: 'account_id', as: 'account' });
+AccountTransaction.belongsTo(User, { foreignKey: 'recorded_by', as: 'recorder' });
+
+AccountTransfer.belongsTo(Account, { foreignKey: 'from_account_id', as: 'fromAccount' });
+AccountTransfer.belongsTo(Account, { foreignKey: 'to_account_id', as: 'toAccount' });
+AccountTransfer.belongsTo(User, { foreignKey: 'approved_by', as: 'approver' });
+AccountTransfer.belongsTo(User, { foreignKey: 'recorded_by', as: 'recorder' });
+
+// ShopCashDisposition associations
+ShopCashDisposition.belongsTo(Shop, { foreignKey: 'shop_id', as: 'shop' });
+ShopCashDisposition.belongsTo(User, { foreignKey: 'submitted_by', as: 'submitter' });
+ShopCashDisposition.belongsTo(User, { foreignKey: 'approved_by', as: 'approver' });
+Shop.hasMany(ShopCashDisposition, { foreignKey: 'shop_id', as: 'cashDispositions' });
+
 module.exports = {
   sequelize,
   Role, Permission, User, RefreshToken, Setting,
@@ -709,4 +794,6 @@ module.exports = {
   TicketGroup, Ticket, TicketActivity,
   Department, Position, Employee, Attendance,
   SmsLog,
+  Account, AccountTransaction, AccountTransfer,
+  ShopCashDisposition,
 };

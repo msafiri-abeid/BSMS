@@ -1,6 +1,10 @@
 import { useState } from 'react';
-import { Form, Input, Button, Table, Modal, Card, Row, Col, Checkbox, Tag, App, Typography, Space, Spin, Select } from 'antd';
-import { Plus, Save, Pencil, Trash2, Shield } from 'lucide-react';
+import { Form, Input, Button, Table, Modal, Card, Row, Col, Checkbox, Tag, App, Typography, Space, Spin } from 'antd';
+import {
+  Plus, Save, Pencil, Trash2, Shield,
+  Store, Cpu, Wallet, Headphones, DollarSign,
+  Package, Users, BarChart3, Settings as SettingsIcon, UserCheck, Handshake,
+} from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { settingsAPI } from '../../services/api';
 import { useAuthStore } from '../../store/authStore';
@@ -10,6 +14,27 @@ const { Text } = Typography;
 const FALLBACK_MODULES = ['partners', 'shops', 'machines', 'collections', 'finance', 'inventory', 'tickets', 'staff', 'reports', 'settings', 'users'];
 const ACTIONS = ['read', 'create', 'update', 'delete', 'approve'];
 const ACTION_LABELS = { read: 'View', create: 'Create', update: 'Update', delete: 'Delete', approve: 'Approve' };
+
+const MODULE_ICONS = {
+  partners: Handshake,
+  shops: Store,
+  machines: Cpu,
+  collections: Wallet,
+  tickets: Headphones,
+  finance: DollarSign,
+  inventory: Package,
+  staff: Users,
+  reports: BarChart3,
+  settings: SettingsIcon,
+  users: UserCheck,
+};
+
+const MODULE_GROUPS = [
+  { label: 'Operations', modules: ['partners', 'shops', 'machines', 'collections', 'tickets'] },
+  { label: 'Finance', modules: ['finance'] },
+  { label: 'Inventory', modules: ['inventory'] },
+  { label: 'Administration', modules: ['staff', 'reports', 'settings', 'users'] },
+];
 
 export default function RoleBuilderTab() {
   const [newRoleName, setNewRoleName] = useState('');
@@ -92,6 +117,12 @@ export default function RoleBuilderTab() {
     }] : []),
   ];
 
+  const enabledModules = MODULES;
+  const groups = MODULE_GROUPS.map(g => ({
+    ...g,
+    modules: g.modules.filter(m => enabledModules.includes(m)),
+  })).filter(g => g.modules.length > 0);
+
   return (
     <>
       <Row gutter={16}>
@@ -105,12 +136,13 @@ export default function RoleBuilderTab() {
             ) : undefined}>
             <Table dataSource={roles || []} columns={roleColumns} rowKey="id" size="small" pagination={false}
               onRow={(record) => ({ onClick: () => selectRole(record), className: selected?.id === record.id ? 'bg-blue-50' : '' })}
-              showHeader={false} />
+              showHeader={false} loading={isLoading} />
           </Card>
         </Col>
         <Col xs={24} lg={16}>
           {selected ? (
-            <Card size="small" title={`Permissions: ${selected.name}`}
+            <Card size="small"
+              title={<span className="flex items-center gap-1.5"><Shield size={14} className="text-slate-500" />{selected.name}</span>}
               className="border border-slate-100"
               extra={canEdit && !selected.is_system ? (
                   <Button type="primary" size="small" onClick={savePermissions} loading={permMutation.isPending} className="!bg-brand-dark !border-0">
@@ -118,29 +150,53 @@ export default function RoleBuilderTab() {
                   </Button>
                 ) : undefined}>
               {selected.is_system ? (
-                <Text type="secondary" className="text-sm">System roles cannot be modified via the role builder.</Text>
+                <div className="flex flex-col items-center justify-center py-10 text-slate-400">
+                  <Shield size={32} className="mb-2 text-slate-300" />
+                  <Text type="secondary">System roles cannot be modified via the role builder.</Text>
+                </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full border-collapse">
-                    <thead>
-                      <tr>
-                        <th className="text-left p-1.5 text-xs border-b border-slate-100">Module</th>
-                        {ACTIONS.map(a => <th key={a} className="text-center p-1.5 text-xs border-b border-slate-100">{ACTION_LABELS[a] || a}</th>)}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {MODULES.map(mod => (
-                        <tr key={mod} className="border-b border-slate-50">
-                          <td className="p-1.5 text-sm capitalize">{mod}</td>
-                          {ACTIONS.map(act => (
-                            <td key={act} className="text-center p-1.5">
-                              <Checkbox checked={permMatrix[mod]?.[act] || false} onChange={() => toggle(mod, act)} disabled={!canEdit} />
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="space-y-6">
+                  {groups.map(group => (
+                    <div key={group.label}>
+                      <div className="flex items-center gap-2 mb-2 pb-1 border-b border-slate-100">
+                        <h5 className="font-semibold text-[11px] uppercase tracking-wider text-slate-400 m-0">{group.label}</h5>
+                      </div>
+                      <table className="w-full border-collapse">
+                        <thead>
+                          <tr>
+                            <th className="text-left p-1.5 text-[11px] text-slate-400 font-medium border-b border-slate-100 w-[150px]">Module</th>
+                            {ACTIONS.map(a => (
+                              <th key={a} className="text-center p-1.5 text-[11px] text-slate-400 font-medium border-b border-slate-100">{ACTION_LABELS[a]}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {group.modules.map((mod, idx) => {
+                            const Icon = MODULE_ICONS[mod];
+                            return (
+                              <tr key={mod} className={`border-b border-slate-50 transition-colors hover:bg-slate-50/50 ${idx % 2 === 1 ? 'bg-slate-50/30' : ''}`}>
+                                <td className="p-1.5">
+                                  <span className="flex items-center gap-1.5 text-sm capitalize text-slate-700">
+                                    {Icon && <Icon size={13} className="text-slate-400 shrink-0" />}
+                                    {mod}
+                                  </span>
+                                </td>
+                                {ACTIONS.map(act => (
+                                  <td key={act} className="text-center p-1.5">
+                                    <Checkbox
+                                      checked={permMatrix[mod]?.[act] || false}
+                                      onChange={() => toggle(mod, act)}
+                                      disabled={!canEdit}
+                                    />
+                                  </td>
+                                ))}
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  ))}
                 </div>
               )}
             </Card>

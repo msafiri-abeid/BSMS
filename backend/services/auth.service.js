@@ -47,7 +47,14 @@ const register = async ({ name, email, password, role_id, employee_id, phone }) 
 const login = async (email, password) => {
   const user = await User.findOne({
     where: { email, is_active: true },
-    include: [{ model: Role, as: 'role', include: [{ model: Permission, as: 'permissions' }] }],
+    include: [
+      { model: Role, as: 'role', include: [{ model: Permission, as: 'permissions' }] },
+      { model: Employee, as: 'employee', include: [
+        { model: Department, as: 'department' },
+        { model: Position, as: 'position' },
+        { model: Employee, as: 'supervisor', attributes: ['id', 'full_name', 'employee_code'] },
+      ] },
+    ],
   });
   if (!user) throw new Error('Invalid credentials');
 
@@ -73,7 +80,14 @@ const refresh = async (refreshToken) => {
 
   const user = await User.findOne({
     where: { id: decoded.id, is_active: true },
-    include: [{ model: Role, as: 'role', include: [{ model: Permission, as: 'permissions' }] }],
+    include: [
+      { model: Role, as: 'role', include: [{ model: Permission, as: 'permissions' }] },
+      { model: Employee, as: 'employee', include: [
+        { model: Department, as: 'department' },
+        { model: Position, as: 'position' },
+        { model: Employee, as: 'supervisor', attributes: ['id', 'full_name', 'employee_code'] },
+      ] },
+    ],
   });
   if (!user) throw new Error('User not found');
 
@@ -131,4 +145,21 @@ const changePassword = async (userId, currentPassword, newPassword) => {
   await user.update({ password_hash });
 };
 
-module.exports = { register, login, refresh, logout, changePassword, updateProfile, getUserWithRole };
+const uploadProfileDocs = async (userId, files) => {
+  const employee = await Employee.findOne({ where: { user_id: userId } });
+  if (!employee) throw new Error('Employee record not found');
+  const newDocs = (files || []).map((f) => ({ url: f.path, name: f.originalname }));
+  const docs = [...(employee.documents || []), ...newDocs];
+  await employee.update({ documents: docs });
+  return docs;
+};
+
+const deleteProfileDoc = async (userId, docUrl) => {
+  const employee = await Employee.findOne({ where: { user_id: userId } });
+  if (!employee) throw new Error('Employee record not found');
+  const docs = (employee.documents || []).filter((d) => d.url !== docUrl);
+  await employee.update({ documents: docs });
+  return docs;
+};
+
+module.exports = { register, login, refresh, logout, changePassword, updateProfile, getUserWithRole, uploadProfileDocs, deleteProfileDoc };

@@ -28,6 +28,8 @@ const shopIncludes = () => [
       model: Collection,
       as: 'performance',
       attributes: ['collected_at', 'gross_tzs', 'net_tzs', 'office_tzs', 'owner_tzs', 'difference'],
+      where: { status: 'approved' },
+      required: false,
       order: [['collected_at', 'DESC']],
       limit: 30,
     }],

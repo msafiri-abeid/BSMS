@@ -80,7 +80,7 @@ export default function MachineDetailPage() {
     queryFn: () => financeAPI.listExpenses({ machine_id: id }).then(r => r.data.data || []),
     enabled: !!id && isNovomatic,
   });
-  const expenses = Array.isArray(expensesData) ? expensesData : [];
+  const expenses = expensesData?.rows || [];
 
   const totals = useMemo(() => collections.reduce((acc, c) => ({
     gross: acc.gross + (c.gross_tzs || 0),
@@ -94,6 +94,7 @@ export default function MachineDetailPage() {
       message.success('Machine updated');
       queryClient.invalidateQueries({ queryKey: ['machine', id] });
       queryClient.invalidateQueries({ queryKey: ['machines'] });
+      queryClient.invalidateQueries({ queryKey: ['machine-stats', id] });
       setEditOpen(false);
       editForm.resetFields();
     },
@@ -112,6 +113,7 @@ export default function MachineDetailPage() {
       message.success('Machine deployed');
       queryClient.invalidateQueries({ queryKey: ['machine', id] });
       queryClient.invalidateQueries({ queryKey: ['machines'] });
+      queryClient.invalidateQueries({ queryKey: ['machine-stats', id] });
       setDeployOpen(false);
       deployForm.resetFields();
     },
@@ -123,6 +125,7 @@ export default function MachineDetailPage() {
     onSuccess: () => {
       message.success('Collection deleted');
       queryClient.invalidateQueries({ queryKey: ['machine-collections', id] });
+      queryClient.invalidateQueries({ queryKey: ['machine-stats', id] });
     },
     onError: (e) => message.error(e.response?.data?.message || 'Delete failed'),
   });
@@ -132,6 +135,7 @@ export default function MachineDetailPage() {
     onSuccess: () => {
       message.success('Collection reviewed');
       queryClient.invalidateQueries({ queryKey: ['machine-collections', id] });
+      queryClient.invalidateQueries({ queryKey: ['machine-stats', id] });
       setViewRecord(null);
     },
     onError: (e) => message.error(e.response?.data?.message || 'Review failed'),
@@ -145,7 +149,8 @@ export default function MachineDetailPage() {
         type: 'Deployment',
         typeColor: 'blue',
         location: d.shop?.name || '—',
-        details: `Opening: ${d.opening_count || 0} | Load: TZS ${(d.initial_load_tzs || 0).toLocaleString()}`,
+        openingCount: d.opening_count || 0,
+        details: isNovomatic ? '—' : `Load: TZS ${(d.initial_load_tzs || 0).toLocaleString()}`,
         date: d.deployed_at,
         status: d.withdrawn_at ? 'Withdrawn' : 'Active',
       });
@@ -238,7 +243,8 @@ export default function MachineDetailPage() {
         return <Tag color={colors[r.type] || 'default'} className="!text-[10px] !px-2 !rounded-full border-0 uppercase font-semibold">{v || r.type}</Tag>;
       },
     },
-    { title: 'Location / Shop', dataIndex: 'location', render: v => <span className="font-medium text-slate-700">{v}</span> },
+    { title: 'Location / Shop', dataIndex: 'location', width: 300, ellipsis: true, render: v => <span className="font-medium text-slate-700">{v}</span> },
+    { title: 'Initial Reading', dataIndex: 'openingCount', width: 120, render: v => v != null ? <span className="font-mono text-sm font-semibold text-slate-700">{v.toLocaleString()}</span> : <span className="text-slate-300">—</span> },
     { title: 'Date', dataIndex: 'date', width: 170, render: v => <span className="text-slate-600 text-sm">{dayjs(v).format('DD MMM YYYY, HH:mm')}</span> },
     {
       title: 'Status', dataIndex: 'status', width: 100,
@@ -517,7 +523,7 @@ export default function MachineDetailPage() {
       )}
 
       {/* ── Bottom: Location + Debt/Expenses ─────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="space-y-6">
         <Card className="shadow-sm border-slate-100 rounded-xl" size="small"
           title={<div className="flex items-center gap-2 font-semibold text-slate-700"><History size={16} className="text-blue-500" /> Location History</div>}>
           {locations.length > 0 ? (
@@ -541,31 +547,24 @@ export default function MachineDetailPage() {
         {isNovomatic ? (
           <Card className="shadow-sm border-slate-100 rounded-xl" size="small"
             title={<div className="flex items-center gap-2 font-semibold text-slate-700"><Receipt size={16} className="text-red-500" /> Expenses Summary</div>}>
-            <div className="space-y-4">
-              <div className="bg-orange-50/50 border border-orange-100 rounded-lg p-4 text-center">
-                <Text className="text-xs font-semibold uppercase tracking-wider text-slate-500 block mb-1">Total Expenses</Text>
-                <Text className="text-xl font-bold text-orange-600">{fmt(statsData?.kpis?.totalExpenses)}</Text>
-                <Text className="text-xs text-slate-400 block mt-1">{statsData?.kpis?.expenseCount || 0} expense(s)</Text>
-              </div>
-              {expenses.length > 0 && (
-                <div className="border border-slate-100 rounded-lg overflow-hidden">
-                  <Table
-                    dataSource={expenses}
-                    columns={[
-                      { title: 'Date', dataIndex: 'date', width: 100, render: v => dayjs(v).format('DD MMM') },
-                      { title: 'Category', dataIndex: 'category', width: 90 },
-                      { title: 'Amount', dataIndex: 'amount_tzs', width: 100, render: v => <span className="font-semibold">{fmt(v)}</span> },
-                      { title: 'Status', dataIndex: 'status', width: 80, render: v => <Tag className="!text-[10px]">{v}</Tag> },
-                      { title: 'Description', dataIndex: 'description', ellipsis: true },
-                    ]}
-                    rowKey="id"
-                    size="small"
-                    pagination={false}
-                    loading={expLoading}
-                  />
-                </div>
-              )}
-            </div>
+            <div className="text-xs text-slate-400 mb-3">Total: {fmt(statsData?.kpis?.totalExpenses)} | {statsData?.kpis?.expenseCount || 0} record(s)</div>
+            <Table
+              dataSource={expenses}
+              columns={[
+                { title: 'Date', dataIndex: 'created_at', width: 100, render: v => dayjs(v).format('DD MMM YYYY') },
+                { title: 'Category', key: 'category', width: 110, render: (_, r) => r.category?.name || '—' },
+                { title: 'Amount', dataIndex: 'amount', width: 110, render: v => <span className="font-semibold">{fmt(v)}</span> },
+                { title: 'Status', dataIndex: 'status', width: 90, render: v => <Tag color={v === 'approved' ? 'green' : v === 'rejected' ? 'red' : 'orange'} className="!text-[10px] uppercase">{v}</Tag> },
+                { title: 'Description', dataIndex: 'description', width: 220, ellipsis: true },
+                { title: 'Approved By', key: 'approver', width: 120, render: (_, r) => r.approver?.name || (r.status === 'pending' ? <span className="text-slate-300">—</span> : '—') },
+              ]}
+              rowKey="id"
+              size="small"
+              pagination={false}
+              loading={expLoading}
+              locale={{ emptyText: 'No expenses recorded for this machine.' }}
+              className="border border-slate-50 rounded-lg overflow-hidden"
+            />
           </Card>
         ) : (
           <Card className="shadow-sm border-slate-100 rounded-xl" size="small"
@@ -792,11 +791,9 @@ export default function MachineDetailPage() {
               {shops.map(s => <Option key={s.id} value={s.id}>{s.name}</Option>)}
             </Select>
           </Form.Item>
-          {!isNovomatic && (
-            <Form.Item name="opening_count" label={<span className="text-slate-600 font-medium text-xs">Opening Mechanical Counter Register</span>} initialValue={0}>
-              <InputNumber min={0} className="w-full rounded-lg h-9 font-mono" />
-            </Form.Item>
-          )}
+          <Form.Item name="opening_count" label={<span className="text-slate-600 font-medium text-xs">Opening {isNovomatic ? 'Credits' : 'Counter'} Reading</span>} rules={[{ required: true, message: 'Please enter the initial meter reading' }]}>
+            <InputNumber className="w-full rounded-lg h-9 font-mono" />
+          </Form.Item>
           {!isNovomatic && (
             <div className="bg-slate-50 border border-slate-100 rounded-lg p-3 my-2">
               <span className="text-[11px] uppercase tracking-wider font-bold text-slate-400 block mb-2">Token Initial Liquidity Allocation</span>

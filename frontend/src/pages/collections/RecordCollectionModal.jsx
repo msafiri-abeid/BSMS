@@ -1,11 +1,16 @@
 import { useState, useEffect } from 'react';
-import { Modal, Form, Select, InputNumber, Upload, App, Typography } from 'antd';
+import { Modal, Form, Select, InputNumber, Upload, App, Typography, DatePicker } from 'antd';
 import { Camera } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { machinesAPI, collectionsAPI, shopsAPI } from '../../services/api';
+import { useAuthStore } from '../../store/authStore';
+import dayjs from 'dayjs';
 
 const { Text } = Typography;
 const { Option } = Select;
+const ADMIN_ROLES = ['Admin', 'General Manager', 'Operations Manager'];
+
+const yesterday = dayjs().subtract(1, 'day');
 
 export default function RecordCollectionModal({ open, onClose }) {
   const [form] = Form.useForm();
@@ -13,6 +18,8 @@ export default function RecordCollectionModal({ open, onClose }) {
   const [fileList, setFileList] = useState([]);
   const [openingCredits, setOpeningCredits] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+  const roleName = useAuthStore((s) => s.user?.role?.name);
+  const canEditDate = ADMIN_ROLES.includes(roleName);
 
   const { data: machinesData } = useQuery({
     queryKey: ['novomatic-machines'],
@@ -33,6 +40,11 @@ export default function RecordCollectionModal({ open, onClose }) {
   const allShops = shopsData?.rows || shopsData || [];
 
   const selectedMachineId = Form.useWatch('machine_id', form);
+  const closingCredits = Form.useWatch('closing_credits', form) || 0;
+
+  // Auto-calculated gross
+  const creditValue = 10;
+  const grossTzs = (closingCredits - openingCredits) * creditValue;
 
   const { data: prevCollection } = useQuery({
     queryKey: ['prev-novomatic-collection', selectedMachineId],
@@ -43,16 +55,33 @@ export default function RecordCollectionModal({ open, onClose }) {
     enabled: !!selectedMachineId,
   });
 
+  const { data: machineDetail } = useQuery({
+    queryKey: ['machine-detail', selectedMachineId],
+    queryFn: () => machinesAPI.get(selectedMachineId).then(r => r.data.data),
+    enabled: !!selectedMachineId,
+  });
+
   useEffect(() => {
     if (prevCollection) {
       const opening = prevCollection.closing_credits || 0;
       setOpeningCredits(opening);
       form.setFieldsValue({ opening_credits: opening });
+    } else if (machineDetail) {
+      const initial = machineDetail.previous_count || machineDetail.opening_count || 0;
+      setOpeningCredits(initial);
+      form.setFieldsValue({ opening_credits: initial });
     } else {
       setOpeningCredits(0);
       form.setFieldsValue({ opening_credits: 0 });
     }
-  }, [prevCollection, form]);
+  }, [prevCollection, machineDetail, form]);
+
+  // Set default collection date on open
+  useEffect(() => {
+    if (open) {
+      form.setFieldsValue({ collection_date: yesterday });
+    }
+  }, [open, form]);
 
   const handleClose = () => {
     form.resetFields();
@@ -68,6 +97,7 @@ export default function RecordCollectionModal({ open, onClose }) {
       const fd = new FormData();
       fd.append('machine_id', values.machine_id);
       fd.append('shop_id', values.shop_id || '');
+      fd.append('collection_date', values.collection_date.format('YYYY-MM-DD'));
       fd.append('novomatic_data', JSON.stringify({
         closing_credits: values.closing_credits,
         opening_credits: openingCredits,
@@ -101,6 +131,11 @@ export default function RecordCollectionModal({ open, onClose }) {
       destroyOnClose
     >
       <Form form={form} layout="vertical" className="mt-4 space-y-1">
+        <Form.Item name="collection_date" label={<span className="text-slate-600 font-medium text-xs">Collection Date</span>}
+          rules={[{ required: true, message: 'Select collection date' }]}>
+          <DatePicker className="w-full rounded-lg h-9" disabled={!canEditDate} disabledDate={(d) => d.isAfter(dayjs())} />
+        </Form.Item>
+
         <Form.Item name="shop_id" label={<span className="text-slate-600 font-medium text-xs">Shop</span>}
           rules={[{ required: true, message: 'Select a shop' }]}>
           <Select showSearch optionFilterProp="children" className="h-9" popupClassName="rounded-lg"
@@ -127,9 +162,9 @@ export default function RecordCollectionModal({ open, onClose }) {
           <InputNumber disabled className="w-full rounded-lg h-9 font-mono" />
         </Form.Item>
 
-        <Form.Item name="closing_credits" label={<span className="text-slate-600 font-medium text-xs">Closing Meter (TOTAL IN-OUT credits)</span>}
+        <Form.Item name="closing_credits" label={<span className="text-slate-600 font-medium text-xs">Closing Meter (TOTAL IN-OUT)</span>}
           rules={[{ required: true, message: 'Enter the closing meter reading' }]}>
-          <InputNumber min={0} className="w-full rounded-lg h-9 font-mono"
+          <InputNumber className="w-full rounded-lg h-9 font-mono"
             placeholder="Enter TOTAL IN-OUT value from screen" />
         </Form.Item>
 
@@ -148,6 +183,14 @@ export default function RecordCollectionModal({ open, onClose }) {
             </div>
           </Upload.Dragger>
         </Form.Item>
+
+        {/* Gross summary (read-only) */}
+        {selectedMachineId && closingCredits > 0 && (
+          <div className="mt-2 p-3 rounded-lg bg-slate-50 border border-slate-200 text-xs flex justify-between">
+            <span className="text-slate-500">Gross ({(closingCredits - openingCredits).toLocaleString()} × TZS 10)</span>
+            <span className="font-semibold text-slate-700">TZS {(grossTzs || 0).toLocaleString()}</span>
+          </div>
+        )}
       </Form>
     </Modal>
   );

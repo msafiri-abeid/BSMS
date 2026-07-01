@@ -35,6 +35,7 @@ const submit = async (req, res, next) => {
       novomaticData: body.novomatic_data ? JSON.parse(body.novomatic_data) : null,
       assignmentId: body.assignment_id,
       skipDebtRepayment,
+      collectionDate: body.collection_date || undefined,
     });
 
     res.status(201).json({ success: true, data: collection });

@@ -105,6 +105,7 @@ const recordCollection = async (req, res, next) => {
       userId: req.user.id,
       currCount: req.body.curr_count,
       novomaticData: req.body.novomatic_data ? JSON.parse(req.body.novomatic_data) : null,
+      collectionDate: req.body.collection_date || undefined,
     });
     res.status(201).json({ success: true, data: collection });
   } catch (err) { next(err); }

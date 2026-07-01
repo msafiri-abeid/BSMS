@@ -100,7 +100,7 @@ const getMachineStats = async (id, filters = {}) => {
   if (filters.date_from) dateWhere.collected_at = { [Op.gte]: new Date(filters.date_from) };
   if (filters.date_to) dateWhere.collected_at = { ...dateWhere.collected_at, [Op.lte]: new Date(filters.date_to + 'T23:59:59.999Z') };
 
-  const collectionsWhere = { machine_id: id, ...dateWhere };
+  const collectionsWhere = { machine_id: id, status: 'approved', ...dateWhere };
 
   const [aggResult, weeklyTargets, monthlyRevenue, expenseResult, debtResult] = await Promise.all([
     Collection.findAll({
@@ -124,7 +124,7 @@ const getMachineStats = async (id, filters = {}) => {
         [fn('DATE_FORMAT', col('collected_at'), '%Y-%m'), 'month'],
         [fn('SUM', col('gross_tzs')), 'revenue'],
       ],
-      where: { machine_id: id },
+      where: { machine_id: id, status: 'approved' },
       group: [fn('DATE_FORMAT', col('collected_at'), '%Y-%m')],
       order: [[fn('DATE_FORMAT', col('collected_at'), '%Y-%m'), 'ASC']],
       raw: true,
@@ -134,7 +134,7 @@ const getMachineStats = async (id, filters = {}) => {
         [fn('COALESCE', fn('SUM', col('amount')), 0), 'totalExpenses'],
         [fn('COUNT', col('id')), 'expenseCount'],
       ],
-      where: { machine_id: id },
+      where: { machine_id: id, status: 'approved' },
       raw: true,
     }),
     MachineDebt.findAll({
@@ -237,6 +237,7 @@ const deploy = async (id, { shop_id, opening_count, initial_load_tzs, machine_lo
   await machine.update({
     current_shop_id: shop_id,
     status: 'active',
+    opening_count: opening_count || 0,
     previous_count: opening_count || 0,
     cycle_start_date: now.toISOString().split('T')[0],
   });
@@ -410,6 +411,7 @@ const generateMachinePDF = async (id) => new Promise(async (resolve, reject) => 
           model: Collection,
           as: 'performance',
           attributes: ['collected_at', 'net_tzs', 'gross_tzs', 'office_tzs', 'owner_tzs', 'difference', 'prev_count', 'curr_count'],
+          where: { status: 'approved' },
           order: [['collected_at', 'DESC']],
           limit: 50,
         },
@@ -543,7 +545,7 @@ const generateMachinePDF = async (id) => new Promise(async (resolve, reject) => 
   } catch (err) { reject(err); }
 });
 
-const recordCollection = async ({ machineId, shopId, userId, currCount, novomaticData }) => {
+const recordCollection = async ({ machineId, shopId, userId, currCount, novomaticData, collectionDate }) => {
   const { submitCollection } = require('./collection.service');
   const allowed = ['Admin', 'General Manager', 'Operations Manager'];
 
@@ -558,6 +560,7 @@ const recordCollection = async ({ machineId, shopId, userId, currCount, novomati
     novomaticData,
     assignmentId: null,
     skipDebtRepayment: false,
+    collectionDate,
   });
 };
 

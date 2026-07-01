@@ -254,7 +254,6 @@ export default function NovomaticMachinesPage() {
           <Form.Item name="credit_value_tzs" label={<span className="text-xs font-semibold text-slate-600">Credit Value (TZS)</span>} rules={[{ required: true }]} initialValue={10}>
             <InputNumber min={1} className="w-full" />
           </Form.Item>
-          <p className="text-xs text-slate-400">Novomatic machines have no weekly target or token debt tracking.</p>
         </Form>
       </Modal>
 
@@ -288,6 +287,9 @@ export default function NovomaticMachinesPage() {
             <Select showSearch optionFilterProp="children">
               {shops.map(s => <Option key={s.id} value={s.id}>{s.name}</Option>)}
             </Select>
+          </Form.Item>
+          <Form.Item name="opening_count" label={<span className="text-xs font-semibold text-slate-600">Opening Credits</span>} rules={[{ required: true, message: 'Please enter the initial meter reading' }]}>
+            <InputNumber className="w-full" />
           </Form.Item>
           <Form.Item name="reason" label={<span className="text-xs font-semibold text-slate-600">Reason</span>}><Input.TextArea rows={2} /></Form.Item>
         </Form>

@@ -53,4 +53,18 @@ const changePassword = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { register, login, refresh, logout, me, updateProfile, changePassword };
+const uploadProfileDocs = async (req, res, next) => {
+  try {
+    const docs = await authService.uploadProfileDocs(req.user.id, req.files);
+    res.json({ success: true, data: docs });
+  } catch (err) { next(err); }
+};
+
+const deleteProfileDoc = async (req, res, next) => {
+  try {
+    const docs = await authService.deleteProfileDoc(req.user.id, req.body.url);
+    res.json({ success: true, data: docs });
+  } catch (err) { next(err); }
+};
+
+module.exports = { register, login, refresh, logout, me, updateProfile, changePassword, uploadProfileDocs, deleteProfileDoc };

@@ -50,7 +50,7 @@ module.exports = {
 
   ROLES: ['Admin', 'General Manager', 'Director', 'Operations Manager', 'Finance', 'Sales', 'Collector', 'Technician', 'Cashier', 'Supervisor'],
 
-  MODULES: ['partners', 'shops', 'machines', 'collections', 'finance', 'inventory', 'tickets', 'staff', 'reports', 'settings', 'users'],
+  MODULES: ['accounts', 'partners', 'shops', 'machines', 'collections', 'finance', 'inventory', 'tickets', 'staff', 'reports', 'settings', 'users'],
 
   ACTIONS: ['read', 'create', 'update', 'delete', 'approve'],
 

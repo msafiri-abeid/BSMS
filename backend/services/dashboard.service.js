@@ -92,8 +92,8 @@ exports.adminDashboard = async (reqQuery) => {
     scope.shop_id ? 1 : Shop.count({ where: { status: 'active' } }),
     Ticket.count({ where: { status: ['open', 'in_progress', 'reopened'] } }),
     Expense.count({ where: { status: 'pending' } }),
-    Collection.sum('gross_tzs', { where: { ...collFilter, collected_at: { [Op.gte]: today } } }),
-    Collection.sum('gross_tzs', { where: { ...collFilter, collected_at: { [Op.gte]: week } } }),
+    Collection.sum('gross_tzs', { where: { ...collFilter, status: 'approved', collected_at: { [Op.gte]: today } } }),
+    Collection.sum('gross_tzs', { where: { ...collFilter, status: 'approved', collected_at: { [Op.gte]: week } } }),
     TokenInventory.sum('qty'),
     MachineDebt.count({ where: { status: ['pending', 'partial'], type: 'token' } }),
     MachineDebt.sum('amount', { where: { status: ['pending', 'partial'], type: 'token' } }),
@@ -140,7 +140,7 @@ exports.adminDashboard = async (reqQuery) => {
   const last30DaysCollections = await sequelize.query(`
     SELECT DATE(collected_at) as date, SUM(gross_tzs) as total
     FROM collections
-    WHERE collected_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+    WHERE status = 'approved' AND collected_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
     ${chartCollFilter}
     GROUP BY DATE(collected_at)
     ORDER BY date ASC
@@ -164,7 +164,7 @@ exports.adminDashboard = async (reqQuery) => {
   // Top machines this week
   const topMachines = await Collection.findAll({
     attributes: ['machine_id', [sequelize.fn('SUM', sequelize.col('gross_tzs')), 'total_tzs']],
-    where: { ...collFilter, collected_at: { [Op.gte]: week } },
+    where: { ...collFilter, status: 'approved', collected_at: { [Op.gte]: week } },
     group: ['machine_id'],
     order: [[sequelize.fn('SUM', sequelize.col('gross_tzs')), 'DESC']],
     limit: 5,
@@ -212,7 +212,7 @@ exports.collectorDashboard = async (userId) => {
       ],
     }),
     Collection.findAll({
-      where: { collector_id: userId, collected_at: { [Op.gte]: week } },
+      where: { collector_id: userId, status: 'approved', collected_at: { [Op.gte]: week } },
       attributes: ['id', 'gross_tzs', 'collected_at', 'machine_id'],
     }),
     Ticket.count({ where: { requester_id: userId, status: ['open', 'in_progress'] } }),
@@ -237,7 +237,7 @@ exports.financeDashboard = async () => {
       },
       limit: 10,
     }),
-    Collection.sum('gross_tzs', { where: { collected_at: { [Op.gte]: month } } }),
+    Collection.sum('gross_tzs', { where: { status: 'approved', collected_at: { [Op.gte]: month } } }),
     Expense.sum('amount', { where: { status: 'approved', created_at: { [Op.gte]: month } } }),
   ]);
 
@@ -253,13 +253,13 @@ exports.directorDashboard = async () => {
   const month = monthStart();
 
   const [monthRevenue, monthExpenses] = await Promise.all([
-    Collection.sum('gross_tzs', { where: { collected_at: { [Op.gte]: month } } }),
+    Collection.sum('gross_tzs', { where: { status: 'approved', collected_at: { [Op.gte]: month } } }),
     Expense.sum('amount', { where: { status: 'approved', created_at: { [Op.gte]: month } } }),
   ]);
 
   const last6Months = await sequelize.query(`
     SELECT DATE_FORMAT(collected_at, '%Y-%m') as month, SUM(gross_tzs) as revenue
-    FROM collections GROUP BY month ORDER BY month DESC LIMIT 6
+    FROM collections WHERE status = 'approved' GROUP BY month ORDER BY month DESC LIMIT 6
   `, { type: sequelize.QueryTypes.SELECT });
 
   return {

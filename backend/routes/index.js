@@ -2,7 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const { authenticate, checkPermission } = require('../middleware/auth');
-const { uploadContract, uploadDocuments, uploadReceipt, uploadMeter, uploadTicket } = require('../middleware/upload');
+const { uploadContract, uploadDocuments, uploadReceipt, uploadMeter, uploadTicket, uploadEmployee } = require('../middleware/upload');
 
 const authC = require('../controllers/auth.controller');
 const machineC = require('../controllers/machine.controller');
@@ -28,6 +28,8 @@ router.post('/auth/logout', authC.logout);
 router.get('/auth/me', authenticate, authC.me);
 router.put('/auth/password', authenticate, authC.changePassword);
 router.put('/auth/profile', authenticate, authC.updateProfile);
+router.post('/auth/profile/documents', authenticate, uploadEmployee, authC.uploadProfileDocs);
+router.delete('/auth/profile/documents', authenticate, authC.deleteProfileDoc);
 
 // ── USERS ─────────────────────────────────────────────────────
 const usersC = require('../controllers/users.controller');
@@ -85,6 +87,10 @@ router.delete('/collections/:id', authenticate, checkPermission('collections', '
 // ── FINANCE ───────────────────────────────────────────────────
 router.get('/finance/expenses', authenticate, checkPermission('finance', 'read'), financeC.listExpenses);
 router.post('/finance/expenses', authenticate, uploadReceipt.single('receipt'), financeC.submitExpense);
+router.get('/finance/expenses/categories', authenticate, financeC.listCategories);
+router.get('/finance/shop-cash', authenticate, checkPermission('finance', 'read'), financeC.listShopCashDispositions);
+router.post('/finance/shop-cash', authenticate, checkPermission('finance', 'create'), uploadReceipt.fields([{ name: 'selcom_receipt', maxCount: 1 }, { name: 'bank_deposit_receipt', maxCount: 1 }]), financeC.submitShopCashDisposition);
+router.put('/finance/shop-cash/:id/approve', authenticate, checkPermission('finance', 'approve'), financeC.approveShopCashDisposition);
 router.get('/finance/expenses/pending', authenticate, checkPermission('finance', 'approve'), financeC.getPendingExpenses);
 router.put('/finance/expenses/:id/approve', authenticate, checkPermission('finance', 'approve'), financeC.approveExpense);
 router.get('/finance/invoices', authenticate, checkPermission('finance', 'read'), financeC.listInvoices);
@@ -94,6 +100,19 @@ router.post('/finance/invoices/:id/payment', authenticate, checkPermission('fina
 router.get('/finance/payroll', authenticate, checkPermission('finance', 'read'), financeC.listPayroll);
 router.post('/finance/payroll', authenticate, checkPermission('finance', 'create'), financeC.createPayroll);
 router.get('/finance/export/collections', authenticate, checkPermission('reports', 'read'), financeC.exportCollections);
+
+// ── ACCOUNTING ─────────────────────────────────────────────────
+router.get('/finance/accounts', authenticate, checkPermission('accounts', 'read'), financeC.listAccounts);
+router.post('/finance/accounts', authenticate, checkPermission('accounts', 'create'), financeC.createAccount);
+router.get('/finance/accounts/:id', authenticate, checkPermission('accounts', 'read'), financeC.getAccount);
+router.put('/finance/accounts/:id', authenticate, checkPermission('accounts', 'update'), financeC.updateAccount);
+router.delete('/finance/accounts/:id', authenticate, checkPermission('accounts', 'delete'), financeC.deleteAccount);
+router.get('/finance/accounts/:id/transactions', authenticate, checkPermission('accounts', 'read'), financeC.listTransactions);
+router.post('/finance/accounts/transfer', authenticate, checkPermission('accounts', 'create'), financeC.transferAccounts);
+router.get('/finance/reports/balance-sheet', authenticate, checkPermission('accounts', 'read'), financeC.balanceSheet);
+router.get('/finance/reports/trial-balance', authenticate, checkPermission('accounts', 'read'), financeC.trialBalance);
+router.get('/finance/reports/cash-flow', authenticate, checkPermission('accounts', 'read'), financeC.cashFlow);
+router.get('/finance/reports/account-report/:id', authenticate, checkPermission('accounts', 'read'), financeC.accountReport);
 
 // ── TICKETS ───────────────────────────────────────────────────
 router.get('/tickets', authenticate, ticketC.list);
@@ -230,7 +249,6 @@ router.get('/dashboard/technician', authenticate, dashC.technicianDashboard);
 
 // ── STAFF ─────────────────────────────────────────────────────
 const staffC = require('../controllers/staff.controller');
-const { uploadEmployee } = require('../middleware/upload');
 
 router.get('/staff/departments', authenticate, checkPermission('staff', 'read'), staffC.listDepartments);
 router.post('/staff/departments', authenticate, checkPermission('staff', 'create'), staffC.createDepartment);
