@@ -194,6 +194,7 @@ export default function EmployeesPage() {
       bank_account: r.bank_account,
       status: r.status,
       user_role_id: r.user?.role_id,
+      user_email: r.user?.email,
       user_is_active: r.user?.is_active !== false,
     });
     setOpen(true);

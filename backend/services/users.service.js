@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const { BCRYPT_ROUNDS } = require('../config/constants');
-const { User, Role } = require('../models');
+const { Op } = require('sequelize');
+const { User, Role, Employee } = require('../models');
 const authService = require('./auth.service');
 
 const listUsers = async (filters = {}) => {
@@ -56,6 +57,17 @@ const updateUser = async (id, data) => {
   }
 
   await user.update(payload);
+
+  if (user.employee_id) {
+    const empUpdates = {};
+    if (data.name !== undefined) empUpdates.full_name = data.name.trim();
+    if (data.email !== undefined) empUpdates.email = data.email.trim();
+    if (data.phone !== undefined) empUpdates.phone = data.phone.trim();
+    if (Object.keys(empUpdates).length) {
+      await Employee.update(empUpdates, { where: { employee_code: user.employee_id } });
+    }
+  }
+
   return authService.getUserWithRole(user.id);
 };
 

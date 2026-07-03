@@ -722,8 +722,31 @@ const approveShopCashDisposition = async (dispositionId, action, reason, userId)
   return disp;
 };
 
+const updateExpense = async (id, data, userId) => {
+  const expense = await Expense.findByPk(id);
+  if (!expense) throw new Error('Expense not found');
+  if (expense.status !== 'pending') throw new Error('Can only edit pending expenses');
+  await expense.update({ ...data, submitted_by: userId });
+  return Expense.findByPk(id, {
+    include: [
+      { model: ExpenseCategory, as: 'category' },
+      { model: User, as: 'submitter', attributes: ['name'] },
+      { model: User, as: 'approver', attributes: ['name'] },
+    ],
+  });
+};
+
+const removeExpense = async (id) => {
+  const expense = await Expense.findByPk(id);
+  if (!expense) throw new Error('Expense not found');
+  if (expense.status !== 'pending') throw new Error('Can only delete pending expenses');
+  await expense.destroy();
+  return true;
+};
+
 module.exports = {
-  submitExpense, approveExpense, createInvoice, recordPayment, generateInvoicePDF, createPayrollRun, exportCollectionsExcel,
+  submitExpense, approveExpense, updateExpense, removeExpense,
+  createInvoice, recordPayment, generateInvoicePDF, createPayrollRun, exportCollectionsExcel,
   listAccounts, createAccount, getAccount, updateAccount, deleteAccount,
   listAccountTransactions, transferBetweenAccounts,
   generateBalanceSheet, generateTrialBalance, generateCashFlow, generateAccountReport,

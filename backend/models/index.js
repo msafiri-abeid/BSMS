@@ -122,7 +122,11 @@ const Machine = sequelize.define('Machine', {
   previous_count: { type: DataTypes.BIGINT, defaultValue: 0 },
   current_shop_id: { type: DataTypes.INTEGER },
   status: { type: DataTypes.ENUM('active', 'inactive', 'maintenance', 'transferred'), defaultValue: 'inactive' },
-}, { tableName: 'machines' });
+}, { tableName: 'machines', indexes: [
+  { fields: ['current_shop_id'] },
+  { fields: ['manufacturer'] },
+  { fields: ['status'] },
+] });
 
 const MachineDeployment = sequelize.define('MachineDeployment', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
@@ -170,7 +174,11 @@ const CollectorAssignment = sequelize.define('CollectorAssignment', {
   assigned_by: { type: DataTypes.INTEGER, allowNull: false },
   is_opened: { type: DataTypes.BOOLEAN, defaultValue: false },
   opened_at: { type: DataTypes.DATE, allowNull: true },
-}, { tableName: 'collector_assignments' });
+}, { tableName: 'collector_assignments', indexes: [
+  { fields: ['collector_id'] },
+  { fields: ['assigned_date'] },
+  { fields: ['machine_id'] },
+] });
 
 const Collection = sequelize.define('Collection', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
@@ -197,7 +205,14 @@ const Collection = sequelize.define('Collection', {
   supervisor_approved_by: { type: DataTypes.INTEGER },
   supervisor_approved_at: { type: DataTypes.DATE },
   status: { type: DataTypes.ENUM('pending', 'supervisor_approved', 'approved', 'disputed'), defaultValue: 'pending' },
-}, { tableName: 'collections' });
+}, { tableName: 'collections', indexes: [
+  { fields: ['machine_id'] },
+  { fields: ['shop_id'] },
+  { fields: ['collected_at'] },
+  { fields: ['collection_date'] },
+  { fields: ['status'] },
+  { fields: ['collector_id'] },
+] });
 
 const NovomaticReading = sequelize.define('NovomaticReading', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
@@ -218,7 +233,10 @@ const WeeklyTarget = sequelize.define('WeeklyTarget', {
   week_end: { type: DataTypes.DATEONLY, allowNull: false },
   collected_tzs: { type: DataTypes.INTEGER, defaultValue: 0 },
   status: { type: DataTypes.ENUM('pending', 'met', 'unmet'), defaultValue: 'pending' },
-}, { tableName: 'weekly_targets' });
+}, { tableName: 'weekly_targets', indexes: [
+  { fields: ['machine_id'] },
+  { fields: ['week_start'] },
+] });
 
 // ─── MACHINE DEBTS ────────────────────────────────────────────
 const MachineDebt = sequelize.define('MachineDebt', {
@@ -234,7 +252,11 @@ const MachineDebt = sequelize.define('MachineDebt', {
   recorded_by: { type: DataTypes.INTEGER, allowNull: false },
   status: { type: DataTypes.ENUM('pending', 'partial', 'paid', 'written_off'), defaultValue: 'pending' },
   paid_at: { type: DataTypes.DATE },
-}, { tableName: 'machine_debts' });
+}, { tableName: 'machine_debts', indexes: [
+  { fields: ['machine_id'] },
+  { fields: ['status'] },
+  { fields: ['shop_id'] },
+] });
 
 // ─── FINANCE ──────────────────────────────────────────────────
 const ExpenseCategory = sequelize.define('ExpenseCategory', {
@@ -260,7 +282,11 @@ const Expense = sequelize.define('Expense', {
   approved_at: { type: DataTypes.DATE },
   status: { type: DataTypes.ENUM('pending', 'approved', 'rejected'), defaultValue: 'pending' },
   rejection_reason: { type: DataTypes.TEXT },
-}, { tableName: 'expenses' });
+}, { tableName: 'expenses', indexes: [
+  { fields: ['status'] },
+  { fields: ['shop_id'] },
+  { fields: ['expense_date'] },
+] });
 
 const Invoice = sequelize.define('Invoice', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
@@ -489,7 +515,12 @@ const Ticket = sequelize.define('Ticket', {
   channel: { type: DataTypes.ENUM('sms', 'system', 'email'), defaultValue: 'system' },
   sla_deadline: { type: DataTypes.DATE },
   resolved_at: { type: DataTypes.DATE },
-}, { tableName: 'tickets' });
+}, { tableName: 'tickets', indexes: [
+  { fields: ['status'] },
+  { fields: ['assigned_to'] },
+  { fields: ['sla_deadline'] },
+  { fields: ['machine_id'] },
+] });
 
 const TicketActivity = sequelize.define('TicketActivity', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
@@ -677,6 +708,7 @@ Machine.hasMany(Collection, {
 });
 
 Collection.hasOne(NovomaticReading, { foreignKey: 'collection_id', as: 'novomaticReading' });
+NovomaticReading.belongsTo(Collection, { foreignKey: 'collection_id', as: 'collection' });
 
 CollectorAssignment.belongsTo(User, { foreignKey: 'collector_id', as: 'collector' });
 CollectorAssignment.belongsTo(Machine, { foreignKey: 'machine_id', as: 'machine' });

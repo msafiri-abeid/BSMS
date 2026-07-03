@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Modal, Form, Select, InputNumber, Upload, App, Typography, DatePicker } from 'antd';
 import { Camera } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { machinesAPI, collectionsAPI, shopsAPI } from '../../services/api';
 import { useAuthStore } from '../../store/authStore';
 import dayjs from 'dayjs';
@@ -15,8 +15,10 @@ const yesterday = dayjs().subtract(1, 'day');
 export default function RecordCollectionModal({ open, onClose }) {
   const [form] = Form.useForm();
   const { message } = App.useApp();
+  const qc = useQueryClient();
   const [fileList, setFileList] = useState([]);
   const [openingCredits, setOpeningCredits] = useState(0);
+  const [creditValue, setCreditValue] = useState(10);
   const [submitting, setSubmitting] = useState(false);
   const roleName = useAuthStore((s) => s.user?.role?.name);
   const canEditDate = ADMIN_ROLES.includes(roleName);
@@ -42,18 +44,8 @@ export default function RecordCollectionModal({ open, onClose }) {
   const selectedMachineId = Form.useWatch('machine_id', form);
   const closingCredits = Form.useWatch('closing_credits', form) || 0;
 
-  // Auto-calculated gross
-  const creditValue = 10;
+  // Auto-calculated gross (credit_value_tzs from machine data)
   const grossTzs = (closingCredits - openingCredits) * creditValue;
-
-  const { data: prevCollection } = useQuery({
-    queryKey: ['prev-novomatic-collection', selectedMachineId],
-    queryFn: () => collectionsAPI.list({ machine_id: selectedMachineId, limit: 1 }).then(r => {
-      const rows = r.data.data?.rows || [];
-      return rows[0]?.novomaticReading || null;
-    }),
-    enabled: !!selectedMachineId,
-  });
 
   const { data: machineDetail } = useQuery({
     queryKey: ['machine-detail', selectedMachineId],
@@ -62,19 +54,16 @@ export default function RecordCollectionModal({ open, onClose }) {
   });
 
   useEffect(() => {
-    if (prevCollection) {
-      const opening = prevCollection.closing_credits || 0;
+    if (machineDetail) {
+      const opening = machineDetail.lastNovomaticReading?.closing_credits ?? machineDetail.previous_count ?? machineDetail.opening_count ?? 0;
       setOpeningCredits(opening);
       form.setFieldsValue({ opening_credits: opening });
-    } else if (machineDetail) {
-      const initial = machineDetail.previous_count || machineDetail.opening_count || 0;
-      setOpeningCredits(initial);
-      form.setFieldsValue({ opening_credits: initial });
+      if (machineDetail.credit_value_tzs) setCreditValue(machineDetail.credit_value_tzs);
     } else {
       setOpeningCredits(0);
       form.setFieldsValue({ opening_credits: 0 });
     }
-  }, [prevCollection, machineDetail, form]);
+  }, [machineDetail, form]);
 
   // Set default collection date on open
   useEffect(() => {
@@ -107,6 +96,9 @@ export default function RecordCollectionModal({ open, onClose }) {
       }
       await collectionsAPI.submit(fd);
       message.success('Collection recorded successfully');
+      qc.invalidateQueries({ queryKey: ['collections'] });
+      qc.invalidateQueries({ queryKey: ['machine-detail'] });
+      qc.invalidateQueries({ queryKey: ['machine', selectedMachineId] });
       handleClose();
     } catch (err) {
       if (err?.errorFields) return;
@@ -179,15 +171,20 @@ export default function RecordCollectionModal({ open, onClose }) {
           >
             <div className="flex flex-col items-center gap-1 py-3">
               <Camera className="w-8 h-8 text-slate-400" />
-              <Text className="text-xs text-slate-500">Tap or drop a photo of the TOTAL IN-OUT screen</Text>
+              <Text className="text-xs text-slate-500">Tap to open camera or upload a photo</Text>
             </div>
           </Upload.Dragger>
+          {fileList[0]?.originFileObj && (
+            <div className="mt-2 rounded-lg overflow-hidden border border-slate-200">
+              <img src={URL.createObjectURL(fileList[0].originFileObj)} alt="Meter preview" className="w-full max-h-48 object-contain bg-slate-50" />
+            </div>
+          )}
         </Form.Item>
 
         {/* Gross summary (read-only) */}
         {selectedMachineId && closingCredits > 0 && (
           <div className="mt-2 p-3 rounded-lg bg-slate-50 border border-slate-200 text-xs flex justify-between">
-            <span className="text-slate-500">Gross ({(closingCredits - openingCredits).toLocaleString()} × TZS 10)</span>
+            <span className="text-slate-500">Gross ({(closingCredits - openingCredits).toLocaleString()} × TZS {creditValue})</span>
             <span className="font-semibold text-slate-700">TZS {(grossTzs || 0).toLocaleString()}</span>
           </div>
         )}

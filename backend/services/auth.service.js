@@ -125,6 +125,9 @@ const updateProfile = async (userId, { name, email, phone, currentPassword, acco
   const employee = await Employee.findOne({ where: { user_id: userId } });
   if (employee) {
     const empPayload = {};
+    if (name != null) empPayload.full_name = name.trim();
+    if (email != null) empPayload.email = email.trim();
+    if (phone != null) empPayload.phone = phone.trim();
     if (account_holder_name !== undefined) empPayload.account_holder_name = account_holder_name;
     if (bank_account !== undefined) empPayload.bank_account = bank_account;
     if (bank_name !== undefined) empPayload.bank_name = bank_name;

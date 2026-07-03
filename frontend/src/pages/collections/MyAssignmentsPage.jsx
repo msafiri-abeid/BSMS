@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Card, Button, Tag, Modal, Form, Input, InputNumber, Upload, Alert, Spin, App, Typography, Divider, Table, Select, DatePicker, Space, List, Empty } from 'antd';
+import { Card, Button, Tag, Modal, Form, InputNumber, Upload, Alert, Spin, App, Typography, Table, Select, DatePicker, Space, List, Empty } from 'antd';
 import { Camera, CheckCircle, Clock, DoorOpen, Download, FileText, Plus, Unlock, Lock, Eye, Edit3, Trash2, X } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { collectionsAPI, usersAPI, machinesAPI } from '../../services/api';
@@ -33,8 +33,7 @@ const fmt = (n) => `TZS ${(n || 0).toLocaleString()}`;
 
 export default function MyAssignmentsPage() {
   const [submitting, setSubmitting] = useState(null);
-  const [ocrLoading, setOcrLoading] = useState(false);
-  const [ocrResult, setOcrResult] = useState(null);
+  const [meterPhoto, setMeterPhoto] = useState(null);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(null);
   const [assignFilters, setAssignFilters] = useState({ limit: 50, offset: 0 });
@@ -84,7 +83,7 @@ export default function MyAssignmentsPage() {
       message.success(`Collection submitted — Gross: TZS ${c.gross_tzs?.toLocaleString()}`);
       qc.invalidateQueries({ queryKey: ['my-assignments'] });
       setSubmitting(null);
-      setOcrResult(null);
+      setMeterPhoto(null);
       form.resetFields();
     },
     onError: (e) => message.error(e.response?.data?.message || 'Submission failed'),
@@ -136,49 +135,15 @@ export default function MyAssignmentsPage() {
     a.download = `assignments-selected-${dayjs().format('YYYY-MM-DD')}.csv`; a.click();
   };
 
-  // ── OCR / Submit helpers ──
-  const handleOCR = async ({ file }) => {
-    if (!submitting) return;
-    setOcrLoading(true);
-    setOcrResult(null);
-    const fd = new FormData();
-    fd.append('meter_image', file);
-    fd.append('machine_id', submitting.machine_id);
-    try {
-      const res = await collectionsAPI.ocr(fd);
-      const result = res.data.data;
-      setOcrResult(result);
-      if (result.success && result.extractedValues) {
-        const v = result.extractedValues;
-        if (v.credit_count !== null) form.setFieldValue('curr_count', v.credit_count);
-        if (v.total_in !== null) form.setFieldValue('total_in', v.total_in);
-        if (v.total_out !== null) form.setFieldValue('total_out', v.total_out);
-      }
-    } catch {
-      message.error('OCR failed — enter values manually');
-    } finally {
-      setOcrLoading(false);
-    }
-  };
-
   const onFinish = (values) => {
     const fd = new FormData();
     fd.append('machine_id', submitting.machine_id);
     fd.append('shop_id', submitting.shop_id);
     fd.append('assignment_id', submitting.id);
     fd.append('curr_count', values.curr_count || 0);
-    if (values.meter_image?.file) fd.append('meter_image', values.meter_image.file);
-    if (submitting.machine?.manufacturer === 'Novomatic') {
-      fd.append('novomatic_data', JSON.stringify({
-        total_in_tzs: values.total_in,
-        total_out_tzs: values.total_out,
-        coins_in_tzs: values.coins_in || 0,
-      }));
-    }
+    if (meterPhoto) fd.append('meter_image', meterPhoto);
     submitMutation.mutate(fd);
   };
-
-  const isNovomatic = submitting?.machine?.manufacturer === 'Novomatic';
 
   // ── Assigner table columns ──
   const mgmtCols = [
@@ -271,7 +236,7 @@ export default function MyAssignmentsPage() {
             </Button>
           )}
           <Button type="primary" size="small" icon={<Camera className="w-3.5 h-3.5" />}
-            onClick={() => { setSubmitting(r); form.resetFields(); setOcrResult(null); }}
+            onClick={() => { setSubmitting(r); form.resetFields(); setMeterPhoto(null); }}
             className="flex items-center gap-1 !bg-brand-dark hover:!bg-brand-light border-none">
             Submit
           </Button>
@@ -309,64 +274,83 @@ export default function MyAssignmentsPage() {
           <KpiCard title="Done" value={done.length} icon={CheckCircle} bgColor="bg-emerald-50" iconColor="text-emerald-600" />
         </div>
 
-        <Table dataSource={assignments || []} columns={collectorCols} rowKey="id" size="middle"
-          pagination={false}
-          locale={{ emptyText: (
+        {/* Desktop Table */}
+        <div className="hidden md:block">
+          <Table dataSource={assignments || []} columns={collectorCols} rowKey="id" size="middle"
+            pagination={false}
+            locale={{ emptyText: (
+              <div className="flex flex-col items-center justify-center py-8">
+                <FileText className="w-12 h-12 text-slate-300 mb-3" />
+                <Text type="secondary">No assignments for today</Text>
+              </div>
+            )}} />
+        </div>
+
+        {/* Mobile Cards */}
+        <div className="md:hidden space-y-2">
+          {(assignments || []).length === 0 ? (
             <div className="flex flex-col items-center justify-center py-8">
               <FileText className="w-12 h-12 text-slate-300 mb-3" />
               <Text type="secondary">No assignments for today</Text>
             </div>
-          )}} />
+          ) : (
+            <List
+              dataSource={assignments || []}
+              renderItem={(r) => (
+                <MobileCard
+                  record={r}
+                  fields={[
+                    { key: 'machine', dataIndex: ['machine', 'slot_code'] },
+                    { key: 'shop', label: 'Shop', dataIndex: ['shop', 'name'] },
+                    { key: 'manufacturer', label: 'Type', dataIndex: ['machine', 'manufacturer'] },
+                    { key: 'prev', label: 'Prev', dataIndex: ['machine', 'previous_count'] },
+                  ]}
+                  onClick={() => {
+                    if (r.status === 'pending') { setSubmitting(r); form.resetFields(); setMeterPhoto(null); }
+                  }}
+                  statusColor={r.status === 'done' ? 'green' : 'orange'}
+                />
+              )}
+            />
+          )}
+        </div>
 
         {/* Submit Collection Modal */}
         <Modal
           title={<span className="text-sm font-bold text-slate-700">Submit Collection — {submitting?.machine?.slot_code}</span>}
           open={!!submitting}
-          onCancel={() => { setSubmitting(null); setOcrResult(null); form.resetFields(); }}
+          onCancel={() => { setSubmitting(null); setMeterPhoto(null); form.resetFields(); }}
           onOk={() => form.submit()}
           confirmLoading={submitMutation.isPending}
           width={500}
           className="top-8"
         >
           <Form form={form} layout="vertical" onFinish={onFinish} className="mt-4">
-            <Form.Item label={<span className="text-xs font-semibold text-slate-600">Meter Photo <span className="text-slate-400">(Optional — OCR auto-fill)</span></span>} name="meter_image">
-              <Upload beforeUpload={() => false} onChange={handleOCR} maxCount={1} accept="image/*">
-                <Button icon={ocrLoading ? <Spin size="small" /> : <Camera className="w-4 h-4" />} disabled={ocrLoading}
-                  className="flex items-center gap-1.5">
-                  {ocrLoading ? 'Reading...' : 'Upload Photo'}
-                </Button>
-              </Upload>
+            <Form.Item label={<span className="text-xs font-semibold text-slate-600">Meter Photo</span>}>
+              <Upload.Dragger
+                beforeUpload={(file) => { setMeterPhoto(file); return false; }}
+                onRemove={() => setMeterPhoto(null)}
+                accept="image/*"
+                maxCount={1}
+                fileList={meterPhoto ? [{ uid: '-1', name: meterPhoto.name, status: 'done' }] : []}
+                className="rounded-lg"
+              >
+                <div className="flex flex-col items-center gap-1 py-2">
+                  <Camera className="w-8 h-8 text-slate-400" />
+                  <span className="text-xs text-slate-500">Tap to open camera or choose a photo</span>
+                </div>
+              </Upload.Dragger>
             </Form.Item>
 
-            {ocrResult && (
-              <Alert
-                type={ocrResult.success ? (ocrResult.needsConfirmation ? 'warning' : 'success') : 'error'}
-                message={ocrResult.success ? (ocrResult.needsConfirmation ? 'Low confidence — verify values' : 'Values auto-filled') : 'OCR failed — enter manually'}
-                className="mb-4 text-xs"
-                showIcon
-              />
+            {meterPhoto && (
+              <div className="mb-4 rounded-lg overflow-hidden border border-slate-200">
+                <img src={URL.createObjectURL(meterPhoto)} alt="Meter preview" className="w-full max-h-48 object-contain bg-slate-50" />
+              </div>
             )}
 
-            {!isNovomatic && (
-              <Form.Item name="curr_count" label={<span className="text-xs font-semibold text-slate-600">Current Counter Reading</span>} rules={[{ required: true }]}>
-                <InputNumber min={0} className="w-full" size="large" />
-              </Form.Item>
-            )}
-
-            {isNovomatic && (
-              <>
-                <Divider plain className="!text-xs !text-slate-400 !my-3">Novomatic Master Accounting Screen</Divider>
-                <Form.Item name="total_in" label={<span className="text-xs font-semibold text-slate-600">TOTAL IN (credits)</span>} rules={[{ required: true }]}>
-                  <InputNumber min={0} className="w-full" />
-                </Form.Item>
-                <Form.Item name="total_out" label={<span className="text-xs font-semibold text-slate-600">TOTAL OUT (credits)</span>} rules={[{ required: true }]}>
-                  <InputNumber min={0} className="w-full" />
-                </Form.Item>
-                <Form.Item name="coins_in" label={<span className="text-xs font-semibold text-slate-600">Coins IN (credits)</span>}>
-                  <InputNumber min={0} className="w-full" />
-                </Form.Item>
-              </>
-            )}
+            <Form.Item name="curr_count" label={<span className="text-xs font-semibold text-slate-600">Current Counter Reading</span>} rules={[{ required: true }]}>
+              <InputNumber className="w-full" size="large" />
+            </Form.Item>
 
             {submitting && (
               <Alert

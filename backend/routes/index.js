@@ -76,17 +76,25 @@ router.put('/collections/assignments/:id', authenticate, checkPermission('collec
 router.delete('/collections/assignments/:id', authenticate, checkPermission('collections', 'delete'), collectionC.deleteAssignment);
 router.get('/collections', authenticate, checkPermission('collections', 'read'), collectionC.list);
 router.post('/collections', authenticate, uploadMeter.single('meter_image'), collectionC.submit);
-router.post('/collections/ocr', authenticate, uploadMeter.single('meter_image'), collectionC.ocr);
 router.post('/collections/assignments/:id/open', authenticate, collectionC.openMachine);
 router.get('/collections/assignments/export', authenticate, checkPermission('collections', 'read'), collectionC.exportAssignments);
 router.get('/collections/weekly-targets', authenticate, checkPermission('collections', 'read'), collectionC.weeklyTargets);
-router.put('/collections/:id', authenticate, checkPermission('collections', 'update'), collectionC.update);
-router.put('/collections/:id/supervisor-approve', authenticate, checkPermission('collections', 'approve'), collectionC.supervisorApprove);
-router.delete('/collections/:id', authenticate, checkPermission('collections', 'delete'), collectionC.remove);
+router.put('/collections/:id', authenticate, uploadMeter.single('meter_image'), (req, res, next) => {
+  const allowed = ['Admin', 'General Manager', 'Operations Manager', 'Supervisor', 'Cashier'];
+  if (allowed.includes(req.user.role?.name)) return collectionC.update(req, res, next);
+  return res.status(403).json({ success: false, message: 'Permission denied' });
+});
+router.delete('/collections/:id', authenticate, (req, res, next) => {
+  const allowed = ['Admin', 'General Manager', 'Operations Manager', 'Cashier'];
+  if (allowed.includes(req.user.role?.name)) return collectionC.remove(req, res, next);
+  return res.status(403).json({ success: false, message: 'Permission denied' });
+});
 
 // ── FINANCE ───────────────────────────────────────────────────
 router.get('/finance/expenses', authenticate, checkPermission('finance', 'read'), financeC.listExpenses);
 router.post('/finance/expenses', authenticate, uploadReceipt.single('receipt'), financeC.submitExpense);
+router.put('/finance/expenses/:id', authenticate, checkPermission('finance', 'update'), uploadReceipt.single('receipt'), financeC.updateExpense);
+router.delete('/finance/expenses/:id', authenticate, checkPermission('finance', 'delete'), financeC.removeExpense);
 router.get('/finance/expenses/categories', authenticate, financeC.listCategories);
 router.get('/finance/shop-cash', authenticate, checkPermission('finance', 'read'), financeC.listShopCashDispositions);
 router.post('/finance/shop-cash', authenticate, checkPermission('finance', 'create'), uploadReceipt.fields([{ name: 'selcom_receipt', maxCount: 1 }, { name: 'bank_deposit_receipt', maxCount: 1 }]), financeC.submitShopCashDisposition);

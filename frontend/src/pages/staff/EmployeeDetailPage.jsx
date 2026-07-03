@@ -96,6 +96,7 @@ export default function EmployeeDetailPage() {
       tax_payer_id: employee.tax_payer_id,
       status: employee.status,
       user_role_id: employee.user?.role_id,
+      user_email: employee.user?.email,
       user_is_active: employee.user?.is_active !== false,
     });
     setEditOpen(true);

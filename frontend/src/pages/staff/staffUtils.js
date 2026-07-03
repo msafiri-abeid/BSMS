@@ -11,6 +11,7 @@ export const buildEmployeeFormData = (values) => {
     if (values[k] !== undefined && values[k] !== null && values[k] !== '') fd.append(k, values[k]);
   });
   if (values.user_role_id) fd.append('user_role_id', values.user_role_id);
+  if (values.user_email) fd.append('user_email', values.user_email);
   if (values.user_password) fd.append('user_password', values.user_password);
   if (values.user_is_active !== undefined) fd.append('user_is_active', values.user_is_active ? 'true' : 'false');
   (values.documents || []).forEach((f) => {

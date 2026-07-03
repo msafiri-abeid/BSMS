@@ -1,4 +1,4 @@
-const { Machine, MachineDeployment, MachineExchange, MachineRefill, Shop, Collection, TokenInventory, MachineDebt, Setting, WeeklyTarget, Expense } = require('../models');
+const { Machine, MachineDeployment, MachineExchange, MachineRefill, Shop, Collection, TokenInventory, MachineDebt, Setting, WeeklyTarget, Expense, NovomaticReading } = require('../models');
 const { Op, literal, fn, col } = require('sequelize');
 const { DEFAULT_CREDIT_VALUES } = require('../config/constants');
 
@@ -92,6 +92,12 @@ const getOne = async (id) => {
       difference: p.difference,
     }));
   }
+  const lastCollection = await Collection.findOne({
+    where: { machine_id: id },
+    order: [['collected_at', 'DESC']],
+    include: [{ model: NovomaticReading, as: 'novomaticReading', attributes: ['closing_credits'] }],
+  });
+  formatted.lastNovomaticReading = lastCollection?.novomaticReading || null;
   return formatted;
 };
 

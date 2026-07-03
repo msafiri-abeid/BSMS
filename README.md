@@ -4,6 +4,39 @@ Web application for Bentabet Ltd — managing slot machine operations, collectio
 
 ---
 
+## 🚀 Production Deployment
+
+See **[deploy/production-checklist.md](deploy/production-checklist.md)** for the full step-by-step deployment guide.
+
+**Quick start on a VPS:**
+```bash
+# Server setup
+apt install -y nginx mysql-server-8.0 certbot python3-certbot-nginx
+curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && apt install -y nodejs
+npm install -g pm2
+
+# App setup
+cd /opt/bentabet
+cd backend && npm install --production
+cd ../frontend && npm install && npm run build
+cd ../backend && pm2 start ecosystem.config.js
+
+# SSL
+certbot --nginx -d yourdomain.com
+```
+
+**Database backups** — see [BACKUP_GUIDE.md](BACKUP_GUIDE.md) for automated daily dumps with off-site sync and point-in-time recovery.
+
+| File | Purpose |
+|---|---|
+| `deploy/nginx-bentabet.conf` | nginx config with SSL, WebSocket, rate limiting |
+| `backend/ecosystem.config.js` | PM2 cluster mode config |
+| `backend/scripts/backup-db.sh` | Linux backup script |
+| `backend/scripts/backup-db.ps1` | Windows backup script |
+| `BACKUP_GUIDE.md` | Full backup & restore documentation |
+
+---
+
 ## Tech Stack
 
 | Layer | Technology |

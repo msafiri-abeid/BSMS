@@ -1,5 +1,6 @@
 // services/collection.service.js
 const { Op, literal } = require('sequelize');
+const sequelize = require('../config/database');
 const { Collection, Machine, MachineDeployment, WeeklyTarget, NovomaticReading, CollectorAssignment, Setting, Shop, User, Partner, MachineDebt, Address, Account, AccountTransaction } = require('../models');
 
 const getWeekBounds = (date = new Date()) => {
@@ -74,7 +75,7 @@ const getOrCreateWeeklyTarget = async (machineId, shopId, weekStart, weekEnd, ma
   return { target, targetTzs };
 };
 
-const payOutstandingDebts = async (machineId, amount) => {
+const payOutstandingDebts = async (machineId, amount, options = {}) => {
   if (amount <= 0) return 0;
 
   const outstandingDebts = await MachineDebt.findAll({
@@ -83,6 +84,7 @@ const payOutstandingDebts = async (machineId, amount) => {
       status: { [Op.in]: ['pending', 'partial'] },
     },
     order: [['created_at', 'ASC']],
+    ...options,
   });
 
   let remaining = amount;
@@ -102,7 +104,7 @@ const payOutstandingDebts = async (machineId, amount) => {
     } else {
       debt.status = 'partial';
     }
-    await debt.save();
+    await debt.save(options);
   }
 
   return amount - remaining;
@@ -114,87 +116,90 @@ const submitCollection = async ({ machineId, shopId, collectorId, currCount, met
 
   const isNovomatic = machine.manufacturer === 'Novomatic' && novomaticData;
 
-  let calcData;
-  let currCountFinal = currCount;
+  return sequelize.transaction(async (t) => {
+    let calcData;
+    let currCountFinal = currCount;
+    let openingCredits = 0;
 
-  if (isNovomatic) {
-    // Novomatic: no weekly target, no debt. Credits-based calculation.
-    const closingCredits = novomaticData.closing_credits;
-    // Auto-fill opening credits from previous collection if not provided
-    let openingCredits = novomaticData.opening_credits;
-    if (openingCredits === null || openingCredits === undefined) {
-      const prevCollection = await Collection.findOne({
-        where: { machine_id: machineId },
-        order: [['collected_at', 'DESC']],
-        include: [{ model: NovomaticReading, as: 'novomaticReading' }],
-      });
-      openingCredits = prevCollection?.novomaticReading?.closing_credits || machine.previous_count || machine.opening_count || 0;
+    if (isNovomatic) {
+      const closingCredits = novomaticData.closing_credits;
+      openingCredits = novomaticData.opening_credits;
+      if (openingCredits === null || openingCredits === undefined) {
+        const prevCollection = await Collection.findOne({
+          where: { machine_id: machineId },
+          order: [['collected_at', 'DESC']],
+          include: [{ model: NovomaticReading, as: 'novomaticReading' }],
+          transaction: t,
+        });
+        openingCredits = prevCollection?.novomaticReading?.closing_credits || machine.previous_count || machine.opening_count || 0;
+      }
+      calcData = calculateNovomatic(openingCredits, closingCredits, machine.credit_value_tzs);
+      currCountFinal = closingCredits;
+    } else {
+      const cycleStart = await getMachineCycleStart(machine);
+      const { weekStart, weekEnd } = cycleStart
+        ? getMachineWeekBounds(cycleStart)
+        : getWeekBounds();
+
+      const machineTarget = machine.weekly_target_tzs || null;
+      const finalTarget = machineTarget || (await Setting.findOne({ where: { key: 'weekly_target_tzs' }, transaction: t }));
+
+      const { target, targetTzs } = await getOrCreateWeeklyTarget(
+        machineId, shopId, weekStart, weekEnd,
+        finalTarget ? parseInt(finalTarget.value || finalTarget) : 120000
+      );
+
+      const alreadyCollected = target.collected_tzs || 0;
+      calcData = calculateMeteora(machine.previous_count, currCount, machine.credit_value_tzs, targetTzs, alreadyCollected);
+
+      let finalOwnerTzs = calcData.owner_tzs;
+      if (!skipDebtRepayment && calcData.owner_tzs > 0) {
+        const repaid = await payOutstandingDebts(machineId, calcData.owner_tzs, { transaction: t });
+        finalOwnerTzs = calcData.owner_tzs - repaid;
+      }
+      calcData.owner_tzs = finalOwnerTzs;
+
+      await target.increment('collected_tzs', { by: calcData.gross_tzs, transaction: t });
+      await machine.update({ previous_count: currCount }, { transaction: t });
     }
-    calcData = calculateNovomatic(openingCredits, closingCredits, machine.credit_value_tzs);
-    currCountFinal = closingCredits;
-  } else {
-    // Meteora: weekly target + debt logic
-    const cycleStart = await getMachineCycleStart(machine);
-    const { weekStart, weekEnd } = cycleStart
-      ? getMachineWeekBounds(cycleStart)
-      : getWeekBounds();
 
-    const machineTarget = machine.weekly_target_tzs || null;
-    const finalTarget = machineTarget || (await Setting.findOne({ where: { key: 'weekly_target_tzs' } }));
+    const colDate = collectionDate || new Date(Date.now() - 86400000).toISOString().split('T')[0];
 
-    const { target, targetTzs } = await getOrCreateWeeklyTarget(
-      machineId, shopId, weekStart, weekEnd,
-      finalTarget ? parseInt(finalTarget.value || finalTarget) : 120000
-    );
+    const collection = await Collection.create({
+      machine_id: machineId,
+      shop_id: shopId,
+      collector_id: collectorId,
+      prev_count: isNovomatic ? (novomaticData?.opening_credits ?? machine.previous_count) : machine.previous_count,
+      curr_count: currCountFinal,
+      difference: calcData.difference,
+      credit_value_tzs: machine.credit_value_tzs,
+      gross_tzs: calcData.gross_tzs,
+      office_tzs: calcData.office_tzs,
+      owner_tzs: calcData.owner_tzs,
+      net_tzs: calcData.net_tzs,
+      meter_image_url: meterImageUrl,
+      collection_date: colDate,
+      collected_at: new Date(),
+    }, { transaction: t });
 
-    const alreadyCollected = target.collected_tzs || 0;
-    calcData = calculateMeteora(machine.previous_count, currCount, machine.credit_value_tzs, targetTzs, alreadyCollected);
-
-    // Debt-first: apply excess to outstanding debts before creating owner commission
-    let finalOwnerTzs = calcData.owner_tzs;
-    if (!skipDebtRepayment && calcData.owner_tzs > 0) {
-      const repaid = await payOutstandingDebts(machineId, calcData.owner_tzs);
-      finalOwnerTzs = calcData.owner_tzs - repaid;
+    if (isNovomatic) {
+      await NovomaticReading.create({
+        collection_id: collection.id,
+        opening_credits: openingCredits,
+        closing_credits: novomaticData.closing_credits,
+        total_credits: calcData.total_credits,
+        screenshot_url: novomaticData.screenshot_url || meterImageUrl,
+        read_at: new Date(),
+      }, { transaction: t });
+      await machine.update({ previous_count: novomaticData.closing_credits }, { transaction: t });
     }
-    calcData.owner_tzs = finalOwnerTzs;
 
-    await target.increment('collected_tzs', { by: calcData.gross_tzs });
-    await machine.update({ previous_count: currCount });
-  }
+    if (assignmentId) {
+      await CollectorAssignment.update({ status: 'done' }, { where: { id: assignmentId }, transaction: t });
+    }
 
-  const colDate = collectionDate || new Date(Date.now() - 86400000).toISOString().split('T')[0];
-
-  const collection = await Collection.create({
-    machine_id: machineId,
-    shop_id: shopId,
-    collector_id: collectorId,
-    prev_count: isNovomatic ? (novomaticData?.opening_credits ?? machine.previous_count) : machine.previous_count,
-    curr_count: currCountFinal,
-    difference: calcData.difference,
-    credit_value_tzs: machine.credit_value_tzs,
-    gross_tzs: calcData.gross_tzs,
-    office_tzs: calcData.office_tzs,
-    owner_tzs: calcData.owner_tzs,
-    net_tzs: calcData.net_tzs,
-    meter_image_url: meterImageUrl,
-    collection_date: colDate,
-    collected_at: new Date(),
+    return collection;
   });
-
-  if (isNovomatic) {
-    await NovomaticReading.create({
-      collection_id: collection.id,
-      opening_credits: novomaticData.opening_credits ?? openingCredits,
-      closing_credits: novomaticData.closing_credits,
-      total_credits: calcData.total_credits,
-      screenshot_url: novomaticData.screenshot_url || meterImageUrl,
-      read_at: new Date(),
-    });
-  }
-
-  if (assignmentId) await CollectorAssignment.update({ status: 'done' }, { where: { id: assignmentId } });
-
-  return collection;
 };
 
 const getCollections = async (filters = {}, user) => {
@@ -204,6 +209,7 @@ const getCollections = async (filters = {}, user) => {
   if (filters.machine_id) where.machine_id = filters.machine_id;
   if (filters.shop_id) where.shop_id = filters.shop_id;
   if (filters.collector_id) where.collector_id = filters.collector_id;
+  if (filters.status) where.status = filters.status;
   // manufacturer filter handled via include.where below
   if (filters.date) {
     where.collection_date = filters.date;
@@ -256,10 +262,62 @@ const getCollections = async (filters = {}, user) => {
 };
 
 const updateCollection = async (id, data) => {
-  const collection = await Collection.findByPk(id);
+  const collection = await Collection.findByPk(id, {
+    include: [{ model: NovomaticReading, as: 'novomaticReading' }]
+  });
   if (!collection) return null;
-  await collection.update(data);
-  return collection;
+
+  return sequelize.transaction(async (t) => {
+    const updateData = { ...data };
+    delete updateData.collector_id;
+    delete updateData.machine_id;
+    delete updateData.shop_id;
+
+    // Handle Novomatic meter reading + recalculation
+    if (data.novomatic_data) {
+      const nd = typeof data.novomatic_data === 'string'
+        ? JSON.parse(data.novomatic_data)
+        : data.novomatic_data;
+      delete updateData.novomatic_data;
+
+      const machine = await Machine.findByPk(collection.machine_id, { transaction: t });
+      if (!machine) throw new Error('Machine not found');
+
+      const totalCredits = nd.closing_credits - nd.opening_credits;
+
+      // Update NovomaticReading record
+      const nrUpdate = {
+        opening_credits: nd.opening_credits,
+        closing_credits: nd.closing_credits,
+        total_credits: totalCredits,
+        screenshot_url: 'meter_image_url' in data ? (data.meter_image_url || null) : collection.novomaticReading?.screenshot_url,
+        read_at: new Date(),
+      };
+      await NovomaticReading.update(nrUpdate, {
+        where: { collection_id: id },
+        transaction: t,
+      });
+
+      // Update machine previous_count for next collection
+      await machine.update({ previous_count: nd.closing_credits }, { transaction: t });
+
+      // Update Collection meter-derived fields
+      Object.assign(updateData, {
+        prev_count: nd.opening_credits,
+        curr_count: nd.closing_credits,
+        difference: totalCredits,
+        credit_value_tzs: machine.credit_value_tzs,
+      });
+    }
+
+    if ('meter_image_url' in data) {
+      updateData.meter_image_url = data.meter_image_url || null;
+    }
+
+    await collection.update(updateData, { transaction: t });
+    // Reload to return fresh state
+    return collection.reload({ transaction: t });
+  });
 };
 
 const removeCollection = async (id) => {
@@ -267,18 +325,6 @@ const removeCollection = async (id) => {
   if (!collection) return false;
   await collection.destroy();
   return true;
-};
-
-const supervisorApprove = async (id, userId) => {
-  const collection = await Collection.findByPk(id);
-  if (!collection) return null;
-  if (collection.status !== 'pending') throw new Error('Collection is not in pending status');
-  await collection.update({
-    status: 'supervisor_approved',
-    supervisor_approved_by: userId,
-    supervisor_approved_at: new Date(),
-  });
-  return collection;
 };
 
 const getAssignments = async (filters = {}) => {
@@ -357,4 +403,4 @@ const exportAssignmentsExcel = async (filters = {}) => {
   return wb.xlsx.writeBuffer();
 };
 
-module.exports = { submitCollection, getCollections, getWeekBounds, getMachineWeekBounds, calculateMeteora, calculateNovomatic, updateCollection, removeCollection, supervisorApprove, getAssignments, updateAssignment, removeAssignment, exportAssignmentsExcel };
+module.exports = { submitCollection, getCollections, getWeekBounds, getMachineWeekBounds, calculateMeteora, calculateNovomatic, updateCollection, removeCollection, getAssignments, updateAssignment, removeAssignment, exportAssignmentsExcel };

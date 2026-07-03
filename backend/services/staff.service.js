@@ -275,7 +275,16 @@ const updateEmployee = async (id, data) => {
     const userUpdates = {};
     if (user_role_id) userUpdates.role_id = user_role_id;
     if (user_password) userUpdates.password_hash = await bcrypt.hash(user_password, BCRYPT_ROUNDS);
-    if (user_email) userUpdates.email = user_email;
+    if (safe.full_name) userUpdates.name = safe.full_name;
+    if (safe.phone) userUpdates.phone = safe.phone;
+    const newEmail = user_email || safe.email;
+    if (newEmail) {
+      const existingUser = await User.findOne({ where: { email: newEmail } });
+      if (existingUser && existingUser.id !== employee.user_id) {
+        throw new Error('Email already in use by another user account');
+      }
+      userUpdates.email = newEmail;
+    }
     if (user_is_active !== undefined) userUpdates.is_active = user_is_active;
     if (Object.keys(userUpdates).length) {
       await User.update(userUpdates, { where: { id: employee.user_id } });

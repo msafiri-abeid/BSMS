@@ -1,6 +1,5 @@
 // controllers/collection.controller.js
-const { submitCollection, getCollections, updateCollection, removeCollection, supervisorApprove, getAssignments, updateAssignment, removeAssignment } = require('../services/collection.service');
-const { extractMeterReading } = require('../services/ocr.service');
+const { submitCollection, getCollections, updateCollection, removeCollection, getAssignments, updateAssignment, removeAssignment } = require('../services/collection.service');
 const { Machine, CollectorAssignment, WeeklyTarget, Collection } = require('../models');
 const { Op } = require('sequelize');
 const { cloudinary } = require('../middleware/upload');
@@ -39,16 +38,6 @@ const submit = async (req, res, next) => {
     });
 
     res.status(201).json({ success: true, data: collection });
-  } catch (err) { next(err); }
-};
-
-const ocr = async (req, res, next) => {
-  try {
-    if (!req.file) return res.status(400).json({ success: false, message: 'No image uploaded' });
-    const machine = await Machine.findByPk(req.body.machine_id);
-    if (!machine) return res.status(404).json({ success: false, message: 'Machine not found' });
-    const result = await extractMeterReading(req.file.buffer, machine.manufacturer);
-    res.json({ success: true, data: result });
   } catch (err) { next(err); }
 };
 
@@ -110,10 +99,44 @@ const openMachine = async (req, res, next) => {
 
 const update = async (req, res, next) => {
   try {
-    const allowed = ['Admin', 'General Manager', 'Operations Manager'];
-    if (!allowed.includes(req.user.role?.name)) {
+    const allowed = ['Admin', 'General Manager', 'Operations Manager', 'Supervisor'];
+    const roleName = req.user.role?.name;
+    let meterImageUrl = null;
+
+    // Cashier: only own pending collections, cannot approve
+    if (roleName === 'Cashier') {
+      const existing = await Collection.findByPk(req.params.id, {
+        attributes: ['id', 'collector_id', 'status'],
+      });
+      if (!existing) return res.status(404).json({ success: false, message: 'Collection not found' });
+      if (existing.collector_id !== req.user.id) {
+        return res.status(403).json({ success: false, message: 'You can only edit your own collections' });
+      }
+      if (existing.status !== 'pending') {
+        return res.status(403).json({ success: false, message: 'Can only edit pending collections' });
+      }
+      if (req.body.status === 'approved') {
+        delete req.body.status;
+      }
+    } else if (!allowed.includes(roleName)) {
       return res.status(403).json({ success: false, message: 'Permission denied' });
     }
+
+    // Handle meter image re-upload
+    if (req.file) {
+      meterImageUrl = await new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          { folder: 'bentabet/meters' },
+          (err, result) => {
+            if (err) reject(err);
+            else resolve(result.secure_url);
+          }
+        );
+        stream.end(req.file.buffer);
+      });
+      req.body.meter_image_url = meterImageUrl;
+    }
+
     if (req.body.status === 'approved') {
       req.body.approved_by = req.user.id;
       req.body.approved_at = new Date();
@@ -127,9 +150,23 @@ const update = async (req, res, next) => {
 const remove = async (req, res, next) => {
   try {
     const allowed = ['Admin', 'General Manager', 'Operations Manager'];
-    if (!allowed.includes(req.user.role?.name)) {
+    const roleName = req.user.role?.name;
+
+    if (roleName === 'Cashier') {
+      const existing = await Collection.findByPk(req.params.id, {
+        attributes: ['id', 'collector_id', 'status'],
+      });
+      if (!existing) return res.status(404).json({ success: false, message: 'Collection not found' });
+      if (existing.collector_id !== req.user.id) {
+        return res.status(403).json({ success: false, message: 'You can only delete your own collections' });
+      }
+      if (existing.status !== 'pending') {
+        return res.status(403).json({ success: false, message: 'Can only delete pending collections' });
+      }
+    } else if (!allowed.includes(roleName)) {
       return res.status(403).json({ success: false, message: 'Permission denied' });
     }
+
     const deleted = await removeCollection(req.params.id);
     if (!deleted) return res.status(404).json({ success: false, message: 'Collection not found' });
     res.json({ success: true, message: 'Collection deleted successfully' });
@@ -182,18 +219,6 @@ const deleteAssignment = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-const supervisorApproveHandler = async (req, res, next) => {
-  try {
-    const allowed = ['Supervisor', 'Admin', 'General Manager', 'Operations Manager'];
-    if (!allowed.includes(req.user.role?.name)) {
-      return res.status(403).json({ success: false, message: 'Permission denied' });
-    }
-    const collection = await supervisorApprove(req.params.id, req.user.id);
-    if (!collection) return res.status(404).json({ success: false, message: 'Collection not found' });
-    res.json({ success: true, data: collection });
-  } catch (err) { next(err); }
-};
-
 const exportAssignments = async (req, res, next) => {
   try {
     if (!assignAllowed(req.user)) return res.status(403).json({ success: false, message: 'Permission denied' });
@@ -204,4 +229,4 @@ const exportAssignments = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { submit, ocr, list, myAssignments, createAssignment, openMachine, update, remove, weeklyTargets, listAssignments, editAssignment, deleteAssignment, supervisorApprove: supervisorApproveHandler, exportAssignments };
+module.exports = { submit, list, myAssignments, createAssignment, openMachine, update, remove, weeklyTargets, listAssignments, editAssignment, deleteAssignment, exportAssignments };

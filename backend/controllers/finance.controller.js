@@ -31,6 +31,21 @@ const approveExpense = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+const updateExpense = async (req, res, next) => {
+  try {
+    const receipt_url = req.file?.path;
+    const expense = await financeService.updateExpense(req.params.id, { ...req.body, receipt_url }, req.user.id);
+    res.json({ success: true, data: expense });
+  } catch (err) { next(err); }
+};
+
+const removeExpense = async (req, res, next) => {
+  try {
+    await financeService.removeExpense(req.params.id);
+    res.json({ success: true, message: 'Expense deleted' });
+  } catch (err) { next(err); }
+};
+
 const listCategories = async (req, res, next) => {
   try {
     const data = await ExpenseCategory.findAll({ where: { is_active: true }, order: [['name', 'ASC']] });
@@ -261,7 +276,7 @@ const accountReport = async (req, res, next) => {
 };
 
 module.exports = {
-  submitExpense, getPendingExpenses, approveExpense, listExpenses, listCategories,
+  submitExpense, updateExpense, removeExpense, getPendingExpenses, approveExpense, listExpenses, listCategories,
   createInvoice, listInvoices, downloadInvoicePDF, recordPayment, listPayroll, createPayroll, exportCollections,
   listAccounts, createAccount, getAccount, updateAccount, deleteAccount,
   listTransactions, transferAccounts,

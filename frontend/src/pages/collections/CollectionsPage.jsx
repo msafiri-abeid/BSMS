@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Table, Tag, Button, Space, DatePicker, Select, Input, Typography, Empty, Modal, App, Image, List, Segmented } from 'antd';
+import { Table, Tag, Button, Space, DatePicker, Select, Input, InputNumber, Typography, Empty, Modal, App, Image, List, Segmented, Upload } from 'antd';
 import { Download, Plus, Eye, Edit3, Trash2, Camera, Search, X, CheckCircle, XCircle, FileDown, TrendingUp, ShieldCheck, ClipboardList, Calendar } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { collectionsAPI, financeAPI, shopsAPI, usersAPI } from '../../services/api';
@@ -29,7 +29,20 @@ export default function CollectionsPage() {
   const canWrite = ['create', 'update', 'delete'].some(a => hasPermission('collections', a));
   const roleName = useAuthStore((s) => s.user?.role?.name);
   const canAssign = canWrite && ['Admin', 'General Manager', 'Operations Manager'].includes(roleName);
-  const isSupervisor = roleName === 'Supervisor';
+  const canApprove = ['Admin', 'General Manager', 'Operations Manager', 'Supervisor'].includes(roleName);
+  const userId = useAuthStore((s) => s.user?.id);
+
+  // Edit modal local state
+  const [editStatus, setEditStatus] = useState('pending');
+  const [editDate, setEditDate] = useState(null);
+  const [editOpening, setEditOpening] = useState(0);
+  const [editClosing, setEditClosing] = useState(0);
+  const [editGross, setEditGross] = useState(0);
+  const [editOffice, setEditOffice] = useState(0);
+  const [editOwner, setEditOwner] = useState(0);
+  const [editCreditValue, setEditCreditValue] = useState(10);
+  const [editFileList, setEditFileList] = useState([]);
+  const [editRemoveImage, setEditRemoveImage] = useState(false);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['collections', filters],
@@ -48,12 +61,12 @@ export default function CollectionsPage() {
 
   useEffect(() => {
     if (roleName === 'Cashier') {
-      setFilters(f => ({ ...f, manufacturer: 'Novomatic', date: dayjs().format('YYYY-MM-DD') }));
+      setFilters(f => ({ ...f, manufacturer: 'Novomatic', date: dayjs().subtract(1, 'day').format('YYYY-MM-DD') }));
     }
   }, [roleName]);
   useEffect(() => {
     if (isNovomaticFilter && !filters.date) {
-      setFilters(f => ({ ...f, date: dayjs().format('YYYY-MM-DD') }));
+      setFilters(f => ({ ...f, date: dayjs().subtract(1, 'day').format('YYYY-MM-DD') }));
     }
   }, [isNovomaticFilter]);
   const approvedRows = rows.filter(c => c.status === 'approved');
@@ -62,6 +75,89 @@ export default function CollectionsPage() {
     office: acc.office + (c.status === 'approved' ? (c.office_tzs || 0) : 0),
     owner: acc.owner + (c.status === 'approved' ? (c.owner_tzs || 0) : 0),
   }), { gross: 0, office: 0, owner: 0 });
+
+  // Initialize edit form when opening a record for editing
+  useEffect(() => {
+    if (editRecord) {
+      const nr = editRecord.novomaticReading || {};
+      const cv = editRecord.credit_value_tzs || editRecord.machine?.credit_value_tzs || 10;
+      setEditStatus(editRecord.status);
+      setEditDate(editRecord.collection_date || null);
+      setEditOpening(nr.opening_credits ?? editRecord.prev_count ?? 0);
+      setEditClosing(nr.closing_credits ?? editRecord.curr_count ?? 0);
+      setEditGross(editRecord.gross_tzs || 0);
+      setEditOffice(editRecord.office_tzs || 0);
+      setEditOwner(editRecord.owner_tzs || 0);
+      setEditCreditValue(cv);
+      setEditFileList([]);
+      setEditRemoveImage(false);
+    }
+  }, [editRecord]);
+
+  // Auto-recalculate gross when meter readings change (Novomatic, read-only display)
+  useEffect(() => {
+    if (editRecord?.machine?.manufacturer === 'Novomatic') {
+      setEditGross(Math.max(0, (editClosing - editOpening) * editCreditValue));
+    }
+  }, [editClosing, editOpening, editCreditValue, editRecord]);
+
+  const handleEditClose = () => {
+    setEditRecord(null);
+    setEditStatus('pending');
+    setEditDate(null);
+    setEditOpening(0);
+    setEditClosing(0);
+    setEditGross(0);
+    setEditOffice(0);
+    setEditOwner(0);
+    setEditCreditValue(10);
+    setEditFileList([]);
+    setEditRemoveImage(false);
+  };
+
+  const handleEditSave = async () => {
+    if (!editRecord) return;
+    try {
+      const isNovomatic = editRecord.machine?.manufacturer === 'Novomatic';
+      const hasNewImage = editFileList[0]?.originFileObj;
+
+      const payload = {
+        status: editStatus,
+        gross_tzs: editGross,
+      };
+      if (editDate) payload.collection_date = editDate;
+
+      if (isNovomatic) {
+        payload.novomatic_data = JSON.stringify({
+          opening_credits: editOpening,
+          closing_credits: editClosing,
+        });
+      } else {
+        payload.office_tzs = editOffice;
+        payload.owner_tzs = editOwner;
+      }
+
+      if (editRemoveImage && !hasNewImage) {
+        payload.meter_image_url = '';
+      }
+
+      if (hasNewImage) {
+        const fd = new FormData();
+        Object.entries(payload).forEach(([k, v]) => fd.append(k, v));
+        fd.append('meter_image', editFileList[0].originFileObj);
+        await collectionsAPI.update(editRecord.id, fd);
+      } else {
+        await collectionsAPI.update(editRecord.id, payload);
+      }
+
+      message.success('Collection updated');
+      handleEditClose();
+      qc.invalidateQueries({ queryKey: ['collections'] });
+      qc.invalidateQueries({ queryKey: ['machine-stats'] });
+    } catch (e) {
+      message.error(e.response?.data?.message || 'Update failed');
+    }
+  };
 
   const removeMutation = useMutation({
     mutationFn: (id) => collectionsAPI.remove(id),
@@ -119,14 +215,6 @@ export default function CollectionsPage() {
   const handleAction = (key, r) => {
     if (key === 'view') setViewRecord(r);
     if (key === 'edit') setEditRecord(r);
-    if (key === 'supervisor_approve') {
-      Modal.confirm({
-        title: 'Supervisor Approve Collection',
-        content: `Approve collection for ${r.machine?.slot_code} as supervisor?`,
-        okText: 'Approve', okCancel: true,
-        onOk: () => supervisorApproveMutation.mutate(r.id),
-      });
-    }
     if (key === 'delete') {
       Modal.confirm({
         title: 'Delete Collection',
@@ -137,25 +225,15 @@ export default function CollectionsPage() {
     }
   };
 
-  const supervisorApproveMutation = useMutation({
-    mutationFn: (id) => collectionsAPI.supervisorApprove(id),
-    onSuccess: () => {
-      message.success('Collection supervisor-approved');
-      qc.invalidateQueries({ queryKey: ['collections'] });
-      qc.invalidateQueries({ queryKey: ['machine-stats'] });
-    },
-    onError: (e) => message.error(e.response?.data?.message || 'Failed'),
-  });
-
   const actionItems = (r) => {
     const items = [
       { key: 'view', icon: <Eye className="w-4 h-4" />, label: 'View' },
     ];
-    if (isSupervisor && r.status === 'pending') {
-      items.push({ key: 'supervisor_approve', icon: <ShieldCheck className="w-4 h-4" />, label: 'Supervisor Approve' });
-    }
-    if (canWrite) {
-      items.push({ key: 'edit', icon: <Edit3 className="w-4 h-4" />, label: 'Edit' });
+    const isOwnPending = r.collector_id === userId && r.status === 'pending';
+    const canEditRow = canWrite || (roleName === 'Cashier' && isOwnPending);
+    const canDeleteRow = (canWrite && ['Admin', 'General Manager', 'Operations Manager'].includes(roleName)) || (roleName === 'Cashier' && isOwnPending);
+    if (canEditRow) items.push({ key: 'edit', icon: <Edit3 className="w-4 h-4" />, label: 'Edit' });
+    if (canDeleteRow) {
       items.push({ type: 'divider' });
       items.push({ key: 'delete', icon: <Trash2 className="w-4 h-4" />, label: 'Delete', danger: true });
     }
@@ -459,17 +537,7 @@ export default function CollectionsPage() {
         footer={
           viewRecord ? (
             <Space>
-              {isSupervisor && viewRecord.status === 'pending' && (
-                  <Button icon={<ShieldCheck className="w-4 h-4" />}
-                    onClick={() => {
-                      supervisorApproveMutation.mutate(viewRecord.id);
-                      setViewRecord(null);
-                    }}
-                    className="flex items-center gap-1.5 !bg-blue-600 hover:!bg-blue-700 border-none text-white">
-                    Supervisor Approve
-                  </Button>
-                )}
-              {canWrite && ['Admin', 'General Manager', 'Operations Manager'].includes(roleName) && viewRecord.status === 'pending' && (
+              {canApprove && viewRecord.status === 'pending' && (
                 <>
                   <Button icon={<CheckCircle className="w-4 h-4" />}
                     onClick={() => {
@@ -553,48 +621,126 @@ export default function CollectionsPage() {
       <Modal
         title={<span className="text-sm font-bold text-slate-700">Edit Collection — {editRecord?.machine?.slot_code}</span>}
         open={!!editRecord}
-        onCancel={() => setEditRecord(null)}
-        onOk={() => {
-          if (!editRecord) return;
-          collectionsAPI.update(editRecord.id, editRecord).then(() => {
-            message.success('Collection updated');
-            setEditRecord(null);
-            qc.invalidateQueries({ queryKey: ['collections'] });
-          }).catch(e => message.error(e.response?.data?.message || 'Update failed'));
-        }}
+        onCancel={handleEditClose}
+        onOk={handleEditSave}
         okText="Save"
-        width={480}
+        width={520}
         className="top-8"
+        okButtonProps={{ className: '!bg-brand-dark rounded-lg' }}
+        cancelButtonProps={{ className: 'rounded-lg' }}
       >
         {editRecord && (
-          <div className="space-y-3 mt-4">
-            <div>
-              <Text className="text-xs font-semibold text-slate-500 block mb-1">Status</Text>
-              <Select value={editRecord.status} className="w-full"
-                onChange={(v) => setEditRecord({ ...editRecord, status: v })}>
-                <Option value="pending">Pending</Option>
-                <Option value="approved">Approved</Option>
-                <Option value="disputed">Disputed</Option>
-              </Select>
-            </div>
-            <div>
-              <Text className="text-xs font-semibold text-slate-500 block mb-1">Gross (TZS)</Text>
-              <Input type="number" value={editRecord.gross_tzs}
-                onChange={(e) => setEditRecord({ ...editRecord, gross_tzs: Number(e.target.value) })}
-                className="w-full" />
-            </div>
-            <div>
-              <Text className="text-xs font-semibold text-slate-500 block mb-1">Office Share (TZS)</Text>
-              <Input type="number" value={editRecord.office_tzs}
-                onChange={(e) => setEditRecord({ ...editRecord, office_tzs: Number(e.target.value) })}
-                className="w-full" />
-            </div>
-            <div>
-              <Text className="text-xs font-semibold text-slate-500 block mb-1">Owner Share (TZS)</Text>
-              <Input type="number" value={editRecord.owner_tzs}
-                onChange={(e) => setEditRecord({ ...editRecord, owner_tzs: Number(e.target.value) })}
-                className="w-full" />
-            </div>
+          <div className="space-y-4 mt-4">
+            {/* Status */}
+            {canApprove ? (
+              <div>
+                <Text className="text-xs font-semibold text-slate-500 block mb-1">Status</Text>
+                <Select value={editStatus} className="w-full" onChange={setEditStatus}>
+                  <Option value="pending">Pending</Option>
+                  <Option value="approved">Approved</Option>
+                  <Option value="disputed">Disputed</Option>
+                </Select>
+              </div>
+            ) : (
+              <div>
+                <Text className="text-xs font-semibold text-slate-500 block mb-1">Status</Text>
+                <Tag color={editStatus === 'approved' ? 'green' : editStatus === 'disputed' ? 'red' : 'orange'} className="!text-[10px] uppercase">{editStatus}</Tag>
+              </div>
+            )}
+
+            {/* Collection Date — editable by Admin/GM/Ops only */}
+            {['Admin', 'General Manager', 'Operations Manager'].includes(roleName) && (
+              <div>
+                <Text className="text-xs font-semibold text-slate-500 block mb-1">Collection Date</Text>
+                <DatePicker value={editDate ? dayjs(editDate) : null} className="w-full"
+                  onChange={(d) => setEditDate(d ? d.format('YYYY-MM-DD') : null)} />
+              </div>
+            )}
+
+            {editRecord.machine?.manufacturer === 'Novomatic' ? (
+              <>
+                {/* Credit Value (read-only) */}
+                <div>
+                  <Text className="text-xs font-semibold text-slate-500 block mb-1">Credit Value</Text>
+                  <span className="font-semibold text-slate-700">TZS {editCreditValue.toLocaleString()}</span>
+                </div>
+
+                {/* Opening Meter */}
+                <div>
+                  <Text className="text-xs font-semibold text-slate-500 block mb-1">Opening Meter (credits)</Text>
+                  <InputNumber value={editOpening} className="w-full rounded-lg h-9 font-mono" disabled />
+                </div>
+
+                {/* Closing Meter */}
+                <div>
+                  <Text className="text-xs font-semibold text-slate-500 block mb-1">Closing Meter (TOTAL IN-OUT)</Text>
+                  <InputNumber value={editClosing} className="w-full rounded-lg h-9 font-mono"
+                    onChange={setEditClosing} />
+                </div>
+
+                {/* Gross Amount (read-only) */}
+                <div>
+                  <Text className="text-xs font-semibold text-slate-500 block mb-1">Gross Amount (TZS)</Text>
+                  <div className="p-2 rounded-lg bg-slate-50 border border-slate-200">
+                    <span className="font-semibold text-slate-700">TZS {(editGross || 0).toLocaleString()}</span>
+                  </div>
+                  <div className="text-xs text-slate-400 mt-1">
+                    ({Number(editClosing - editOpening).toLocaleString()} credits &times; TZS {editCreditValue.toLocaleString()}) = TZS {((editClosing - editOpening) * editCreditValue).toLocaleString()}
+                  </div>
+                </div>
+
+                {/* Meter Photo */}
+                <div>
+                  <Text className="text-xs font-semibold text-slate-500 block mb-1">Meter Photo</Text>
+                  {editRecord.meter_image_url && !editRemoveImage ? (
+                    <div className="flex items-center gap-2 mb-2">
+                      <Image src={editRecord.meter_image_url} className="max-h-16 rounded border border-slate-200" preview={{ mask: 'View' }} />
+                      <Button size="small" icon={<Trash2 className="w-3 h-3" />}
+                        onClick={() => setEditRemoveImage(true)}
+                        className="flex items-center gap-1 !text-xs text-red-500 hover:!border-red-400">
+                        Remove
+                      </Button>
+                    </div>
+                  ) : editRecord.meter_image_url && editRemoveImage ? (
+                    <div className="flex items-center gap-2 mb-2 text-xs text-slate-400">
+                      <Camera className="w-4 h-4" /> Current image will be removed. Upload a new one below if needed.
+                    </div>
+                  ) : null}
+                  <Upload.Dragger
+                    fileList={editFileList}
+                    beforeUpload={(file) => { setEditFileList([file]); return false; }}
+                    onRemove={() => setEditFileList([])}
+                    accept="image/*"
+                    maxCount={1}
+                    className="rounded-lg"
+                  >
+                    <div className="flex flex-col items-center gap-1 py-2">
+                      <Camera className="w-6 h-6 text-slate-400" />
+                      <Text className="text-xs text-slate-500">Tap to replace meter photo</Text>
+                    </div>
+                  </Upload.Dragger>
+                </div>
+              </>
+            ) : (
+              <>
+                {/* Gross, Office, Owner for Meteora */}
+                <div>
+                  <Text className="text-xs font-semibold text-slate-500 block mb-1">Gross (TZS)</Text>
+                  <InputNumber value={editGross} className="w-full rounded-lg h-9"
+                    onChange={setEditGross} />
+                </div>
+                <div>
+                  <Text className="text-xs font-semibold text-slate-500 block mb-1">Office Share (TZS)</Text>
+                  <InputNumber value={editOffice} className="w-full rounded-lg h-9"
+                    onChange={setEditOffice} />
+                </div>
+                <div>
+                  <Text className="text-xs font-semibold text-slate-500 block mb-1">Owner Share (TZS)</Text>
+                  <InputNumber value={editOwner} className="w-full rounded-lg h-9"
+                    onChange={setEditOwner} />
+                </div>
+              </>
+            )}
           </div>
         )}
       </Modal>

@@ -161,11 +161,20 @@ export default function EmployeeFormModal({
               </div>
 
               {hasExistingUser && (
-                <div className="mt-2">
-                  <Form.Item name="user_is_active" label={<span className="text-xs font-semibold text-slate-600">Active</span>} valuePropName="checked" initialValue={editing?.user?.is_active !== false}>
-                    <Switch />
-                  </Form.Item>
-                </div>
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 mt-2">
+                    <Form.Item
+                      name="user_email"
+                      label={<span className="text-xs font-semibold text-slate-600">Login Email</span>}
+                      rules={[{ type: 'email', message: 'Enter a valid email' }]}
+                    >
+                      <Input type="email" placeholder="Login email address" />
+                    </Form.Item>
+                    <Form.Item name="user_is_active" label={<span className="text-xs font-semibold text-slate-600">Active</span>} valuePropName="checked" initialValue={editing?.user?.is_active !== false}>
+                      <Switch />
+                    </Form.Item>
+                  </div>
+                </>
               )}
 
               {(!editing || showCreateUser) && (

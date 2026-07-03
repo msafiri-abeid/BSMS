@@ -131,6 +131,8 @@ module.exports = async () => {
         }
       }
       await Permission.findOrCreate({ where: { role_id: role.id, module: 'shops', action: 'read' } });
+      await Permission.findOrCreate({ where: { role_id: role.id, module: 'finance', action: 'read' } });
+      await Permission.findOrCreate({ where: { role_id: role.id, module: 'finance', action: 'create' } });
     }
   }
 

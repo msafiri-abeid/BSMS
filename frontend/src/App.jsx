@@ -55,6 +55,7 @@ import BusinessManagementTab from './pages/settings/BusinessManagementTab';
 import SystemTab from './pages/settings/SystemTab';
 
 import NotFoundPage from './pages/NotFoundPage';
+import ErrorBoundary from './components/ErrorBoundary';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -77,6 +78,7 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AntApp>
+        <ErrorBoundary>
         <BrowserRouter>
           <Routes>
             <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
@@ -141,6 +143,7 @@ export default function App() {
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
         </BrowserRouter>
+        </ErrorBoundary>
       </AntApp>
     </QueryClientProvider>
   );

@@ -32,6 +32,10 @@ const start = async () => {
         await sequelize.sync({ force: true });
       }
       console.log('[DB] Models synced' + (force ? ' (tables recreated)' : ''));
+    } else if (process.env.NODE_ENV === 'production') {
+      // PRODUCTION: Only create missing tables, NEVER alter or drop
+      await sequelize.sync();
+      console.log('[DB] Production mode: new tables created, existing ones untouched');
     }
 
     await seedDefaults();

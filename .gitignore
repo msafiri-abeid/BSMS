@@ -8,6 +8,7 @@ node_modules/
 # logs
 logs/
 *.log
+backend/logs/
 
 # build files
 build/
@@ -55,6 +56,10 @@ coverage/
 # Documentation
 CLAUDE.md
 AGENTS.md
+
+# Google Service Account Keys (CRITICAL — never commit)
+backend/bentabet-vision-key.json
+backend/*-key.json
 
 # Local Configuration
 opencode.json

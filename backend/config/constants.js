@@ -30,11 +30,6 @@ module.exports = {
     BASE_URL: 'https://apisms.beem.africa/v1',
   },
 
-  GOOGLE_VISION: {
-    PROJECT_ID: process.env.GOOGLE_CLOUD_PROJECT,
-    KEY_FILENAME: process.env.GOOGLE_APPLICATION_CREDENTIALS,
-  },
-
   DEFAULT_WEEKLY_TARGET: 120000, // TZS
   DEFAULT_CREDIT_VALUES: {
     Meteora: 200,
