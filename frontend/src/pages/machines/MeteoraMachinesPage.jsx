@@ -3,6 +3,7 @@ import { Table, Button, Modal, Form, Input, Select, Tag, Space, InputNumber, App
 import { FileText, Clock, Building2, TrendingUp, Download, Plus, UserPlus, Eye, Edit, Trash2, Search, X, FileDown } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { machinesAPI, shopsAPI } from '../../services/api';
+import { useAuthStore } from '../../store/authStore';
 import { useNavigate } from 'react-router-dom';
 import KpiCard from '../../components/KpiCard';
 import ActionMenu from '../../components/ActionMenu';
@@ -14,6 +15,7 @@ const { Option } = Select;
 const STATUS_COLORS = { active: 'green', inactive: 'default', maintenance: 'orange', transferred: 'blue' };
 
 export default function MeteoraMachinesPage() {
+  const { hasPermission } = useAuthStore();
   const [registerOpen, setRegisterOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(null);
   const [deleteOpen, setDeleteOpen] = useState(null);
@@ -185,10 +187,12 @@ export default function MeteoraMachinesPage() {
           <h4 className="text-base font-bold text-slate-800 m-0">Meteora Machines</h4>
           <span className="text-xs text-slate-500">{machines?.count || 0} total</span>
         </div>
-        <Button type="primary" icon={<Plus size={14} />} onClick={() => setRegisterOpen(true)}
-          className="!bg-brand-dark hover:!bg-brand-light border-none shadow-sm flex items-center gap-1.5 text-white">
-          Register Machine
-        </Button>
+        {hasPermission('machines', 'create') && (
+          <Button type="primary" icon={<Plus size={14} />} onClick={() => setRegisterOpen(true)}
+            className="!bg-brand-dark hover:!bg-brand-light border-none shadow-sm flex items-center gap-1.5 text-white">
+            Register Machine
+          </Button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">

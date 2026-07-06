@@ -29,8 +29,10 @@ export default function ExpensesPage() {
   const [dateFilter, setDateFilter] = useState('');
   const { message, modal } = App.useApp();
   const qc = useQueryClient();
-  const { hasPermission } = useAuthStore();
+  const { hasPermission, user } = useAuthStore();
   const canApprove = hasPermission('finance', 'approve');
+  const roleName = user?.role?.name;
+  const isCashier = roleName === 'Cashier';
 
   const params = {};
   if (search) params.search = search;
@@ -148,9 +150,9 @@ export default function ExpensesPage() {
     const selected = rows.filter(r => selectedRowKeys.includes(r.id));
     if (selected.length === 0) return;
     const csv = [
-      ['Date', 'Category', 'Description', 'Amount', 'Status', 'Business Type'].join(','),
+      ['Date', 'Shop', 'Category', 'Machine', 'Description', 'Amount', 'Status', 'Business Type'].join(','),
       ...selected.map(r =>
-        [dayjs(r.created_at).format('DD MMM YYYY'), r.category?.name, r.description, r.amount, r.status, r.business_type].join(',')
+        [dayjs(r.created_at).format('DD MMM YYYY'), r.shop?.name || '', r.category?.name, r.machine?.slot_code || '', r.description, r.amount, r.status, r.business_type].join(',')
       ),
     ].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
@@ -161,6 +163,7 @@ export default function ExpensesPage() {
 
   const cols = [
     { title: 'Date', dataIndex: 'expense_date', render: v => dayjs(v).format('DD MMM YYYY'), width: 110 },
+    { title: 'Shop', key: 'shop', render: (_, r) => r.shop?.name || '—', width: 130 },
     { title: 'Category', key: 'category', render: (_, r) => r.category?.name || '—', width: 120 },
     { title: 'Amount', dataIndex: 'amount', render: v => <span className="font-semibold">{fmt(v)}</span>, width: 120 },
     { title: 'Business', dataIndex: 'business_type', render: v => <Tag color={v === 'bentabet' ? 'purple' : 'blue'} className="!text-[10px] uppercase">{v}</Tag>, width: 90 },
@@ -175,7 +178,9 @@ export default function ExpensesPage() {
 
   const mobileFields = [
     { key: 'description', dataIndex: 'description' },
+    { key: 'shop', label: 'Shop', render: (_, r) => r.shop?.name || '—' },
     { key: 'category', label: 'Category', render: (_, r) => r.category?.name || '—' },
+    { key: 'machine', label: 'Machine', render: (_, r) => r.machine?.slot_code || '—' },
     { key: 'amount', label: 'Amount', dataIndex: 'amount' },
   ];
 
@@ -288,8 +293,8 @@ export default function ExpensesPage() {
         onOk={() => form.submit()} confirmLoading={editRecord ? updateMutation.isPending : submitMutation.isPending}
         className="top-8">
         <Form form={form} layout="vertical" onFinish={onSubmit} className="mt-4">
-          <Form.Item name="business_type" label={<span className="text-xs font-semibold text-slate-600">Business Type</span>} rules={[{ required: true }]} initialValue="meteora">
-            <Select>
+          <Form.Item name="business_type" label={<span className="text-xs font-semibold text-slate-600">Business Type</span>} rules={[{ required: true }]} initialValue={isCashier ? 'bentabet' : 'meteora'}>
+            <Select disabled={isCashier}>
               <Option value="meteora">Meteora</Option>
               <Option value="bentabet">Bentabet</Option>
             </Select>
@@ -396,6 +401,16 @@ export default function ExpensesPage() {
               <span className="text-xs text-slate-500">Business Type</span>
               <Tag color={viewRecord.business_type === 'bentabet' ? 'purple' : 'blue'} className="!text-[10px] uppercase m-0">{viewRecord.business_type}</Tag>
             </div>
+            <div className="flex justify-between border-b border-slate-100 pb-2">
+              <span className="text-xs text-slate-500">Shop</span>
+              <span className="text-sm font-medium text-slate-700">{viewRecord.shop?.name || viewRecord.shop_id || '—'}</span>
+            </div>
+            {viewRecord.machine && (
+              <div className="flex justify-between border-b border-slate-100 pb-2">
+                <span className="text-xs text-slate-500">Machine</span>
+                <span className="text-sm font-medium text-slate-700">{viewRecord.machine?.slot_code || viewRecord.machine_id}</span>
+              </div>
+            )}
             <div className="flex justify-between border-b border-slate-100 pb-2">
               <span className="text-xs text-slate-500">Submitted By</span>
               <span className="text-sm font-medium text-slate-700">{viewRecord.submitter?.name || '—'}</span>

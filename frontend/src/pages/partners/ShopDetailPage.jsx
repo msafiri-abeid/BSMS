@@ -217,7 +217,7 @@ export default function ShopDetailPage() {
 
   const addr = shop.address || {};
   const grossFromCollections = collectionRows.reduce((s, r) => s + (r.gross_tzs || 0), 0);
-  const cashAtHandPreview = Math.max(0, grossFromCollections - (cashDispForm.selcom_tzs || 0));
+  const cashAtHandPreview = grossFromCollections - (cashDispForm.selcom_tzs || 0);
 
   return (
     <div>
@@ -239,7 +239,7 @@ export default function ShopDetailPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4 gap-3 mb-6">
         <KpiCard title="Total Machines" value={displayMachines.length} icon={Cpu} bgColor="bg-indigo-50" iconColor="text-indigo-600" />
         <KpiCard title="Gross Revenue" value={isSlot ? grossFromCollections : (perfSummary?.gross || 0)} formatter={fmt} icon={TrendingUp} bgColor="bg-emerald-50" iconColor="text-emerald-600" />
-        <KpiCard title="Net Revenue" value={isSlot ? Math.max(0, grossFromCollections - totalExpenses) : (perfSummary?.net || 0)} formatter={fmt} icon={DollarSign} bgColor="bg-blue-50" iconColor="text-blue-600" />
+        <KpiCard title="Net Revenue" value={isSlot ? grossFromCollections - totalExpenses : (perfSummary?.net || 0)} formatter={fmt} icon={DollarSign} bgColor="bg-blue-50" iconColor="text-blue-600" />
         {isSlot ? (
           <KpiCard title="Total Expenses" value={totalExpenses} formatter={fmt} icon={Receipt} bgColor="bg-rose-50" iconColor="text-rose-600" />
         ) : (

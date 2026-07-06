@@ -115,8 +115,9 @@ module.exports = async () => {
       await Permission.findOrCreate({ where: { role_id: role.id, module: 'machines', action: 'read' } });
       // Shops — read (needed for collection shop selector)
       await Permission.findOrCreate({ where: { role_id: role.id, module: 'shops', action: 'read' } });
-      // Finance — read (view expenses only)
+      // Finance — read + create (submit Bentabet expenses)
       await Permission.findOrCreate({ where: { role_id: role.id, module: 'finance', action: 'read' } });
+      await Permission.findOrCreate({ where: { role_id: role.id, module: 'finance', action: 'create' } });
       // Tickets — read + create
       for (const act of ['read', 'create']) {
         await Permission.findOrCreate({ where: { role_id: role.id, module: 'tickets', action: act } });

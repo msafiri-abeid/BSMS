@@ -2,7 +2,7 @@
 const PDFDocument = require('pdfkit');
 const ExcelJS = require('exceljs');
 const { Op } = require('sequelize');
-const { Expense, Invoice, Payment, CreditNote, Payroll, ExpenseCategory, Partner, Shop, Setting, User, Account, AccountTransaction, AccountTransfer, ShopCashDisposition } = require('../models');
+const { Expense, Invoice, Payment, CreditNote, Payroll, ExpenseCategory, Partner, Shop, Machine, Setting, User, Account, AccountTransaction, AccountTransfer, ShopCashDisposition } = require('../models');
 
 const getSetting = async (key, def) => {
   const row = await Setting.findOne({ where: { key } });
@@ -732,6 +732,8 @@ const updateExpense = async (id, data, userId) => {
       { model: ExpenseCategory, as: 'category' },
       { model: User, as: 'submitter', attributes: ['name'] },
       { model: User, as: 'approver', attributes: ['name'] },
+      { model: Shop, as: 'shop', attributes: ['id', 'name'] },
+      { model: Machine, as: 'machine', attributes: ['id', 'slot_code'] },
     ],
   });
 };

@@ -42,7 +42,8 @@ export default function RecordCollectionModal({ open, onClose }) {
   const allShops = shopsData?.rows || shopsData || [];
 
   const selectedMachineId = Form.useWatch('machine_id', form);
-  const closingCredits = Form.useWatch('closing_credits', form) || 0;
+  const rawClosing = Form.useWatch('closing_credits', form);
+  const closingCredits = rawClosing || 0;
 
   // Auto-calculated gross (credit_value_tzs from machine data)
   const grossTzs = (closingCredits - openingCredits) * creditValue;
@@ -182,10 +183,11 @@ export default function RecordCollectionModal({ open, onClose }) {
         </Form.Item>
 
         {/* Gross summary (read-only) */}
-        {selectedMachineId && closingCredits > 0 && (
+        {selectedMachineId && rawClosing !== undefined && rawClosing !== null && rawClosing !== '' && (
           <div className="mt-2 p-3 rounded-lg bg-slate-50 border border-slate-200 text-xs flex justify-between">
             <span className="text-slate-500">Gross ({(closingCredits - openingCredits).toLocaleString()} × TZS {creditValue})</span>
             <span className="font-semibold text-slate-700">TZS {(grossTzs || 0).toLocaleString()}</span>
+            {grossTzs < 0 && <span className="text-xs text-amber-600 ml-2">(RTP — negative gross)</span>}
           </div>
         )}
       </Form>

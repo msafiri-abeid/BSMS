@@ -92,7 +92,7 @@ router.delete('/collections/:id', authenticate, (req, res, next) => {
 
 // ── FINANCE ───────────────────────────────────────────────────
 router.get('/finance/expenses', authenticate, checkPermission('finance', 'read'), financeC.listExpenses);
-router.post('/finance/expenses', authenticate, uploadReceipt.single('receipt'), financeC.submitExpense);
+router.post('/finance/expenses', authenticate, checkPermission('finance', 'create'), uploadReceipt.single('receipt'), financeC.submitExpense);
 router.put('/finance/expenses/:id', authenticate, checkPermission('finance', 'update'), uploadReceipt.single('receipt'), financeC.updateExpense);
 router.delete('/finance/expenses/:id', authenticate, checkPermission('finance', 'delete'), financeC.removeExpense);
 router.get('/finance/expenses/categories', authenticate, financeC.listCategories);

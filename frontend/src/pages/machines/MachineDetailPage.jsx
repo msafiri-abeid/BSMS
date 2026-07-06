@@ -302,25 +302,27 @@ export default function MachineDetailPage() {
             className="h-10 px-4 border-slate-200 rounded-lg flex items-center gap-1.5 font-medium text-slate-600">
             Export PDF
           </Button>
-          {machine.status !== 'active' && (
+          {machine.status !== 'active' && canWrite && (
             <Button type="primary" icon={<Plus size={16} />}
               onClick={() => { setDeployOpen(true); deployForm.resetFields(); }}
               className="!bg-brand-dark hover:!bg-brand-light border-0 h-10 px-4 rounded-lg flex items-center gap-1.5 font-medium shadow-sm">
               Deploy
             </Button>
           )}
-          <Button icon={<Pencil size={16} className="text-slate-600" />}
-            onClick={() => {
-              editForm.setFieldsValue({
-                slot_code: machine.slot_code, serial_number: machine.serial_number,
-                sticker_no: machine.sticker_no, manufacturer: machine.manufacturer,
-                credit_value_tzs: machine.credit_value_tzs, weekly_target_tzs: machine.weekly_target_tzs,
-              });
-              setEditOpen(true);
-            }}
-            className="h-10 px-4 border-slate-200 rounded-lg flex items-center gap-1.5 font-medium text-slate-600">
-            Edit
-          </Button>
+          {canWrite && (
+            <Button icon={<Pencil size={16} className="text-slate-600" />}
+              onClick={() => {
+                editForm.setFieldsValue({
+                  slot_code: machine.slot_code, serial_number: machine.serial_number,
+                  sticker_no: machine.sticker_no, manufacturer: machine.manufacturer,
+                  credit_value_tzs: machine.credit_value_tzs, weekly_target_tzs: machine.weekly_target_tzs,
+                });
+                setEditOpen(true);
+              }}
+              className="h-10 px-4 border-slate-200 rounded-lg flex items-center gap-1.5 font-medium text-slate-600">
+              Edit
+            </Button>
+          )}
           {canWrite && (
             <Button danger icon={<Trash2 size={16} />} onClick={() => setDeleteOpen(true)}
               className="h-10 px-4 border-red-100 bg-red-50/50 hover:bg-red-50 rounded-lg flex items-center gap-1.5 font-medium">

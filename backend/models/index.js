@@ -733,6 +733,8 @@ Expense.belongsTo(User, { foreignKey: 'submitted_by', as: 'submitter' });
 Expense.belongsTo(User, { foreignKey: 'approved_by', as: 'approver' });
 Expense.belongsTo(ExpenseCategory, { foreignKey: 'category_id', as: 'category' });
 Expense.belongsTo(Collection, { foreignKey: 'collection_id', as: 'collection' });
+Expense.belongsTo(Shop, { foreignKey: 'shop_id', as: 'shop' });
+Expense.belongsTo(Machine, { foreignKey: 'machine_id', as: 'machine' });
 Collection.hasMany(Expense, { foreignKey: 'collection_id', as: 'expenses' });
 
 Invoice.belongsTo(Partner, { foreignKey: 'partner_id', as: 'partner' });

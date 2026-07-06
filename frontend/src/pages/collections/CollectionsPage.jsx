@@ -97,7 +97,7 @@ export default function CollectionsPage() {
   // Auto-recalculate gross when meter readings change (Novomatic, read-only display)
   useEffect(() => {
     if (editRecord?.machine?.manufacturer === 'Novomatic') {
-      setEditGross(Math.max(0, (editClosing - editOpening) * editCreditValue));
+      setEditGross((editClosing - editOpening) * editCreditValue);
     }
   }, [editClosing, editOpening, editCreditValue, editRecord]);
 

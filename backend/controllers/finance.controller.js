@@ -17,6 +17,8 @@ const getPendingExpenses = async (req, res, next) => {
       include: [
         { model: require('../models').User, as: 'submitter', attributes: ['name'] },
         { model: ExpenseCategory, as: 'category' },
+        { model: require('../models').Shop, as: 'shop', attributes: ['id', 'name'] },
+        { model: require('../models').Machine, as: 'machine', attributes: ['id', 'slot_code'] },
       ],
       order: [['created_at', 'ASC']],
     });
@@ -69,6 +71,8 @@ const listExpenses = async (req, res, next) => {
         { model: ExpenseCategory, as: 'category' },
         { model: require('../models').User, as: 'submitter', attributes: ['name'] },
         { model: require('../models').User, as: 'approver', attributes: ['name'] },
+        { model: require('../models').Shop, as: 'shop', attributes: ['id', 'name'] },
+        { model: require('../models').Machine, as: 'machine', attributes: ['id', 'slot_code'] },
       ],
       order: [['created_at', 'DESC']],
     });
@@ -158,7 +162,7 @@ const submitShopCashDisposition = async (req, res, next) => {
     });
     const totalGross = parseInt(grossResult[0]?.total || 0);
     const selcom = parseInt(selcom_tzs) || 0;
-    const cashAtHand = Math.max(0, totalGross - selcom);
+    const cashAtHand = totalGross - selcom;
     const selcom_receipt_url = req.files?.selcom_receipt?.[0]?.path || req.body.selcom_receipt_url || null;
     const bank_deposit_receipt_url = req.files?.bank_deposit_receipt?.[0]?.path || req.body.bank_deposit_receipt_url || null;
 
