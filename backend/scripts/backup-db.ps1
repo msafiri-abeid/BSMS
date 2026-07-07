@@ -24,10 +24,10 @@ param(
 
 # ─── CONFIGURATION ─────────────────────────────────────────────
 $DB_NAME = "bentabet_db"
-$DB_USER = "bentabet"
-$DB_PASS = "your-production-password-here"
+$DB_USER = "root"
+$DB_PASS = "FFSD@2026"
 $MYSQL_PATH = "C:\Program Files\MySQL\MySQL Server 8.0\bin"
-$BACKUP_DIR = "C:\backups\bentabet\daily"
+$BACKUP_DIR = "C:\Users\Traveller\Downloads\BSMS\BSMS\backups"
 $RETENTION_DAYS = 30
 
 # Off-site sync (optional — requires rclone configured)

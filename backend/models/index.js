@@ -5,7 +5,7 @@ const sequelize = require('../config/database');
 // ─── AUTH & RBAC ──────────────────────────────────────────────
 const Role = sequelize.define('Role', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
-  name: { type: DataTypes.STRING(100), allowNull: false, unique: true },
+  name: { type: DataTypes.STRING(100), allowNull: false, unique: 'uq_roles_name' },
   is_system: { type: DataTypes.BOOLEAN, defaultValue: false },
 }, { tableName: 'roles', updatedAt: false });
 
@@ -19,7 +19,7 @@ const Permission = sequelize.define('Permission', {
 const User = sequelize.define('User', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
   name: { type: DataTypes.STRING(150), allowNull: false },
-  email: { type: DataTypes.STRING(200), allowNull: false, unique: true },
+  email: { type: DataTypes.STRING(200), allowNull: false, unique: 'uq_users_email' },
   password_hash: { type: DataTypes.STRING(255), allowNull: false },
   role_id: { type: DataTypes.INTEGER, allowNull: false },
   employee_id: { type: DataTypes.STRING(50) },
@@ -38,7 +38,7 @@ const RefreshToken = sequelize.define('RefreshToken', {
 
 const Setting = sequelize.define('Setting', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
-  key: { type: DataTypes.STRING(100), allowNull: false, unique: true },
+  key: { type: DataTypes.STRING(100), allowNull: false, unique: 'uq_settings_key' },
   value: { type: DataTypes.TEXT },
   description: { type: DataTypes.STRING(255) },
   updated_by: { type: DataTypes.INTEGER },
@@ -73,27 +73,27 @@ const Shop = sequelize.define('Shop', {
 
 const Region = sequelize.define('Region', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
-  name: { type: DataTypes.STRING(100), allowNull: false, unique: true },
+  name: { type: DataTypes.STRING(100), allowNull: false, unique: 'uq_regions_name' },
 }, { tableName: 'regions', updatedAt: false });
 
 const District = sequelize.define('District', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
   name: { type: DataTypes.STRING(200), allowNull: false },
   region_id: { type: DataTypes.INTEGER, allowNull: false },
-}, { tableName: 'districts', updatedAt: false, indexes: [{ unique: true, fields: ['name', 'region_id'] }] });
+}, { tableName: 'districts', updatedAt: false, indexes: [{ name: 'uq_districts_name_region', unique: true, fields: ['name', 'region_id'] }] });
 
 const Ward = sequelize.define('Ward', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
   name: { type: DataTypes.STRING(150), allowNull: false },
   region_id: { type: DataTypes.INTEGER, allowNull: false },
   district_id: { type: DataTypes.INTEGER, allowNull: true },
-}, { tableName: 'wards', updatedAt: false, indexes: [{ unique: true, fields: ['name', 'region_id'] }] });
+}, { tableName: 'wards', updatedAt: false, indexes: [{ name: 'uq_wards_name_region', unique: true, fields: ['name', 'region_id'] }] });
 
 const Street = sequelize.define('Street', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
   name: { type: DataTypes.STRING(200), allowNull: false },
   ward_id: { type: DataTypes.INTEGER, allowNull: false },
-}, { tableName: 'streets', updatedAt: false, indexes: [{ unique: true, fields: ['name', 'ward_id'] }] });
+}, { tableName: 'streets', updatedAt: false, indexes: [{ name: 'uq_streets_name_ward', unique: true, fields: ['name', 'ward_id'] }] });
 
 const Address = sequelize.define('Address', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
@@ -111,7 +111,7 @@ const Address = sequelize.define('Address', {
 // ─── MACHINES ─────────────────────────────────────────────────
 const Machine = sequelize.define('Machine', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
-  slot_code: { type: DataTypes.STRING(50), allowNull: false, unique: true },
+  slot_code: { type: DataTypes.STRING(50), allowNull: false, unique: 'uq_machines_slot_code' },
   serial_number: { type: DataTypes.STRING(100) },
   sticker_no: { type: DataTypes.STRING(50) },
   manufacturer: { type: DataTypes.ENUM('Meteora', 'Novomatic'), allowNull: false },
@@ -290,9 +290,7 @@ const Expense = sequelize.define('Expense', {
 
 const Invoice = sequelize.define('Invoice', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
-  reference_no: { type: DataTypes.STRING(100), allowNull: false, unique: true },
-  partner_id: { type: DataTypes.INTEGER },
-  shop_id: { type: DataTypes.INTEGER },
+  reference_no: { type: DataTypes.STRING(100), allowNull: false, unique: 'uq_invoices_ref' },
   line_items: { type: DataTypes.JSON, defaultValue: [] },
   subtotal: { type: DataTypes.INTEGER, allowNull: false },
   tax_pct: { type: DataTypes.INTEGER, defaultValue: 0 },
@@ -318,9 +316,7 @@ const Payment = sequelize.define('Payment', {
 const CreditNote = sequelize.define('CreditNote', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
   invoice_id: { type: DataTypes.INTEGER, allowNull: false },
-  reference_no: { type: DataTypes.STRING(100), allowNull: false, unique: true },
-  amount: { type: DataTypes.INTEGER, allowNull: false },
-  reason: { type: DataTypes.TEXT, allowNull: false },
+  reference_no: { type: DataTypes.STRING(100), allowNull: false, unique: 'uq_credit_notes_ref' },
   issued_by: { type: DataTypes.INTEGER, allowNull: false },
 }, { tableName: 'credit_notes', updatedAt: false });
 
@@ -381,9 +377,7 @@ const StockMovement = sequelize.define('StockMovement', {
 
 const StockLevel = sequelize.define('StockLevel', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
-  product_id: { type: DataTypes.INTEGER, allowNull: false, unique: true },
-  current_qty: { type: DataTypes.INTEGER, defaultValue: 0 },
-  reorder_level: { type: DataTypes.INTEGER, defaultValue: 10 },
+  product_id: { type: DataTypes.INTEGER, allowNull: false, unique: 'uq_stock_levels_product' },
   expiry_date: { type: DataTypes.DATEONLY },
 }, { tableName: 'stock_levels', createdAt: false });
 
@@ -498,9 +492,7 @@ const TicketGroup = sequelize.define('TicketGroup', {
 
 const Ticket = sequelize.define('Ticket', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
-  ticket_number: { type: DataTypes.STRING(50), allowNull: false, unique: true },
-  subject: { type: DataTypes.STRING(255), allowNull: false },
-  description: { type: DataTypes.TEXT },
+  ticket_number: { type: DataTypes.STRING(50), allowNull: false, unique: 'uq_tickets_number' },
   requester_type: { type: DataTypes.ENUM('staff', 'partner', 'system'), defaultValue: 'staff' },
   requester_name: { type: DataTypes.STRING(150) },
   requester_id: { type: DataTypes.INTEGER },
@@ -549,8 +541,8 @@ const Position = sequelize.define('Position', {
 
 const Employee = sequelize.define('Employee', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
-  user_id: { type: DataTypes.INTEGER, unique: true },
-  employee_code: { type: DataTypes.STRING(50), unique: true },
+  user_id: { type: DataTypes.INTEGER, unique: 'uq_employees_user' },
+  employee_code: { type: DataTypes.STRING(50), unique: 'uq_employees_code' },
   full_name: { type: DataTypes.STRING(150) },
   email: { type: DataTypes.STRING(200) },
   phone: { type: DataTypes.STRING(20) },
@@ -648,7 +640,7 @@ const ShopCashDisposition = sequelize.define('ShopCashDisposition', {
   approved_at: { type: DataTypes.DATE },
   rejection_reason: { type: DataTypes.TEXT },
   notes: { type: DataTypes.TEXT },
-}, { tableName: 'shop_cash_dispositions', indexes: [{ unique: true, fields: ['shop_id', 'date'] }] });
+}, { tableName: 'shop_cash_dispositions', indexes: [{ name: 'uq_cash_disposition_shop_date', unique: true, fields: ['shop_id', 'date'] }] });
 
 // ─── ASSOCIATIONS ─────────────────────────────────────────────
 Role.hasMany(Permission, { foreignKey: 'role_id', as: 'permissions' });

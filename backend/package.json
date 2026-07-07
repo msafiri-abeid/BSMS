@@ -6,7 +6,8 @@
   "scripts": {
     "start": "cross-env NODE_ENV=production node server.js",
     "dev": "nodemon server.js",
-    "backup": "node -e \"require('child_process').execSync('scripts/backup-db.sh daily', { stdio: 'inherit' })\"",
+    "backup": "node scripts/backup-db.js daily",
+    "restore": "node scripts/backup-db.js restore",
     "predeploy": "npm run backup",
     "db:migrate": "npx sequelize-cli db:migrate",
     "db:seed": "npx sequelize-cli db:seed:all",
