@@ -137,6 +137,7 @@ export default function MyAssignmentsPage() {
 
   const onFinish = (values) => {
     const fd = new FormData();
+    fd.append('manufacturer', 'Meteora');
     fd.append('machine_id', submitting.machine_id);
     fd.append('shop_id', submitting.shop_id);
     fd.append('assignment_id', submitting.id);
@@ -331,6 +332,7 @@ export default function MyAssignmentsPage() {
                 beforeUpload={(file) => { setMeterPhoto(file); return false; }}
                 onRemove={() => setMeterPhoto(null)}
                 accept="image/*"
+                capture="environment"
                 maxCount={1}
                 fileList={meterPhoto ? [{ uid: '-1', name: meterPhoto.name, status: 'done' }] : []}
                 className="rounded-lg"

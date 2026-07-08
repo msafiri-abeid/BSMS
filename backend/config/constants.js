@@ -17,12 +17,6 @@ module.exports = {
     POOL: { max: 10, min: 2, acquire: 30000, idle: 10000 },
   },
 
-  CLOUDINARY: {
-    CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME,
-    API_KEY: process.env.CLOUDINARY_API_KEY,
-    API_SECRET: process.env.CLOUDINARY_API_SECRET,
-  },
-
   BEEM_AFRICA: {
     API_KEY: process.env.BEEM_API_KEY,
     SECRET: process.env.BEEM_SECRET,

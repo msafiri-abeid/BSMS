@@ -85,6 +85,7 @@ export default function RecordCollectionModal({ open, onClose }) {
       const values = await form.validateFields();
       setSubmitting(true);
       const fd = new FormData();
+      fd.append('manufacturer', 'Novomatic');
       fd.append('machine_id', values.machine_id);
       fd.append('shop_id', values.shop_id || '');
       fd.append('collection_date', values.collection_date.format('YYYY-MM-DD'));
@@ -92,8 +93,8 @@ export default function RecordCollectionModal({ open, onClose }) {
         closing_credits: values.closing_credits,
         opening_credits: openingCredits,
       }));
-      if (fileList[0]?.originFileObj) {
-        fd.append('meter_image', fileList[0].originFileObj);
+      if (fileList[0]) {
+        fd.append('meter_image', fileList[0]);
       }
       await collectionsAPI.submit(fd);
       message.success('Collection recorded successfully');
@@ -121,7 +122,7 @@ export default function RecordCollectionModal({ open, onClose }) {
       cancelButtonProps={{ className: 'rounded-lg' }}
       width={520}
       className="top-8"
-      destroyOnClose
+      destroyOnHidden
     >
       <Form form={form} layout="vertical" className="mt-4 space-y-1">
         <Form.Item name="collection_date" label={<span className="text-slate-600 font-medium text-xs">Collection Date</span>}
@@ -167,6 +168,7 @@ export default function RecordCollectionModal({ open, onClose }) {
             beforeUpload={(file) => { setFileList([file]); return false; }}
             onRemove={() => setFileList([])}
             accept="image/*"
+            capture="environment"
             maxCount={1}
             className="rounded-lg"
           >

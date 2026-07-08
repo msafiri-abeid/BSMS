@@ -27,26 +27,10 @@ const normalizeDocuments = (docs) => {
 
 const getDocumentProxyUrl = async (docUrl) => {
   if (!docUrl) return null;
-  // Match Cloudinary URLs with optional transformation segments (f_auto, e_sharpen, s--sig--, etc.)
-  const match = docUrl.match(/\/upload\/(?:[^/]+\/)*v(\d+)\/(.+)$/);
-  if (!match) return docUrl;
-  const cloudinary = require('cloudinary').v2;
-  const publicId = match[2];
-  const isPdfDoc = /\.pdf$/i.test(publicId);
-  const resourceType = isPdfDoc ? 'raw' : 'image';
-  try {
-    return cloudinary.url(publicId, {
-      resource_type: resourceType,
-      type: 'upload',
-      sign_url: true,
-      secure: true,
-      version: match[1],
-      expires_at: Math.floor(Date.now() / 1000) + 3600,
-    });
-  } catch (err) {
-    console.warn('Failed to generate signed Cloudinary URL, falling back to original:', err.message);
-    return docUrl;
-  }
+  // Local paths are served directly by express static — no proxy needed
+  if (docUrl.startsWith('/uploads/')) return docUrl;
+  // External URLs (legacy Cloudinary) returned as-is
+  return docUrl;
 };
 
 const enrichEmployee = (emp) => {

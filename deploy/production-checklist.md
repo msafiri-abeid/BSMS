@@ -6,19 +6,11 @@
 
 ## SECURITY — Complete Before Going Live
 
-- [ ] **1. Rotate Google Vision API key**
-  - Go to https://console.cloud.google.com/iam-admin/serviceaccounts
-  - Delete key ID `afc30bfa5fae1e51640a397d7dfb4f3b57d5098b`
-  - Create new key → save as `backend/bentabet-vision-key.json`
-  - **Purge old key from git history**:
-    ```
-    git filter-repo --path backend/bentabet-vision-key.json --invert-paths
-    ```
-- [ ] **2. Set strong JWT secrets in `.env`** (already strong, but rotate anyway)
-- [ ] **3. Change default admin password** — login → Settings → My Profile
-- [ ] **4. Verify `.gitignore` includes**: `backend/*-key.json`, `.env`, `node_modules/`
-- [ ] **5. Set `NODE_ENV=production` in backend `.env`** (this disables `alter: true`)
-- [ ] **6. Configure MySQL user** — create app-specific user (not root):
+- [ ] **1. Rotate JWT secrets in `.env`** — generate fresh 64-char hex values
+- [ ] **2. Change default admin password** — login → Settings → My Profile
+- [ ] **3. Verify `.gitignore` includes**: `.env`, `node_modules/`
+- [ ] **4. Set `NODE_ENV=production` in backend `.env`** (this disables `alter: true`)
+- [ ] **5. Configure MySQL user** — create app-specific user (not root):
   ```sql
   CREATE USER 'bentabet'@'localhost' IDENTIFIED BY 'strong-password';
   GRANT ALL ON bentabet_db.* TO 'bentabet'@'localhost';
@@ -26,9 +18,9 @@
 
 ## INFRASTRUCTURE — Provision VPS
 
-- [ ] **7. Provision server** (Ubuntu 22.04 LTS)
-  - DigitalOcean / Hetzner / AWS Lightsail
-  - Min spec: 2 CPU, 4GB RAM, 80GB SSD
+- [ ] **6. Provision server** (Ubuntu 22.04 LTS)
+  - Hostinger VPS KVM 2 (2 CPU, 4GB RAM, 80GB NVMe SSD)
+  - Alternative: DigitalOcean / Hetzner / AWS Lightsail with same specs
 - [ ] **8. Hardening**
   - SSH key auth only (disable password login)
   - `ufw allow 22,80,443/tcp`
@@ -68,34 +60,35 @@
   cd /opt/bentabet/backend && npm install --production
   cd /opt/bentabet/frontend && npm install && npm run build
   ```
-- [ ] **14. Configure `.env`** — copy example, set all production values
-- [ ] **15. Start with PM2**
+- [ ] **14. Create uploads directories** — (photos, receipts, documents served via nginx, no Cloudinary)
+  ```bash
+  mkdir -p /opt/bentabet/backend/uploads/{meters,receipts,documents,tickets,contracts,avatars,employees,meteora,novomatic}
+  ```
+- [ ] **15. Configure `.env`** — copy example, set all production values
+- [ ] **16. Start with PM2**
   ```bash
   cd /opt/bentabet/backend
   pm2 start ecosystem.config.js
   pm2 startup systemd   # Auto-start on reboot
   pm2 save
   ```
-- [ ] **16. Configure nginx**
+- [ ] **17. Configure nginx**
   ```bash
   cp /opt/bentabet/deploy/nginx-bentabet.conf /etc/nginx/sites-available/bentabet
   # Edit domain name in the file
   ln -s /etc/nginx/sites-available/bentabet /etc/nginx/sites-enabled/
   nginx -t && systemctl reload nginx
   ```
-- [ ] **17. SSL certificate**
+- [ ] **18. SSL certificate**
   ```bash
   certbot --nginx -d yourdomain.com
   ```
-- [ ] **18. Verify health**
+- [ ] **19. Verify health**
   ```bash
   curl https://yourdomain.com/health
   # Should return: {"status":"ok","timestamp":"..."}
   ```
-
-## CHECKLIST — Test Each Feature
-
-- [ ] **19. Login** — admin@bentabet.co.tz works, token refresh works after 15min
+- [ ] **20. Login** — admin@bentabet.co.tz works, token refresh works after 15min
 - [ ] **20. Cashier flow** — Login as Cashier → Collections → Record Novomatic Collection → Submit
 - [ ] **21. Manager flow** — Login as Operations Manager → View collections, approve
 - [ ] **22. Mobile responsive** — Open on phone, verify menu works, check collections page

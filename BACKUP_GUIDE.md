@@ -44,7 +44,7 @@ MySQL 8 Database
 | Stored procedures | Yes | Required for any DB logic |
 | Triggers | Yes | Data integrity rules |
 | MySQL binary logs | Yes | Point-in-time recovery |
-| Uploaded files (Cloudinary) | No | Already stored in Cloudinary |
+| Uploaded files (local disk) | Yes | Store in `backend/uploads/` — include in backup |
 | .env / secrets | No | Managed separately |
 
 ---
@@ -272,7 +272,7 @@ When you modify models (add/remove columns):
 | Hard drive fails on VPS | Restore from off-site backup to new server |
 | Accidental `DELETE FROM collections` | Restore latest dump + replay binlogs |
 | Developer drops a column | Restore from last dump before the change |
-| Cloudinary goes down | Files are safe in Cloudinary, only DB needed |
+| Disk failure on VPS | Restore DB + uploads from off-site backup |
 | Ransomware encrypts server | Wipe server, restore from off-site backup |
 
 ---

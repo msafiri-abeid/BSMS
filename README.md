@@ -47,7 +47,7 @@ certbot --nginx -d yourdomain.com
 | State | TanStack Query + Zustand |
 | Auth | JWT (15min) + Refresh tokens (7 days) + bcrypt |
 | Real-time | Socket.io (ticket dashboard) |
-| File storage | Multer + Cloudinary |
+| File storage | Multer + local disk (`backend/uploads/`) |
 | OCR | Google Vision API |
 | SMS | Beem Africa API |
 | Scheduler | node-cron |
@@ -86,7 +86,7 @@ bentabet/
 
 - Node.js 18+
 - MySQL 8
-- Cloudinary account (for file uploads)
+- Storage directory created automatically (`backend/uploads/`)
 - Beem Africa account (for SMS)
 - Google Cloud project with Vision API enabled (for OCR)
 
@@ -151,10 +151,8 @@ JWT_REFRESH_SECRET=...
 # Frontend URL
 FRONTEND_URL=http://localhost:5173
 
-# Cloudinary
-CLOUDINARY_CLOUD_NAME=...
-CLOUDINARY_API_KEY=...
-CLOUDINARY_API_SECRET=...
+# Uploads directory (relative to backend/)
+UPLOAD_DIR=./uploads
 
 # Beem Africa SMS
 BEEM_API_KEY=...
@@ -210,7 +208,7 @@ Owner TZS  = max(0, Net − Weekly target)
 - Auto-created on machine deployment when `tokens_paid = false`
 - Collections first meet the office weekly target, then remaining amount repays outstanding token debts in FIFO order, then remainder goes to shop owner
 - No auto-commission debts from owner share
-- Debt payments require Operations Manager approval with a receipt attachment uploaded to Cloudinary
+- Debt payments require Operations Manager approval with a receipt attachment stored on local disk (`backend/uploads/receipts/`)
 
 ### Collector Scope
 Collectors can only see their own assigned machines for the current day. They cannot view other collectors' assignments or collections.

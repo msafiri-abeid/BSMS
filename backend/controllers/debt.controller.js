@@ -1,5 +1,4 @@
 const debtService = require('../services/debt.service');
-const { cloudinary } = require('../middleware/upload');
 
 const list = async (req, res, next) => {
   try {
@@ -17,19 +16,7 @@ const create = async (req, res, next) => {
 
 const recordPayment = async (req, res, next) => {
   try {
-    let receiptUrl = null;
-    if (req.file) {
-      receiptUrl = await new Promise((resolve, reject) => {
-        const stream = cloudinary.uploader.upload_stream(
-          { folder: 'bentabet/receipts' },
-          (err, result) => {
-            if (err) reject(err);
-            else resolve(result.secure_url);
-          }
-        );
-        stream.end(req.file.buffer);
-      });
-    }
+    const receiptUrl = req.file?.path || null;
 
     const amount = parseInt(req.body.amount, 10);
     const debt = await debtService.recordPayment(req.params.id, amount, req.user.id, receiptUrl);

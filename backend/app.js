@@ -1,5 +1,6 @@
 require('dotenv').config();
 const express = require('express');
+const path = require('path');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
@@ -30,6 +31,9 @@ app.use(compression());
 
 // Logging
 if (process.env.NODE_ENV !== 'test') app.use(morgan('combined'));
+
+// Serve uploaded files (photos, receipts, documents)
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Health check
 app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));

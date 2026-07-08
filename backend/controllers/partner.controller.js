@@ -16,14 +16,14 @@ exports.listOwnPartners = async (req, res, next) => {
 
 exports.createPartner = async (req, res, next) => {
   try {
-    const partner = await partnerService.createPartner(req.body, req.file);
+    const partner = await partnerService.createPartner(req.body, req.files);
     res.status(201).json({ success: true, data: partner });
   } catch (err) { next(err); }
 };
 
 exports.updatePartner = async (req, res, next) => {
   try {
-    const partner = await partnerService.updatePartner(req.params.id, req.body, req.file);
+    const partner = await partnerService.updatePartner(req.params.id, req.body, req.files);
     if (!partner) return res.status(404).json({ success: false, message: 'Partner not found' });
     res.json({ success: true, data: partner });
   } catch (err) { next(err); }
@@ -54,14 +54,14 @@ exports.listShops = async (req, res, next) => {
 
 exports.createShop = async (req, res, next) => {
   try {
-    const shop = await partnerService.createShop(req.body, req.file);
+    const shop = await partnerService.createShop(req.body, req.files);
     res.status(201).json({ success: true, data: shop });
   } catch (err) { next(err); }
 };
 
 exports.updateShop = async (req, res, next) => {
   try {
-    const shop = await partnerService.updateShop(req.params.id, req.body, req.file);
+    const shop = await partnerService.updateShop(req.params.id, req.body, req.files);
     if (!shop) return res.status(404).json({ success: false, message: 'Shop not found' });
     res.json({ success: true, data: shop });
   } catch (err) { next(err); }

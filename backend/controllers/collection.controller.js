@@ -2,25 +2,12 @@
 const { submitCollection, getCollections, updateCollection, removeCollection, getAssignments, updateAssignment, removeAssignment } = require('../services/collection.service');
 const { Machine, CollectorAssignment, WeeklyTarget, Collection } = require('../models');
 const { Op } = require('sequelize');
-const { cloudinary } = require('../middleware/upload');
+
 
 const submit = async (req, res, next) => {
   try {
     const body = req.body;
-    let meterImageUrl = null;
-
-    if (req.file) {
-      meterImageUrl = await new Promise((resolve, reject) => {
-        const stream = cloudinary.uploader.upload_stream(
-          { folder: 'bentabet/meters' },
-          (err, result) => {
-            if (err) reject(err);
-            else resolve(result.secure_url);
-          }
-        );
-        stream.end(req.file.buffer);
-      });
-    }
+    const meterImageUrl = req.file?.path || null;
 
     const allowedRoles = ['Admin', 'General Manager', 'Operations Manager'];
     const skipDebtRepayment = allowedRoles.includes(req.user.role?.name) && body.skip_debt_repayment === 'true';
@@ -101,7 +88,6 @@ const update = async (req, res, next) => {
   try {
     const allowed = ['Admin', 'General Manager', 'Operations Manager', 'Supervisor'];
     const roleName = req.user.role?.name;
-    let meterImageUrl = null;
 
     // Cashier: only own pending collections, cannot approve
     if (roleName === 'Cashier') {
@@ -122,19 +108,8 @@ const update = async (req, res, next) => {
       return res.status(403).json({ success: false, message: 'Permission denied' });
     }
 
-    // Handle meter image re-upload
     if (req.file) {
-      meterImageUrl = await new Promise((resolve, reject) => {
-        const stream = cloudinary.uploader.upload_stream(
-          { folder: 'bentabet/meters' },
-          (err, result) => {
-            if (err) reject(err);
-            else resolve(result.secure_url);
-          }
-        );
-        stream.end(req.file.buffer);
-      });
-      req.body.meter_image_url = meterImageUrl;
+      req.body.meter_image_url = req.file.path;
     }
 
     if (req.body.status === 'approved') {

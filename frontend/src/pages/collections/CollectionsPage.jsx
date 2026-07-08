@@ -144,7 +144,8 @@ export default function CollectionsPage() {
       if (hasNewImage) {
         const fd = new FormData();
         Object.entries(payload).forEach(([k, v]) => fd.append(k, v));
-        fd.append('meter_image', editFileList[0].originFileObj);
+        fd.append('manufacturer', editRecord.machine?.manufacturer || '');
+        fd.append('meter_image', editFileList[0]);
         await collectionsAPI.update(editRecord.id, fd);
       } else {
         await collectionsAPI.update(editRecord.id, payload);
@@ -711,6 +712,7 @@ export default function CollectionsPage() {
                     beforeUpload={(file) => { setEditFileList([file]); return false; }}
                     onRemove={() => setEditFileList([])}
                     accept="image/*"
+                    capture="environment"
                     maxCount={1}
                     className="rounded-lg"
                   >
