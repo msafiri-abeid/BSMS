@@ -518,7 +518,7 @@ export default function EmployeesPage() {
         onOk={() => form.submit()}
         okText="Apply"
         width={400}
-        className="top-8"
+        className="top-8" destroyOnClose
       >
         <Form form={form} layout="vertical" onFinish={(v) => handleBulkStatus(v.bulk_status)} className="mt-4">
           <Form.Item name="bulk_status" label={`New status for ${selectedRowKeys.length} employees`} rules={[{ required: true }]}>

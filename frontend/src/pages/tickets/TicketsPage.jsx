@@ -208,13 +208,13 @@ export default function TicketsPage() {
       <div className="rounded-lg border border-slate-100 p-4 mb-4 bg-white">
         <Space wrap size={[8, 8]}>
           <Input.Search size="small" placeholder="Search Ticket #" allowClear
-            className="w-40"
+            className="w-full sm:w-40"
             onChange={e => setFilters(f => ({ ...f, ticket_number: e.target.value || undefined }))} />
           <Input.Search size="small" placeholder="Search Slot Code" allowClear
-            className="w-36"
+            className="w-full sm:w-36"
             onChange={e => setFilters(f => ({ ...f, slot_code: e.target.value || undefined }))} />
           <Select size="small" allowClear placeholder="Status"
-            className="w-36"
+            className="w-full sm:w-36"
             onChange={v => setFilters(f => ({ ...f, status: v }))}
             value={filters.status}>
             {['open', 'pending', 'in_progress', 'resolved', 'closed', 'reopened'].map(s => (
@@ -222,20 +222,20 @@ export default function TicketsPage() {
             ))}
           </Select>
           <Select size="small" allowClear placeholder="Priority"
-            className="w-28"
+            className="w-full sm:w-28"
             onChange={v => setFilters(f => ({ ...f, priority: v }))}>
             {['urgent', 'high', 'medium', 'low'].map(p => (
               <Option key={p} value={p}><span className="capitalize">{p}</span></Option>
             ))}
           </Select>
           <Select size="small" allowClear placeholder="Group"
-            className="w-40"
+            className="w-full sm:w-40"
             onChange={v => setFilters(f => ({ ...f, group_id: v }))}>
             {(groups || []).map(g => (
               <Option key={g.id} value={g.id}>{g.name}</Option>
             ))}
           </Select>
-          <RangePicker size="small" className="w-52"
+          <RangePicker size="small" className="w-full sm:w-52"
             onChange={(d) => setFilters(f => ({ ...f, date_from: d?.[0]?.toISOString(), date_to: d?.[1]?.toISOString() }))} />
           {hasFilters && (
             <Button size="small" icon={<X className="w-3 h-3" />} onClick={() => setFilters({ limit: 50, offset: 0 })}
@@ -264,7 +264,7 @@ export default function TicketsPage() {
       )}
 
       {/* Desktop Table */}
-      <div className="hidden md:block">
+      <div className="hidden overflow-x-auto md:block">
         <Table
           dataSource={rows}
           columns={cols}
@@ -313,7 +313,7 @@ export default function TicketsPage() {
         onOk={() => form.submit()}
         confirmLoading={createMutation.isPending}
         width={620}
-        className="top-8"
+        className="top-8" destroyOnClose
       >
         <Form form={form} layout="vertical" onFinish={onCreateFinish} className="mt-4">
           <Form.Item name="subject" label={<span className="text-xs font-semibold text-slate-600">Subject / Issue</span>} rules={[{ required: true, message: 'Please enter a ticket subject' }]}>

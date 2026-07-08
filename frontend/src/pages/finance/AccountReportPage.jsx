@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { Table, Select, Typography, App, DatePicker, Tag, Spin, Card } from 'antd';
+import { Table, Select, Typography, App, DatePicker, Tag, Spin, Card, List } from 'antd';
 import { BarChart3, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { reportsAPI, accountsAPI } from '../../services/api';
 import dayjs from 'dayjs';
+import MobileCard from '../../components/MobileCard';
 
 const { Text } = Typography;
 const { Option } = Select;
@@ -46,6 +47,17 @@ export default function AccountReportPage() {
     { title: 'Recorded By', dataIndex: 'recorded_by', render: v => v || '—', width: 120 },
   ];
 
+  const mobileFields = [
+    { key: 'date', label: 'Date', render: (_, r) => dayjs(r.date).format('DD MMM YYYY') },
+    { key: 'type', label: 'Type', render: (_, r) => r.type === 'in'
+      ? <span className="flex items-center gap-1 text-emerald-600 text-xs font-semibold"><ArrowUpRight size={13} /> IN</span>
+      : <span className="flex items-center gap-1 text-red-600 text-xs font-semibold"><ArrowDownRight size={13} /> OUT</span>
+    },
+    { key: 'amount', label: 'Amount', render: (_, r) => <span className={`font-semibold ${r.type === 'in' ? 'text-emerald-600' : 'text-red-600'}`}>{fmt(r.amount)}</span> },
+    { key: 'balance', label: 'Balance', render: (_, r) => <span className="font-semibold">{fmt(r.balance_after)}</span> },
+    { key: 'reference', label: 'Reference', render: (_, r) => <Tag className="!text-[10px] capitalize">{r.reference_type?.replace('_', ' ')}</Tag> },
+  ];
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-200/60">
@@ -58,7 +70,7 @@ export default function AccountReportPage() {
       {/* Filters */}
       <div className="rounded-lg border border-slate-100 p-4 mb-4 bg-white">
         <div className="flex items-center gap-3 flex-wrap">
-          <Select size="small" placeholder="Select Account" className="w-60" value={accountId} onChange={setAccountId} allowClear>
+          <Select size="small" placeholder="Select Account" className="w-full sm:w-60" value={accountId} onChange={setAccountId} allowClear>
             {accounts.map(a => <Option key={a.id} value={a.id}>{a.name} ({a.account_type?.replace('_', ' ')})</Option>)}
           </Select>
           <DatePicker size="small" placeholder="From" value={dayjs(dateFrom)} onChange={(d) => d && setDateFrom(d.format('YYYY-MM-DD'))} />
@@ -93,14 +105,28 @@ export default function AccountReportPage() {
             </Card>
           </div>
 
-          <Table
-            dataSource={report.transactions}
-            columns={txCols}
-            rowKey="id"
-            size="middle"
-            loading={isFetching}
-            pagination={{ pageSize: 50, showSizeChanger: false }}
-          />
+          <div className="hidden overflow-x-auto md:block">
+            <Table
+              dataSource={report.transactions}
+              columns={txCols}
+              rowKey="id"
+              size="middle"
+              loading={isFetching}
+              pagination={{ pageSize: 50, showSizeChanger: false }}
+            />
+          </div>
+          <div className="md:hidden space-y-2">
+            <List
+              loading={isFetching}
+              dataSource={report.transactions || []}
+              renderItem={(r) => (
+                <MobileCard
+                  record={r}
+                  fields={mobileFields}
+                />
+              )}
+            />
+          </div>
         </>
       )}
     </div>

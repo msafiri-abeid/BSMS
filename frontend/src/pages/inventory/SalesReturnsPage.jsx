@@ -1,12 +1,13 @@
 // src/pages/inventory/SalesReturnsPage.jsx
 import { useState } from 'react';
-import { Table, Button, Modal, Form, Select, Input, InputNumber, Space, Alert, Typography, Tag } from 'antd';
-import { PlusOutlined, CheckOutlined } from '@ant-design/icons';
+import { Table, Button, Modal, Form, Select, Input, InputNumber, Space, Alert, Typography, Tag, List } from 'antd';
+import { Plus, Check } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { inventoryAPI, shopsAPI } from '../../services/api';
 import dayjs from 'dayjs';
+import MobileCard from '../../components/MobileCard';
 
-const { Title } = Typography;
+const { Text } = Typography;
 const { Option } = Select;
 
 export default function SalesReturnsPage() {
@@ -59,13 +60,22 @@ export default function SalesReturnsPage() {
     { title: 'Reason', dataIndex: 'reason', render: (r) => <span title={r}>{r?.substring(0, 30)}...</span> },
   ];
 
+  const mobileFields = [
+    { key: 'date', label: 'Date', render: (_, r) => dayjs(r.return_date).format('DD MMM YYYY') },
+    { key: 'sale', label: 'Sale ID', render: (_, r) => `#${r.sale_id}` },
+    { key: 'product', label: 'Product', render: (_, r) => r.product?.name || '—' },
+    { key: 'qty', label: 'Qty', render: (_, r) => r.qty_returned },
+    { key: 'refund', label: 'Refund', render: (_, r) => `TZS ${r.refund_amount_tzs?.toLocaleString()}` },
+    { key: 'method', label: 'Method', render: (_, r) => <Tag color={r.refund_method === 'cash' ? 'green' : 'blue'}>{r.refund_method}</Tag> },
+  ];
+
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
-        <Title level={3} style={{ margin: 0 }}>Sales Returns</Title>
+      <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-200/60">
+        <h4 className="text-base font-bold text-slate-800 m-0">Sales Returns</h4>
         <Select
           placeholder="Select shop"
-          style={{ width: 250 }}
+          className="w-full sm:w-60"
           onChange={setSelectedShop}
           allowClear
           showSearch
@@ -80,32 +90,48 @@ export default function SalesReturnsPage() {
       )}
 
       {selectedShop && (
-        <Space direction="vertical" style={{ width: '100%' }} size="large">
+        <div className="space-y-4">
           <Button
             type="primary"
-            icon={<PlusOutlined />}
+            icon={<Plus className="w-4 h-4" />}
             onClick={() => setReturnModalOpen(true)}
+            className="!bg-brand-dark hover:!bg-brand-light border-none shadow-sm flex items-center gap-1.5"
           >
             Process Return
           </Button>
 
-          <Table
-            dataSource={returns}
-            columns={returnsColumns}
-            rowKey="id"
-            pagination={{ pageSize: 20 }}
-            size="small"
-          />
-        </Space>
+          <div className="hidden overflow-x-auto md:block">
+            <Table
+              dataSource={returns}
+              columns={returnsColumns}
+              rowKey="id"
+              pagination={{ pageSize: 20 }}
+              size="small"
+            />
+          </div>
+
+          <div className="md:hidden space-y-2">
+            <List
+              dataSource={returns || []}
+              renderItem={(r) => (
+                <MobileCard
+                  record={r}
+                  fields={mobileFields}
+                />
+              )}
+            />
+          </div>
+        </div>
       )}
 
       <Modal
-        title="Process Sales Return"
+        title={<span className="text-sm font-bold text-slate-700">Process Sales Return</span>}
         open={returnModalOpen}
         onCancel={() => setReturnModalOpen(false)}
         onOk={() => returnForm.submit()}
         confirmLoading={processReturnMutation.isPending}
         width={600}
+        className="top-8"
       >
         <Form
           form={returnForm}
@@ -116,8 +142,9 @@ export default function SalesReturnsPage() {
               shop_id: selectedShop,
             });
           }}
+          className="mt-4"
         >
-          <Form.Item name="sale_id" label="Sale" rules={[{ required: true, message: 'Select a sale' }]}>
+          <Form.Item name="sale_id" label={<span className="text-xs font-semibold text-slate-600">Sale</span>} rules={[{ required: true, message: 'Select a sale' }]}>
             <Select placeholder="Select a sale to return from">
               {(sales || []).map(s => (
                 <Option key={s.id} value={s.id}>
@@ -127,21 +154,21 @@ export default function SalesReturnsPage() {
             </Select>
           </Form.Item>
 
-          <Form.Item name="product_id" label="Product" rules={[{ required: true, message: 'Select a product' }]}>
+          <Form.Item name="product_id" label={<span className="text-xs font-semibold text-slate-600">Product</span>} rules={[{ required: true, message: 'Select a product' }]}>
             <Select placeholder="Select product to return">
               {/* Products will be filtered from selected sale in a real implementation */}
             </Select>
           </Form.Item>
 
-          <Form.Item name="qty_returned" label="Quantity Returned" rules={[{ required: true, message: 'Enter quantity', min: 1 }]}>
-            <InputNumber min={1} />
+          <Form.Item name="qty_returned" label={<span className="text-xs font-semibold text-slate-600">Quantity Returned</span>} rules={[{ required: true, message: 'Enter quantity', min: 1 }]}>
+            <InputNumber min={1} className="w-full" />
           </Form.Item>
 
-          <Form.Item name="reason" label="Reason for Return" rules={[{ required: true, message: 'Provide a reason' }]}>
+          <Form.Item name="reason" label={<span className="text-xs font-semibold text-slate-600">Reason for Return</span>} rules={[{ required: true, message: 'Provide a reason' }]}>
             <Input.TextArea rows={3} placeholder="e.g., Defective, Wrong item, Customer request" />
           </Form.Item>
 
-          <Form.Item name="refund_method" label="Refund Method" rules={[{ required: true }]}>
+          <Form.Item name="refund_method" label={<span className="text-xs font-semibold text-slate-600">Refund Method</span>} rules={[{ required: true }]}>
             <Select placeholder="How to refund the customer">
               <Option value="cash">Cash Refund</Option>
               <Option value="credit">Store Credit</Option>
@@ -152,7 +179,7 @@ export default function SalesReturnsPage() {
             message="The stock will be restored and refund will be processed immediately."
             type="info"
             showIcon
-            style={{ marginTop: 16 }}
+            className="mt-4"
           />
         </Form>
       </Modal>

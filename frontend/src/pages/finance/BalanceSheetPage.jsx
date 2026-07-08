@@ -60,7 +60,7 @@ export default function BalanceSheetPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Assets */}
-        <Card size="small" className="border border-slate-100">
+        <Card size="small" className="border border-slate-100 overflow-x-auto">
           <h5 className="font-semibold text-sm text-slate-700 mb-4 flex items-center gap-2">
             <Landmark size={16} className="text-emerald-600" /> Assets
           </h5>
@@ -75,7 +75,7 @@ export default function BalanceSheetPage() {
         </Card>
 
         {/* Equity & Liabilities */}
-        <Card size="small" className="border border-slate-100">
+        <Card size="small" className="border border-slate-100 overflow-x-auto">
           <h5 className="font-semibold text-sm text-slate-700 mb-4 flex items-center gap-2">
             <BarChart3 size={16} className="text-blue-600" /> Equity
           </h5>

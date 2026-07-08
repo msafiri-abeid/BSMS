@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
-import { Table, Progress, Empty, Alert } from 'antd';
+import { Table, Progress, Empty, Alert, List } from 'antd';
 import { collectionsAPI } from '../../services/api';
+import MobileCard from '../../components/MobileCard';
 
 const fmt = (n) => `TZS ${(n || 0).toLocaleString()}`;
 
@@ -34,6 +35,18 @@ export default function WeeklyTargetsPage() {
     },
   ];
 
+  const mobileFields = [
+    { key: 'slot_code', dataIndex: 'machine.slot_code' },
+    { key: 'shop', label: 'Shop', render: (_, r) => r.shop?.name || '—' },
+    { key: 'week', label: 'Week', render: (_, r) => `${r.week_start || '?'} – ${r.week_end || '?'}` },
+    { key: 'target', label: 'Target', render: (_, r) => fmt(r.target_tzs) },
+    { key: 'collected', label: 'Collected', render: (_, r) => <strong>{fmt(r.collected_tzs)}</strong> },
+    { key: 'commission', label: 'Commission', render: (_, r) => {
+      const c = Math.max(0, (r.collected_tzs || 0) - (r.target_tzs || 0));
+      return c > 0 ? <span className="font-semibold text-purple-700">{fmt(c)}</span> : <span className="text-xs text-slate-300">—</span>;
+    }},
+  ];
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-200/60">
@@ -44,15 +57,30 @@ export default function WeeklyTargetsPage() {
         <Alert type="error" message="Failed to load weekly targets" description={error.message} className="mb-4" showIcon />
       )}
 
-      <Table
-        dataSource={data || []}
-        columns={cols}
-        rowKey="id"
-        loading={isLoading}
-        size="middle"
-        pagination={{ pageSize: 20 }}
-        locale={{ emptyText: <Empty description={error ? 'Error loading data' : 'No weekly targets yet — they are created when collections are submitted'} /> }}
-      />
+      <div className="hidden overflow-x-auto md:block">
+        <Table
+          dataSource={data || []}
+          columns={cols}
+          rowKey="id"
+          loading={isLoading}
+          size="middle"
+          pagination={{ pageSize: 20 }}
+          locale={{ emptyText: <Empty description={error ? 'Error loading data' : 'No weekly targets yet — they are created when collections are submitted'} /> }}
+        />
+      </div>
+
+      <div className="md:hidden space-y-2">
+        <List
+          loading={isLoading}
+          dataSource={data || []}
+          renderItem={(r) => (
+            <MobileCard
+              record={r}
+              fields={mobileFields}
+            />
+          )}
+        />
+      </div>
     </div>
   );
 }

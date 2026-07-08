@@ -230,7 +230,7 @@ export default function ShopDetailPage() {
           <Tag color={STATUS_COLORS[shop.status]} className="!text-[10px] uppercase !m-0">{shop.status}</Tag>
           <Tag color={isSlot ? 'purple' : 'blue'} className="!text-[10px] !m-0">{isSlot ? 'Slot Shop' : 'Meteora Shop'}</Tag>
         </div>
-        <DatePicker size="small" className="w-36" value={dayjs(selectedDay)}
+        <DatePicker size="small" className="w-full sm:w-36" value={dayjs(selectedDay)}
           onChange={(d) => setSelectedDay(d ? d.format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD'))}
           disabledDate={(d) => d.isAfter(dayjs())} />
       </div>

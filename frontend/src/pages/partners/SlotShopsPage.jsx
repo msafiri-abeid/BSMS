@@ -277,13 +277,13 @@ export default function SlotShopsPage() {
             defaultValue={search}
             onSearch={(v) => setSearch(v || '')}
             className="w-full sm:w-56" />
-          <Select size="small" placeholder="Supervisor" allowClear className="w-44"
+          <Select size="small" placeholder="Supervisor" allowClear className="w-full sm:w-44"
             value={supervisorFilter || undefined}
             onChange={(v) => setSupervisorFilter(v || '')}>
             {employees.map(e => <Option key={e.id} value={String(e.id)}>{e.full_name}</Option>)}
           </Select>
           <Select size="small" placeholder="Filter by status" value={statusFilter || undefined}
-            onChange={(v) => setStatusFilter(v || '')} allowClear className="w-36">
+            onChange={(v) => setStatusFilter(v || '')} allowClear className="w-full sm:w-36">
             <Option value="active">Active</Option>
             <Option value="inactive">Inactive</Option>
             <Option value="suspended">Suspended</Option>
@@ -317,7 +317,7 @@ export default function SlotShopsPage() {
         </div>
       )}
 
-      <div className="hidden md:block">
+      <div className="hidden overflow-x-auto md:block">
         <Table dataSource={rows} columns={cols} rowKey="id" loading={isLoading}
           size="middle"
           rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}
@@ -355,7 +355,7 @@ export default function SlotShopsPage() {
 
       <Modal title={editing ? 'Edit Shop' : 'New Slot Shop'} open={open}
         onCancel={() => { setOpen(false); form.resetFields(); }}
-        onOk={() => form.submit()} confirmLoading={saveMutation.isPending} width={640} className="top-8">
+        onOk={() => form.submit()} confirmLoading={saveMutation.isPending} width={640} className="top-8" destroyOnClose>
         <Form form={form} layout="vertical" onFinish={onFinish} className="mt-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Form.Item name="name" label={<span className="text-xs font-semibold text-slate-600">Shop Name</span>} rules={[{ required: true }]} className="!mb-3">

@@ -43,7 +43,7 @@ export default function BusinessManagementTab() {
       </Card>
 
       {canEdit && (
-        <Modal title="Edit Business" open={!!editBiz} onCancel={() => setEditBiz(null)} footer={null} className="top-8">
+        <Modal title="Edit Business" open={!!editBiz} onCancel={() => setEditBiz(null)} footer={null} className="top-8" destroyOnClose>
           {editBiz && (
             <Form
               layout="vertical"

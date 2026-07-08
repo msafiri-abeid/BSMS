@@ -185,10 +185,10 @@ export default function NovomaticMachinesPage() {
             defaultValue={slotCodeSearch}
             onSearch={(v) => setSlotCodeSearch(v)}
             className="w-full sm:w-44" />
-          <Select size="small" allowClear placeholder="Shop" value={locationFilter} onChange={(v) => setLocationFilter(v)} className="w-36">
+          <Select size="small" allowClear placeholder="Shop" value={locationFilter} onChange={(v) => setLocationFilter(v)} className="w-full sm:w-36">
             {shops.map(s => <Option key={s.id} value={String(s.id)}>{s.name}</Option>)}
           </Select>
-          <Select size="small" allowClear placeholder="Status" value={statusFilter} onChange={(v) => setStatusFilter(v)} className="w-32">
+          <Select size="small" allowClear placeholder="Status" value={statusFilter} onChange={(v) => setStatusFilter(v)} className="w-full sm:w-32">
             <Option value="active">Active</Option>
             <Option value="inactive">Inactive</Option>
             <Option value="maintenance">Maintenance</Option>
@@ -223,7 +223,7 @@ export default function NovomaticMachinesPage() {
         </div>
       )}
 
-      <div className="hidden md:block">
+      <div className="hidden overflow-x-auto md:block">
         <Table dataSource={rows} columns={cols} rowKey="id" loading={isLoading} size="middle"
           rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}
           pagination={{ total: machines?.count, pageSize: 20 }} />

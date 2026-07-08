@@ -218,18 +218,18 @@ export default function ExpensesPage() {
           <Select size="small" allowClear placeholder="Business Type"
             value={bizTypeFilter || undefined}
             onChange={(v) => setBizTypeFilter(v || '')}
-            className="w-36">
+            className="w-full sm:w-36">
             <Option value="meteora">Meteora</Option>
             <Option value="bentabet">Bentabet</Option>
           </Select>
-          <DatePicker size="small" className="w-36"
+          <DatePicker size="small" className="w-full sm:w-36"
             value={dateFilter ? dayjs(dateFilter) : null}
             onChange={(d) => setDateFilter(d ? d.format('YYYY-MM-DD') : '')}
             placeholder="Filter date" />
           <Select size="small" allowClear placeholder="Status"
             value={statusFilter || undefined}
             onChange={(v) => setStatusFilter(v || '')}
-            className="w-32">
+            className="w-full sm:w-32">
             <Option value="pending">Pending</Option>
             <Option value="approved">Approved</Option>
             <Option value="rejected">Rejected</Option>
@@ -261,7 +261,7 @@ export default function ExpensesPage() {
       )}
 
       {/* Desktop Table */}
-      <div className="hidden md:block">
+      <div className="hidden overflow-x-auto md:block">
         <Table dataSource={rows} columns={cols} rowKey={(r) => r.id} loading={isLoading}
           size="middle"
           rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}
@@ -279,8 +279,17 @@ export default function ExpensesPage() {
               <MobileCard
                 record={r}
                 fields={mobileFields}
-                onClick={() => {}}
+                onClick={() => setViewRecord(r)}
                 statusColor={STATUS_COLORS[r.status]}
+                actions={[
+                  { key: 'view', label: 'View', icon: <Eye className="w-3.5 h-3.5" />, onClick: () => setViewRecord(r) },
+                  ...(canApprove && r.status === 'pending' ? [
+                    { key: 'approve', label: 'Approve', type: 'primary', icon: <CheckCircle className="w-3.5 h-3.5" />, onClick: () => approveMutation.mutate({ id: r.id, action: 'approve' }), loading: approveMutation.isPending },
+                  ] : []),
+                  ...(r.status === 'pending' && !canApprove ? [
+                    { key: 'edit', label: 'Edit', icon: <Edit3 className="w-3.5 h-3.5" />, onClick: () => { setEditRecord(r); setOpen(true); } },
+                  ] : []),
+                ]}
               />
             )}
           />

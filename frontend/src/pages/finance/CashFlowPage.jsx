@@ -24,7 +24,7 @@ export default function CashFlowPage() {
   if (!data) return null;
 
   const renderSection = (title, icon, items, net, isPositive) => (
-    <Card size="small" className="border border-slate-100 mb-4">
+    <Card size="small" className="border border-slate-100 mb-4 overflow-x-auto">
       <div className="flex items-center gap-2 mb-3">
         {icon}
         <h5 className="font-semibold text-sm text-slate-700 m-0">{title}</h5>

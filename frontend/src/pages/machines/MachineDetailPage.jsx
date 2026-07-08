@@ -359,7 +359,7 @@ export default function MachineDetailPage() {
 
       {/* ── Filters ──────────────────────────────────────────── */}
       <div className="rounded-lg border border-slate-100 p-4 bg-white flex flex-wrap items-center gap-3">
-        <RangePicker size="small" className="w-56"
+        <RangePicker size="small" className="w-full sm:w-56"
           value={filters.date_from && filters.date_to ? [dayjs(filters.date_from), dayjs(filters.date_to)] : null}
           onChange={(d) => {
             if (d && d[0] && d[1]) {
@@ -732,7 +732,7 @@ export default function MachineDetailPage() {
         okText="Save Changes"
         okButtonProps={{ className: "!bg-brand-dark rounded-lg" }}
         cancelButtonProps={{ className: "rounded-lg" }}
-        centered
+        centered destroyOnClose
       >
         <Form form={editForm} layout="vertical" onFinish={(v) => updateMutation.mutate({ id: machine.id, data: v })} className="mt-4 space-y-1">
           <Form.Item name="slot_code" label={<span className="text-slate-600 font-medium text-xs">Slot Identifier Code</span>} rules={[{ required: true, message: 'Please enter a valid code' }]}><Input className="h-9 rounded-lg" /></Form.Item>
@@ -785,7 +785,7 @@ export default function MachineDetailPage() {
         okText="Initialize Deployment"
         okButtonProps={{ className: "!bg-brand-dark rounded-lg" }}
         cancelButtonProps={{ className: "rounded-lg" }}
-        centered
+        centered destroyOnClose
       >
         <Form form={deployForm} layout="vertical" onFinish={(v) => deployMutation.mutate({ id: machine.id, ...v })} className="mt-4 space-y-1">
           <Form.Item name="shop_id" label={<span className="text-slate-600 font-medium text-xs">Assign Target Shop Location</span>} rules={[{ required: true, message: 'Please select a deployment shop destination' }]}>

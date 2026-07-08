@@ -230,7 +230,7 @@ export default function SalesPage() {
           )}
 
           {/* Desktop Table */}
-          <div className="hidden md:block">
+          <div className="hidden overflow-x-auto md:block">
             <Table dataSource={rows} columns={cols} rowKey="id" loading={isLoading}
               size="middle"
               rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}

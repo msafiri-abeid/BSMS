@@ -141,7 +141,7 @@ export default function StockManagementPage() {
           <h4 className="text-base font-bold text-slate-800 m-0">Stock Management</h4>
           <span className="text-xs text-slate-500">{selectedShop ? `${totalProducts} products` : 'Select a shop'}</span>
         </div>
-        <Select placeholder="Select shop" className="w-[250px]"
+        <Select placeholder="Select shop" className="w-full sm:w-[250px]"
           onChange={(v) => { setSelectedShop(v); }}
           allowClear showSearch optionFilterProp="children">
           {shops.map(s => <Option key={s.id} value={s.id}>{s.name}</Option>)}
@@ -191,7 +191,7 @@ export default function StockManagementPage() {
                       </Space>
                     </div>
                   )}
-                  <div className="hidden md:block">
+                  <div className="hidden overflow-x-auto md:block">
                     <Table dataSource={productRows} columns={stockCols} rowKey="id" loading={productsLoading}
                       size="middle" rowSelection={{ selectedRowKeys: stockRowKeys, onChange: setStockRowKeys }}
                       pagination={{ pageSize: 20 }} />
@@ -230,7 +230,7 @@ export default function StockManagementPage() {
                       </Space>
                     </div>
                   )}
-                  <div className="hidden md:block">
+                  <div className="hidden overflow-x-auto md:block">
                     <Table dataSource={auditRows} columns={auditCols} rowKey="id" loading={auditsLoading}
                       size="middle" rowSelection={{ selectedRowKeys: auditRowKeys, onChange: setAuditRowKeys }}
                       pagination={{ pageSize: 10 }} />
@@ -256,7 +256,7 @@ export default function StockManagementPage() {
                       Add Stock
                     </Button>
                   </div>
-                  <div className="hidden md:block">
+                  <div className="hidden overflow-x-auto md:block">
                     <Table dataSource={productRows} columns={stockCols} rowKey="id" loading={productsLoading}
                       size="middle" pagination={{ pageSize: 20 }} />
                   </div>
@@ -294,7 +294,7 @@ export default function StockManagementPage() {
                       </Space>
                     </div>
                   )}
-                  <div className="hidden md:block">
+                  <div className="hidden overflow-x-auto md:block">
                     <Table dataSource={transferRows} columns={transferCols} rowKey="id" loading={transfersLoading}
                       size="middle" rowSelection={{ selectedRowKeys: transferRowKeys, onChange: setTransferRowKeys }}
                       pagination={{ pageSize: 10 }} />

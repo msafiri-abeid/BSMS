@@ -171,19 +171,19 @@ export default function AccountsPage() {
       {/* Filters */}
       <div className="rounded-lg border border-slate-100 p-4 mb-4 bg-white">
         <Space wrap size={[8, 8]}>
-          <Select size="small" placeholder="Account Type" allowClear className="w-40"
+          <Select size="small" placeholder="Account Type" allowClear className="w-full sm:w-40"
             onChange={(v) => setFilters(f => ({ ...f, account_type: v, offset: 0 }))}>
             <Option value="cash">Cash</Option>
             <Option value="bank">Bank</Option>
             <Option value="mobile_money">Mobile Money</Option>
             <Option value="selcom">Selcom</Option>
           </Select>
-          <Select size="small" placeholder="Status" allowClear className="w-32"
+          <Select size="small" placeholder="Status" allowClear className="w-full sm:w-32"
             onChange={(v) => setFilters(f => ({ ...f, is_active: v, offset: 0 }))}>
             <Option value="true">Active</Option>
             <Option value="false">Inactive</Option>
           </Select>
-          <Input.Search size="small" placeholder="Search name" allowClear className="w-44"
+          <Input.Search size="small" placeholder="Search name" allowClear className="w-full sm:w-44"
             onSearch={(v) => setFilters(f => ({ ...f, search: v || undefined, offset: 0 }))} />
           {(filters.account_type || filters.is_active || filters.search) && (
             <Button size="small" icon={<X className="w-3 h-3" />} onClick={() => setFilters({ limit: 50, offset: 0 })}
@@ -212,13 +212,13 @@ export default function AccountsPage() {
       )}
 
       {/* Desktop Table */}
-      <div className="hidden md:block">
+      <div className="hidden overflow-x-auto md:block">
         <Table
           dataSource={rows}
           columns={cols}
           rowKey="id"
-          size="middle"
           loading={isLoading}
+          size="middle"
           rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}
           pagination={{ pageSize: 50, total: data?.count || 0, showSizeChanger: false,
             onChange: (p) => setFilters(f => ({ ...f, offset: (p - 1) * 50 })) }}

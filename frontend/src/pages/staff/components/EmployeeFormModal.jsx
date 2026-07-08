@@ -34,7 +34,7 @@ export default function EmployeeFormModal({
       onOk={() => form.submit()}
       confirmLoading={loading}
       width={640}
-      destroyOnHidden
+      destroyOnClose
       className="top-8"
     >
       <Form form={form} layout="vertical" onFinish={onSubmit} className="mt-4">

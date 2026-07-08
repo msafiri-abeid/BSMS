@@ -1,4 +1,4 @@
-import { Tag } from 'antd';
+import { Tag, Space, Button } from 'antd';
 import { ChevronRight } from 'lucide-react';
 
 const getNested = (obj, path) => {
@@ -7,10 +7,10 @@ const getNested = (obj, path) => {
   return keys.reduce((o, k) => o?.[k], obj);
 };
 
-function MobileCard({ record, fields, onClick, statusColor }) {
+function MobileCard({ record, fields, onClick, statusColor, actions }) {
   return (
     <div
-      className="bg-white rounded-lg border border-slate-100 p-3 cursor-pointer hover:shadow-sm transition-shadow active:bg-slate-50"
+      className="bg-white rounded-lg border border-slate-100 p-3 hover:shadow-sm transition-shadow active:bg-slate-50"
       onClick={onClick}
     >
       <div className="flex items-start justify-between">
@@ -45,9 +45,27 @@ function MobileCard({ record, fields, onClick, statusColor }) {
               {record.status}
             </Tag>
           )}
-          <ChevronRight className="w-4 h-4 text-slate-300" />
+          {!actions && <ChevronRight className="w-4 h-4 text-slate-300" />}
         </div>
       </div>
+      {actions && (
+        <div className="mt-2 pt-2 border-t border-slate-100 flex gap-2 justify-end" onClick={(e) => e.stopPropagation()}>
+          {actions.map((action, i) => (
+            <Button
+              key={i}
+              size="small"
+              type={action.type || 'default'}
+              icon={action.icon}
+              onClick={() => action.onClick(record)}
+              loading={action.loading}
+              danger={action.danger}
+              className={`text-xs ${action.className || ''}`}
+            >
+              {action.label}
+            </Button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -251,14 +251,14 @@ export default function PartnersPage() {
             onSearch={(v) => setSearch(v || '')}
             className="w-full sm:w-56" />
           <Select size="small" placeholder="Filter by label" value={labelFilter || undefined}
-            onChange={(v) => setLabelFilter(v || '')} allowClear className="w-40">
+            onChange={(v) => setLabelFilter(v || '')} allowClear className="w-full sm:w-40">
             <Option value="Bentabet">Bentabet</Option>
             <Option value="Meteora">Meteora</Option>
             <Option value="Dante">Dante</Option>
             <Option value="Other">Other</Option>
           </Select>
           <Select size="small" placeholder="Filter by status" value={statusFilter || undefined}
-            onChange={(v) => setStatusFilter(v || '')} allowClear className="w-36">
+            onChange={(v) => setStatusFilter(v || '')} allowClear className="w-full sm:w-36">
             <Option value="active">Active</Option>
             <Option value="inactive">Inactive</Option>
           </Select>
@@ -293,7 +293,7 @@ export default function PartnersPage() {
       )}
 
       {/* Desktop Table */}
-      <div className="hidden md:block">
+      <div className="hidden overflow-x-auto md:block">
         <Table dataSource={rows} columns={cols} rowKey="id" loading={isLoading}
           size="middle"
           rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}

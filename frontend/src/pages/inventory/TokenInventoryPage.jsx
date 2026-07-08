@@ -317,7 +317,7 @@ export default function TokenInventoryPage() {
           <Select size="small" allowClear placeholder="Filter by type"
             value={movementTypeFilter}
             onChange={(v) => setMovementTypeFilter(v)}
-            className="w-44">
+            className="w-full sm:w-44">
             {Object.entries(TYPE_LABELS).map(([k, v]) => <Option key={k} value={k}>{v}</Option>)}
           </Select>
           {movementTypeFilter && (
@@ -347,9 +347,9 @@ export default function TokenInventoryPage() {
       )}
 
       {/* Desktop Table */}
-      <div className="hidden md:block">
+      <div className="hidden overflow-x-auto md:block">
         <Table
-          dataSource={movementsWithBalance}
+          dataSource={rows}
           columns={cols}
           rowKey="id"
           loading={isLoading}

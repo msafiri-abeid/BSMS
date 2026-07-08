@@ -96,7 +96,7 @@ export default function AccountDetailPage() {
         <Space wrap size={[8, 8]}>
           <DatePicker size="small" placeholder="From" onChange={(d) => setTxFilters(f => ({ ...f, date_from: d ? d.format('YYYY-MM-DD') : undefined, offset: 0 }))} />
           <DatePicker size="small" placeholder="To" onChange={(d) => setTxFilters(f => ({ ...f, date_to: d ? d.format('YYYY-MM-DD') : undefined, offset: 0 }))} />
-          <Select size="small" placeholder="Type" allowClear className="w-24"
+          <Select size="small" placeholder="Type" allowClear className="w-full sm:w-24"
             onChange={(v) => setTxFilters(f => ({ ...f, type: v, offset: 0 }))}>
             <Option value="in">IN</Option>
             <Option value="out">OUT</Option>

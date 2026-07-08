@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Layout, Menu, Avatar, Dropdown, Space, Badge, Typography, Button } from "antd";
+import { Layout, Menu, Avatar, Dropdown, Space, Badge, Typography, Button, Drawer } from "antd";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Wallet, ClipboardList, ListChecks, Crosshair,
@@ -7,7 +7,7 @@ import {
   DollarSign, Receipt, FileSignature, Banknote, Headphones,
   Package, Coins, ShoppingCart, ClipboardCheck, TrendingUp, Undo2, AlertTriangle, BarChart3,
   Shield, UserCheck, Building2, Briefcase,
-  Settings, User, LogOut, PanelLeftClose, PanelLeftOpen, Bell, Plus,
+  Settings, User, LogOut, PanelLeftClose, PanelLeftOpen, Bell, Plus, Menu as MenuIcon,
   Landmark,
 } from "lucide-react";
 import { useAuthStore } from "../store/authStore";
@@ -134,12 +134,55 @@ const ALL_NAV = [
   },
 ];
 
+function SidebarContent({ collapsed, navItems, selectedKeys, openKeys, onNavigate, onClose }) {
+  return (
+    <>
+      <div className="px-4 py-5 border-b border-white/10">
+        {!collapsed ? (
+          <div className="flex items-center gap-3">
+            <img src={logo} alt="Bentabet Logo" className="w-8 h-8 object-contain" />
+            <div>
+              <h1 className="text-white font-bold text-base leading-none">BENTABET</h1>
+              <p className="text-[11px] text-slate-400 mt-1">Slot Management System</p>
+            </div>
+          </div>
+        ) : (
+          <img src={logo} alt="Bentabet Logo" className="w-10 h-10 object-contain mx-auto" />
+        )}
+      </div>
+      <Menu
+        theme="dark"
+        mode="inline"
+        selectedKeys={selectedKeys}
+        defaultOpenKeys={openKeys}
+        items={navItems}
+        onClick={({ key }) => { if (!key.includes("-group")) { onNavigate(key); onClose?.(); } }}
+        className="!bg-brand-dark border-none pt-2"
+      />
+    </>
+  );
+}
+
 export default function MainLayout() {
   const [collapsed, setCollapsed] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const { message } = App.useApp();
   const { user, refreshToken, clearAuth, hasPermission, getRoleName } = useAuthStore();
+
+  useEffect(() => {
+    const mql = window.matchMedia("(max-width: 767px)");
+    setIsMobile(mql.matches);
+    const handler = (e) => setIsMobile(e.matches);
+    mql.addEventListener("change", handler);
+    return () => mql.removeEventListener("change", handler);
+  }, []);
+
+  useEffect(() => {
+    if (isMobile) setMobileOpen(false);
+  }, [location.pathname]);
 
   const handleLogout = async () => {
     try { await authAPI.logout(refreshToken); } catch {}
@@ -184,72 +227,94 @@ export default function MainLayout() {
     { key: "logout", label: "Sign Out", icon: <LogOut size={14} />, danger: true, onClick: handleLogout },
   ];
 
+  const handleNavClick = (key) => {
+    setMobileOpen(false);
+    navigate(key);
+  };
+
   return (
     <Layout style={{ minHeight: "100vh" }}>
-      <Sider
-        theme="dark"
-        collapsible
-        collapsed={collapsed}
-        trigger={null}
-        width={260}
-        className="!bg-brand-dark fixed left-0 top-0 h-screen overflow-y-auto z-50"
-      >
-        <div className="px-4 py-5 border-b border-white/10">
-          {!collapsed ? (
-            <div className="flex items-center gap-3">
-              <img src={logo} alt="Bentabet Logo" className="w-8 h-8 object-contain" />
-              <div>
-                <h1 className="text-white font-bold text-base leading-none">BENTABET</h1>
-                <p className="text-[11px] text-slate-400 mt-1">Slot Management System</p>
-              </div>
-            </div>
-          ) : (
-            <img src={logo} alt="Bentabet Logo" className="w-10 h-10 object-contain mx-auto" />
-          )}
-        </div>
-        <Menu
+      {/* Desktop Sidebar */}
+      {!isMobile && (
+        <Sider
           theme="dark"
-          mode="inline"
-          selectedKeys={selectedKeys}
-          defaultOpenKeys={openKeys}
-          items={navItems}
-          onClick={({ key }) => { if (!key.includes("-group")) navigate(key); }}
-          className="!bg-brand-dark border-none pt-2"
-        />
-      </Sider>
-
-      <Layout className={`transition-all duration-200 ${collapsed ? "ml-[80px]" : "ml-[260px]"}`}>
-        <Header className="sticky top-0 z-40 flex items-center justify-between bg-white px-6 border-b border-slate-200 h-14">
-          <Button
-            type="text"
-            icon={collapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
-            onClick={() => setCollapsed(!collapsed)}
+          collapsible
+          collapsed={collapsed}
+          trigger={null}
+          width={260}
+          className="!bg-brand-dark fixed left-0 top-0 h-screen overflow-y-auto z-50"
+        >
+          <SidebarContent
+            collapsed={collapsed}
+            navItems={navItems}
+            selectedKeys={selectedKeys}
+            openKeys={openKeys}
+            onNavigate={navigate}
           />
-          <Space>
+        </Sider>
+      )}
+
+      {/* Mobile Drawer */}
+      <Drawer
+        placement="left"
+        open={isMobile && mobileOpen}
+        onClose={() => setMobileOpen(false)}
+        width={280}
+        styles={{ body: { padding: 0, background: '#021559' }, header: { display: 'none' } }}
+        className="!bg-brand-dark"
+      >
+        <SidebarContent
+          collapsed={false}
+          navItems={navItems}
+          selectedKeys={selectedKeys}
+          openKeys={openKeys}
+          onNavigate={handleNavClick}
+          onClose={() => setMobileOpen(false)}
+        />
+      </Drawer>
+
+      <Layout className={`transition-all duration-200 ${!isMobile ? (collapsed ? "ml-[80px]" : "ml-[260px]") : "ml-0"}`}>
+        <Header className="sticky top-0 z-40 flex items-center justify-between bg-white px-4 md:px-6 border-b border-slate-200 h-14">
+          <div className="flex items-center gap-2">
+            {isMobile ? (
+              <Button
+                type="text"
+                icon={<MenuIcon size={20} />}
+                onClick={() => setMobileOpen(true)}
+              />
+            ) : (
+              <Button
+                type="text"
+                icon={collapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+                onClick={() => setCollapsed(!collapsed)}
+              />
+            )}
+          </div>
+          <Space size={[4, 4]}>
             {['Admin', 'General Manager', 'Operations Manager', 'Cashier'].includes(getRoleName()) && (
               <Button
                 type="primary"
                 size="small"
                 icon={<Plus size={14} />}
                 onClick={() => navigate('/inventory/sales?quick=1')}
-                className="!bg-brand-dark !border-0 !font-semibold !shadow-sm hover:!bg-brand-light !flex !items-center !gap-1.5 !px-3"
+                className="!bg-brand-dark !border-0 !font-semibold !shadow-sm hover:!bg-brand-light !flex !items-center !gap-1.5 !px-2 md:!px-3"
               >
-                Record Sale
+                <span className="hidden md:inline">Record Sale</span>
               </Button>
             )}
             <Badge count={0} size="small">
               <Button type="text" icon={<Bell size={18} />} />
             </Badge>
             <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
-              <Space style={{ cursor: "pointer" }}>
+              <Space style={{ cursor: "pointer" }} className="gap-1 md:gap-2">
                 <Avatar size={32} className="!bg-brand-dark" icon={<User size={16} />} />
-                {!collapsed && <Text style={{ fontSize: 13 }}>{user?.name}</Text>}
+                {!isMobile && <Text style={{ fontSize: 13 }} className="hidden md:inline">{user?.name}</Text>}
               </Space>
             </Dropdown>
           </Space>
         </Header>
 
-        <Content className="m-6 min-h-[calc(100vh-104px)] bg-slate-50">
+        <Content className="m-4 md:m-6 min-h-[calc(100vh-104px)] bg-slate-50">
           <Outlet />
         </Content>
       </Layout>

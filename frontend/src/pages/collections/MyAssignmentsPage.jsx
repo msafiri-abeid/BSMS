@@ -276,7 +276,7 @@ export default function MyAssignmentsPage() {
         </div>
 
         {/* Desktop Table */}
-        <div className="hidden md:block">
+        <div className="hidden overflow-x-auto md:block">
           <Table dataSource={assignments || []} columns={collectorCols} rowKey="id" size="middle"
             pagination={false}
             locale={{ emptyText: (
@@ -446,7 +446,7 @@ export default function MyAssignmentsPage() {
       )}
 
       {/* Desktop Table */}
-      <div className="hidden md:block">
+      <div className="hidden overflow-x-auto md:block">
         <Table dataSource={rows} columns={mgmtCols} rowKey="id" loading={loadingAll}
           size="middle" rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}
           pagination={{ total: allAssignments?.count, pageSize: 20, showSizeChanger: false,

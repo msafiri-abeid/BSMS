@@ -217,7 +217,7 @@ export default function RoleBuilderTab() {
           open={!!editModal}
           onCancel={() => setEditModal(null)}
           footer={null}
-          className="top-8"
+          className="top-8" destroyOnClose
         >
           <Form
             layout="vertical"

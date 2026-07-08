@@ -144,7 +144,7 @@ export default function InvoicesPage() {
           <Select size="small" allowClear placeholder="Status"
             value={statusFilter || undefined}
             onChange={(v) => setStatusFilter(v || '')}
-            className="w-32">
+            className="w-full sm:w-32">
             <Option value="draft">Draft</Option>
             <Option value="sent">Sent</Option>
             <Option value="paid">Paid</Option>
@@ -178,7 +178,7 @@ export default function InvoicesPage() {
       )}
 
       {/* Desktop Table */}
-      <div className="hidden md:block">
+      <div className="hidden overflow-x-auto md:block">
         <Table dataSource={rows} columns={cols} rowKey="id" loading={isLoading}
           size="middle"
           rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}

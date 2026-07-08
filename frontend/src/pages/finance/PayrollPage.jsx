@@ -126,7 +126,7 @@ export default function PayrollPage() {
           <Select size="small" allowClear placeholder="Status"
             value={statusFilter || undefined}
             onChange={(v) => setStatusFilter(v || '')}
-            className="w-32">
+            className="w-full sm:w-32">
             <Option value="pending">Pending</Option>
             <Option value="paid">Paid</Option>
           </Select>
@@ -157,7 +157,7 @@ export default function PayrollPage() {
       )}
 
       {/* Desktop Table */}
-      <div className="hidden md:block">
+      <div className="hidden overflow-x-auto md:block">
         <Table dataSource={rows} columns={cols} rowKey="id" loading={isLoading}
           size="middle"
           rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}
@@ -177,6 +177,9 @@ export default function PayrollPage() {
                 fields={mobileFields}
                 onClick={() => {}}
                 statusColor={PAYMENT_STATUS_COLORS[r.payment_status]}
+                actions={r.payment_status === 'pending' ? [
+                  { key: 'pay', label: 'Pay Now', type: 'primary', icon: <DollarSign className="w-3.5 h-3.5" />, onClick: () => payMutation.mutate(r.id), loading: payMutation.isPending },
+                ] : undefined}
               />
             )}
           />

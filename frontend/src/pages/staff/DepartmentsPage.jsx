@@ -118,7 +118,7 @@ export default function DepartmentsPage() {
         onOk={() => form.submit()}
         confirmLoading={saveMutation.isPending}
         width={480}
-        className="top-8"
+        className="top-8" destroyOnClose
       >
         <Form form={form} layout="vertical" onFinish={(v) => saveMutation.mutate(v)} className="mt-4">
           <Form.Item name="name" label={<span className="text-xs font-semibold text-slate-600">Name</span>} rules={[{ required: true }]}><Input /></Form.Item>

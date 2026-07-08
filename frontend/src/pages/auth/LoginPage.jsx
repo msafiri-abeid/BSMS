@@ -1,7 +1,7 @@
 // src/pages/auth/LoginPage.jsx
 import { useState } from 'react';
 import { Form, Input, Button, App } from 'antd';
-import { UserOutlined, LockOutlined } from '@ant-design/icons';
+import { User, Lock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { authAPI } from '../../services/api';
 import { useAuthStore } from '../../store/authStore';
@@ -67,7 +67,7 @@ export default function LoginPage() {
             className="mb-0"
           >
             <Input
-              prefix={<UserOutlined className="text-slate-400 mr-1" />}
+              prefix={<User className="w-4 h-4 text-slate-400 mr-1" />}
               placeholder="Email address"
               autoComplete="email"
               className="h-12 rounded-lg border-slate-300 placeholder:text-slate-400 focus:border-white focus:shadow-none hover:border-slate-200 transition-all"
@@ -80,7 +80,7 @@ export default function LoginPage() {
             className="pt-1 mb-0"
           >
             <Input.Password
-              prefix={<LockOutlined className="text-slate-400 mr-1" />}
+              prefix={<Lock className="w-4 h-4 text-slate-400 mr-1" />}
               placeholder="Password"
               autoComplete="current-password"
               className="h-12 rounded-lg border-slate-300 placeholder:text-slate-400 focus:border-white focus:shadow-none hover:border-slate-200 transition-all"

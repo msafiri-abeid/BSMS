@@ -418,7 +418,7 @@ function RoleBuilderTab() {
         open={!!editModal}
         onCancel={() => setEditModal(null)}
         footer={null}
-        className="top-8"
+        className="top-8" destroyOnClose
       >
         <Form
           layout="vertical"
@@ -477,7 +477,7 @@ function BusinessManagementTab() {
         <Table dataSource={businesses || []} columns={bizColumns} rowKey="id" size="middle" pagination={false} loading={isLoading} />
       </Card>
 
-      <Modal title="Edit Business" open={!!editBiz} onCancel={() => setEditBiz(null)} footer={null} className="top-8">
+      <Modal title="Edit Business" open={!!editBiz} onCancel={() => setEditBiz(null)} footer={null} className="top-8" destroyOnClose>
         {editBiz && (
           <Form
             layout="vertical"
@@ -575,7 +575,7 @@ export default function SettingsPage() {
   return (
     <div>
       <div className="mb-6 pb-4 border-b border-slate-200/60">
-        <Title level={4} style={{ margin: 0 }} className="!text-slate-800 !font-extrabold !tracking-tight">Settings</Title>
+        <Title level={4} className="!m-0 !text-slate-800 !font-extrabold !tracking-tight">Settings</Title>
       </div>
       <Tabs items={tabItems} />
     </div>

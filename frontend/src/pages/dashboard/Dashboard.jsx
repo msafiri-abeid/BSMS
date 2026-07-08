@@ -35,7 +35,7 @@ const DashboardKpiCard = ({ title, value, formatter, icon: Icon, bgIconColor, ic
         <div className="flex-1 min-w-0">
           <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1 truncate">{title}</p>
           <div className="flex items-center gap-2">
-            <p className="text-2xl font-bold text-slate-800" style={{ letterSpacing: '-0.025em' }}>
+            <p className="text-2xl font-bold text-slate-800 tracking-tight">
               {formatter ? formatter(value) : (value ?? 0)}
             </p>
             {isClickable && <ArrowRightIcon className="w-3.5 h-3.5 text-slate-300 shrink-0" />}
@@ -85,7 +85,7 @@ function BusinessFilter({ businessFilter, setBusinessFilter, shopFilter, setShop
           value={businessFilter || undefined}
           onChange={(v) => { setBusinessFilter(v || null); setShopFilter(null); }}
           allowClear showSearch optionFilterProp="children"
-          className="!w-48"
+          className="!w-full sm:!w-48"
         >
           {bizList.map(b => (
             <Select.Option key={b.id} value={b.id}>{b.label || b.name}</Select.Option>
@@ -96,7 +96,7 @@ function BusinessFilter({ businessFilter, setBusinessFilter, shopFilter, setShop
           value={shopFilter || undefined}
           onChange={(v) => setShopFilter(v || null)}
           allowClear showSearch optionFilterProp="children"
-          className="!w-56"
+          className="!w-full sm:!w-56"
           disabled={!businessFilter}
         >
           {shopList.map(s => (
@@ -106,7 +106,7 @@ function BusinessFilter({ businessFilter, setBusinessFilter, shopFilter, setShop
         <RangePicker
           value={dateRange}
           onChange={(dates) => setDateRange(dates)}
-          className="!w-56"
+          className="!w-full sm:!w-56"
         />
         {hasFilters && (
           <Button size="small" onClick={clearFilters}>
@@ -457,7 +457,7 @@ export default function Dashboard() {
     <div className="p-1 sm:p-2 bg-slate-50 min-h-screen">
       <div className="mb-6 pb-4 border-b border-slate-200/60 flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-3">
-          <Title level={4} style={{ margin: 0 }} className="!text-slate-800 !font-extrabold !tracking-tight">
+          <Title level={4} className="!m-0 !text-slate-800 !font-extrabold !tracking-tight">
             {titleMap[role] || 'Dashboard'}
           </Title>
           <span className="text-xs text-slate-400 font-medium">

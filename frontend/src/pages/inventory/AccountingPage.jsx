@@ -108,7 +108,7 @@ export default function AccountingPage() {
           <h4 className="text-base font-bold text-slate-800 m-0">Accounting & Reports</h4>
           <span className="text-xs text-slate-500">{selectedShop ? 'Profit & loss, margins, valuation' : 'Select a shop'}</span>
         </div>
-        <Select placeholder="Select shop" className="w-[250px]"
+        <Select placeholder="Select shop" className="w-full sm:w-[250px]"
           onChange={(v) => { setSelectedShop(v); setMarginRowKeys([]); setValuationRowKeys([]); }}
           allowClear showSearch optionFilterProp="children">
           {shops.map(s => <Option key={s.id} value={s.id}>{s.name}</Option>)}
@@ -230,7 +230,7 @@ export default function AccountingPage() {
                       </Space>
                     </div>
                   )}
-                  <div className="hidden md:block">
+                  <div className="hidden overflow-x-auto md:block">
                     <Table dataSource={marginRows} columns={marginCols} rowKey="id"
                       size="middle"
                       rowSelection={{ selectedRowKeys: marginRowKeys, onChange: setMarginRowKeys }}
@@ -278,7 +278,7 @@ export default function AccountingPage() {
                       </Space>
                     </div>
                   )}
-                  <div className="hidden md:block">
+                  <div className="hidden overflow-x-auto md:block">
                     <Table dataSource={valuationRows} columns={valuationCols} rowKey="product_id"
                       size="middle"
                       rowSelection={{ selectedRowKeys: valuationRowKeys, onChange: setValuationRowKeys }}

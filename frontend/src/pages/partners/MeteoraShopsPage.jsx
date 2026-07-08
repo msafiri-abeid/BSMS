@@ -224,7 +224,7 @@ export default function MeteoraShopsPage() {
             onSearch={(v) => setSearch(v || '')}
             className="w-full sm:w-56" />
           <Select size="small" placeholder="Filter by status" value={statusFilter || undefined}
-            onChange={(v) => setStatusFilter(v || '')} allowClear className="w-36">
+            onChange={(v) => setStatusFilter(v || '')} allowClear className="w-full sm:w-36">
             <Option value="active">Active</Option>
             <Option value="inactive">Inactive</Option>
             <Option value="suspended">Suspended</Option>
@@ -258,7 +258,7 @@ export default function MeteoraShopsPage() {
         </div>
       )}
 
-      <div className="hidden md:block">
+      <div className="hidden overflow-x-auto md:block">
         <Table dataSource={rows} columns={cols} rowKey="id" loading={isLoading}
           size="middle"
           rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}

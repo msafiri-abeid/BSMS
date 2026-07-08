@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { Table, Button, Modal, Form, Input, InputNumber, Select, Tag, Alert, App, Typography, Space, DatePicker } from 'antd';
+import { Table, Button, Modal, Form, Input, InputNumber, Select, Tag, Alert, App, Typography, Space, DatePicker, List } from 'antd';
 import { Plus, AlertTriangle } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { inventoryAPI, shopsAPI } from '../../services/api';
 import dayjs from 'dayjs';
+import MobileCard from '../../components/MobileCard';
 
 const { Text } = Typography;
 const { Option } = Select;
@@ -76,6 +77,24 @@ export default function ShopInventoryPage() {
     },
   ];
 
+  const mobileFields = [
+    { key: 'name', label: 'Product', render: (_, r) => r.name },
+    { key: 'category', label: 'Category', render: (_, r) => r.category || '—' },
+    { key: 'prices', label: 'Prices', render: (_, r) => (
+      <span className="text-xs">Buy: TZS {r.purchase_price?.toLocaleString()} | Sell: TZS {r.selling_price?.toLocaleString()}</span>
+    )},
+    { key: 'stock', label: 'Stock', render: (_, r) => {
+      const qty = r.stockLevel?.current_qty ?? '—';
+      const isLow = r.stockLevel && r.stockLevel.current_qty <= r.stockLevel.reorder_level;
+      return <Tag color={isLow ? 'red' : 'green'} className="flex items-center gap-1">{qty} {isLow && <AlertTriangle className="w-3 h-3" />}</Tag>;
+    }},
+    { key: 'expiry', label: 'Expiry', render: (_, r) => {
+      if (!r.stockLevel?.expiry_date) return '—';
+      const daysLeft = dayjs(r.stockLevel.expiry_date).diff(dayjs(), 'day');
+      return <Tag color={daysLeft <= 7 ? 'red' : daysLeft <= 14 ? 'orange' : 'green'}>{r.stockLevel.expiry_date} ({daysLeft}d)</Tag>;
+    }},
+  ];
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-200/60">
@@ -115,14 +134,28 @@ export default function ShopInventoryPage() {
         />
       )}
 
-      <Table
-        dataSource={products || []}
-        columns={cols}
-        rowKey="id"
-        loading={isLoading}
-        size="middle"
-        pagination={{ pageSize: 20 }}
-      />
+      <div className="hidden overflow-x-auto md:block">
+        <Table
+          dataSource={products || []}
+          columns={cols}
+          rowKey="id"
+          loading={isLoading}
+          size="middle"
+          pagination={{ pageSize: 20 }}
+        />
+      </div>
+      <div className="md:hidden space-y-2">
+        <List
+          loading={isLoading}
+          dataSource={products || []}
+          renderItem={(r) => (
+            <MobileCard
+              record={r}
+              fields={mobileFields}
+            />
+          )}
+        />
+      </div>
 
       <Modal title={<span className="text-sm font-bold text-slate-700">Add Product</span>}
         open={open}

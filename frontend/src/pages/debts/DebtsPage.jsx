@@ -173,19 +173,19 @@ export default function DebtsPage() {
 
       <Card size="small" className="mb-4 border border-slate-100">
         <Space wrap size={[8, 8]}>
-          <Select size="small" placeholder="Machine" value={filters.machine_id} onChange={(v) => setFilters(p => ({ ...p, machine_id: v }))} className="w-[140px]" allowClear>
+          <Select size="small" placeholder="Machine" value={filters.machine_id} onChange={(v) => setFilters(p => ({ ...p, machine_id: v }))} className="w-full sm:w-[140px]" allowClear>
             {machines.map(m => <Option key={m.id} value={String(m.id)}>{m.slot_code}</Option>)}
           </Select>
-          <Select size="small" placeholder="Shop" value={filters.shop_id} onChange={(v) => setFilters(p => ({ ...p, shop_id: v }))} className="w-[140px]" allowClear>
+          <Select size="small" placeholder="Shop" value={filters.shop_id} onChange={(v) => setFilters(p => ({ ...p, shop_id: v }))} className="w-full sm:w-[140px]" allowClear>
             {shops.map(s => <Option key={s.id} value={String(s.id)}>{s.name}</Option>)}
           </Select>
-          <Select size="small" placeholder="Status" value={filters.status} onChange={(v) => setFilters(p => ({ ...p, status: v }))} className="w-[120px]" allowClear>
+          <Select size="small" placeholder="Status" value={filters.status} onChange={(v) => setFilters(p => ({ ...p, status: v }))} className="w-full sm:w-[120px]" allowClear>
             <Option value="pending">Pending</Option>
             <Option value="partial">Partial</Option>
             <Option value="paid">Paid</Option>
             <Option value="written_off">Written Off</Option>
           </Select>
-          <Select size="small" placeholder="Type" value={filters.type} onChange={(v) => setFilters(p => ({ ...p, type: v }))} className="w-[120px]" allowClear>
+          <Select size="small" placeholder="Type" value={filters.type} onChange={(v) => setFilters(p => ({ ...p, type: v }))} className="w-full sm:w-[120px]" allowClear>
             <Option value="token">Token</Option>
             <Option value="commission">Commission</Option>
             <Option value="advance">Advance</Option>
@@ -219,7 +219,7 @@ export default function DebtsPage() {
       )}
 
       {/* Desktop Table */}
-      <div className="hidden md:block">
+      <div className="hidden overflow-x-auto md:block">
         <Table dataSource={debts} columns={cols} rowKey="id" loading={isLoading} size="middle"
           rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}
           pagination={{ total: data?.count, pageSize: 20, showSizeChanger: false,
@@ -254,8 +254,14 @@ export default function DebtsPage() {
                   { key: 'shop', label: 'Shop', dataIndex: ['shop', 'name'] },
                   { key: 'outstanding', label: 'Outstanding', render: (_, r2) => fmt(r2.amount - r2.paid_amount) },
                 ]}
-                onClick={() => {}}
+                onClick={() => setViewRecord(r)}
                 statusColor={STATUS_COLORS[r.status]}
+                actions={[
+                  { key: 'view', label: 'View', icon: <Eye className="w-3.5 h-3.5" />, onClick: () => setViewRecord(r) },
+                  ...(r.status !== 'paid' && r.status !== 'written_off' ? [
+                    { key: 'pay', label: 'Pay', type: 'primary', icon: <Wallet className="w-3.5 h-3.5" />, onClick: () => { setPayOpen(r); payForm.resetFields(); } },
+                  ] : []),
+                ]}
               />
             )}
           />

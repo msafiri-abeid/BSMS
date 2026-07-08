@@ -407,7 +407,7 @@ export default function CollectionsPage() {
       {/* Filters */}
       <div className="rounded-lg border border-slate-100 p-4 mb-4 bg-white">
         <Space wrap size={[8, 8]}>
-          <DatePicker size="small" className="w-36"
+          <DatePicker size="small" className="w-full sm:w-36"
             value={filters.date ? dayjs(filters.date) : null}
             onChange={(d) => {
               if (d) {
@@ -418,26 +418,26 @@ export default function CollectionsPage() {
               }
             }} />
           
-          <Select size="small" placeholder="Shop" allowClear className="w-40"
+          <Select size="small" placeholder="Shop" allowClear className="w-full sm:w-40"
             onChange={(v) => setFilters(f => ({ ...f, shop_id: v, offset: 0 }))}>
             {shops.map(s => <Option key={s.id} value={s.id}>{s.name}</Option>)}
           </Select>
           {isNovomaticFilter ? (
-            <Select size="small" placeholder="Cashier" allowClear className="w-40"
+            <Select size="small" placeholder="Cashier" allowClear className="w-full sm:w-40"
               onChange={(v) => setFilters(f => ({ ...f, collector_id: v, offset: 0 }))}>
               {cashiers.map(c => <Option key={c.id} value={c.id}>{c.name}</Option>)}
             </Select>
           ) : (
-            <Select size="small" placeholder="Collector" allowClear className="w-40"
+            <Select size="small" placeholder="Collector" allowClear className="w-full sm:w-40"
               onChange={(v) => setFilters(f => ({ ...f, collector_id: v, offset: 0 }))}>
               {collectors.map(c => <Option key={c.id} value={c.id}>{c.name}</Option>)}
             </Select>
           )}
-          <Select size="small" placeholder="Status" allowClear className="w-32"
+          <Select size="small" placeholder="Status" allowClear className="w-full sm:w-32"
             onChange={(v) => setFilters(f => ({ ...f, status: v, offset: 0 }))}>
             {['pending', 'approved', 'disputed'].map(s => <Option key={s} value={s}>{s}</Option>)}
           </Select>
-          <Input.Search size="small" placeholder="Search slot code" allowClear className="w-44"
+          <Input.Search size="small" placeholder="Search slot code" allowClear className="w-full sm:w-44"
             onSearch={(v) => setFilters(f => ({ ...f, search: v || undefined, offset: 0 }))} />
           {(filters.shop_id || filters.collector_id || filters.status || filters.search || filters.date) && (
             <Button size="small" icon={<X className="w-3 h-3" />} onClick={() => setFilters(f => ({ limit: 50, offset: 0, manufacturer: f.manufacturer }))}
@@ -471,7 +471,7 @@ export default function CollectionsPage() {
       )}
 
       {/* Desktop Table */}
-      <div className="hidden md:block">
+      <div className="hidden overflow-x-auto md:block">
         <Table
           dataSource={rows}
           columns={cols}
@@ -524,6 +524,15 @@ export default function CollectionsPage() {
                 fields={mobileFields}
                 onClick={() => setViewRecord(r)}
                 statusColor={r.status === 'approved' ? 'green' : r.status === 'disputed' ? 'red' : 'orange'}
+                actions={[
+                  { key: 'view', label: 'View', icon: <Eye className="w-3.5 h-3.5" />, onClick: () => setViewRecord(r) },
+                  ...(canApprove && r.status === 'pending' ? [
+                    { key: 'approve', label: 'Approve', type: 'primary', icon: <CheckCircle className="w-3.5 h-3.5" />, onClick: () => reviewMutation.mutate({ id: r.id, status: 'approved' }), loading: reviewMutation.isPending },
+                  ] : []),
+                  ...(canWrite && (r.status === 'pending' || r.status === 'supervisor_approved') ? [
+                    { key: 'edit', label: 'Edit', icon: <Edit3 className="w-3.5 h-3.5" />, onClick: () => setEditRecord(r) },
+                  ] : []),
+                ]}
               />
             )}
           />
