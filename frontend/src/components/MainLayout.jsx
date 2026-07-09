@@ -37,9 +37,9 @@ const ALL_NAV = [
     icon: <Cpu size={16} />,
     module: "machines",
     children: [
-      { key: "/machines/novomatic", label: "Novomatic", icon: <Monitor size={16} />, module: "machines" },
-      { key: "/machines/meteora", label: "Meteora", icon: <Monitor size={16} />, module: "machines", roles: ['Admin', 'General Manager', 'Operations Manager'] },
-      { key: "/debts", label: "Debts", icon: <FileText size={16} />, module: "machines", roles: ['Admin', 'General Manager', 'Operations Manager'] },
+      { key: "/machines/novomatic", label: "Novomatic", icon: <Monitor size={16} />, module: "machines", businessType: 'slot' },
+      { key: "/machines/meteora", label: "Meteora", icon: <Monitor size={16} />, module: "machines", businessType: 'meteora', roles: ['Admin', 'General Manager', 'Operations Manager', 'Collector'] },
+      { key: "/debts", label: "Debts", icon: <FileText size={16} />, module: "machines", businessType: 'meteora', roles: ['Admin', 'General Manager', 'Operations Manager'] },
     ],
   },
   {
@@ -48,8 +48,8 @@ const ALL_NAV = [
     icon: <Users size={16} />,
     module: "partners",
     children: [
-      { key: "/shops/slot", label: "Slot Shops", icon: <Store size={16} />, module: "shops" },
-      { key: "/shops/meteora", label: "Meteora Shops", icon: <Store size={16} />, module: "shops" },
+      { key: "/shops/slot", label: "Slot Shops", icon: <Store size={16} />, module: "shops", businessType: 'slot' },
+      { key: "/shops/meteora", label: "Meteora Shops", icon: <Store size={16} />, module: "shops", businessType: 'meteora' },
       { key: "/partners", label: "Partners", icon: <Handshake size={16} />, module: "partners" },
     ],
   },
@@ -190,10 +190,21 @@ export default function MainLayout() {
     navigate("/login");
   };
 
+  const BUSINESS_SCOPED_ROLES = { 'Cashier': 'slot', 'Collector': 'meteora' };
+  const userBusinessType = BUSINESS_SCOPED_ROLES[getRoleName()] || null;
+
+  const hasBusinessScope = (item) => {
+    if (!userBusinessType) return true;
+    if (item.businessType && item.businessType !== userBusinessType) return false;
+    if (item.children) return item.children.some(c => hasBusinessScope(c));
+    return true;
+  };
+
   const filterNav = (items) =>
     items
       .filter((item) => {
         if (item.roles && !item.roles.includes(getRoleName())) return false;
+        if (!hasBusinessScope(item)) return false;
         return item.module === null || hasPermission(item.module, "read");
       })
       .map((item) => ({ ...item, children: item.children ? filterNav(item.children) : undefined }))

@@ -736,6 +736,7 @@ Invoice.hasMany(CreditNote, { foreignKey: 'invoice_id', as: 'creditNotes' });
 
 Product.belongsTo(Shop, { foreignKey: 'shop_id', as: 'shop' });
 Product.hasMany(StockMovement, { foreignKey: 'product_id', as: 'movements' });
+StockMovement.belongsTo(Product, { foreignKey: 'product_id', as: 'product' });
 Product.hasOne(StockLevel, { foreignKey: 'product_id', as: 'stockLevel' });
 
 Sale.belongsTo(Shop, { foreignKey: 'shop_id', as: 'shop' });

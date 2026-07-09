@@ -201,12 +201,12 @@ export const settingsAPI = {
 
 export const dashboardAPI = {
   admin: (p) => api.get('/dashboard/admin', { params: p }),
-  collector: () => api.get('/dashboard/collector'),
-  finance: () => api.get('/dashboard/finance'),
-  director: () => api.get('/dashboard/director'),
+  collector: (p) => api.get('/dashboard/collector', { params: p }),
+  finance: (p) => api.get('/dashboard/finance', { params: p }),
+  director: (p) => api.get('/dashboard/director', { params: p }),
   cashier: (p) => api.get('/dashboard/cashier', { params: p }),
-  sales: () => api.get('/dashboard/sales'),
-  technician: () => api.get('/dashboard/technician'),
+  sales: (p) => api.get('/dashboard/sales', { params: p }),
+  technician: (p) => api.get('/dashboard/technician', { params: p }),
 };
 
 export const accountsAPI = {

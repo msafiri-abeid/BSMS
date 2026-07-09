@@ -53,7 +53,8 @@ const deleteRole = async (roleId) => {
 
 const updatePermissions = async (roleId, permissions) => {
   const role = await Role.findByPk(roleId);
-  if (!role || role.is_system) throw new Error('Cannot modify system role');
+  if (!role) throw new Error('Role not found');
+  if (role.name === 'Admin') throw new Error('Admin permissions cannot be modified');
   await Permission.destroy({ where: { role_id: roleId } });
   const toCreate = [];
   permissions.forEach(({ module, actions }) => {

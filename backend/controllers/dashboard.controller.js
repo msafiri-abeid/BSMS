@@ -9,21 +9,21 @@ exports.adminDashboard = async (req, res, next) => {
 
 exports.collectorDashboard = async (req, res, next) => {
   try {
-    const data = await dashService.collectorDashboard(req.user.id);
+    const data = await dashService.collectorDashboard(req.user.id, req.query);
     res.json({ success: true, data });
   } catch (err) { next(err); }
 };
 
 exports.financeDashboard = async (req, res, next) => {
   try {
-    const data = await dashService.financeDashboard();
+    const data = await dashService.financeDashboard(req.query);
     res.json({ success: true, data });
   } catch (err) { next(err); }
 };
 
 exports.directorDashboard = async (req, res, next) => {
   try {
-    const data = await dashService.directorDashboard();
+    const data = await dashService.directorDashboard(req.query);
     res.json({ success: true, data });
   } catch (err) { next(err); }
 };
@@ -37,14 +37,14 @@ exports.cashierDashboard = async (req, res, next) => {
 
 exports.salesDashboard = async (req, res, next) => {
   try {
-    const data = await dashService.salesDashboard();
+    const data = await dashService.salesDashboard(req.query);
     res.json({ success: true, data });
   } catch (err) { next(err); }
 };
 
 exports.technicianDashboard = async (req, res, next) => {
   try {
-    const data = await dashService.technicianDashboard(req.user.id);
+    const data = await dashService.technicianDashboard(req.user.id, req.query);
     res.json({ success: true, data });
   } catch (err) { next(err); }
 };

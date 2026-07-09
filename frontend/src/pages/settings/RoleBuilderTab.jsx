@@ -3,7 +3,7 @@ import { Form, Input, Button, Table, Modal, Card, Row, Col, Checkbox, Tag, App, 
 import {
   Plus, Save, Pencil, Trash2, Shield,
   Store, Cpu, Wallet, Headphones, DollarSign,
-  Package, Users, BarChart3, Settings as SettingsIcon, UserCheck, Handshake,
+  Package, Users, BarChart3, Settings as SettingsIcon, UserCheck, Handshake, Landmark,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { settingsAPI } from '../../services/api';
@@ -22,6 +22,7 @@ const MODULE_ICONS = {
   collections: Wallet,
   tickets: Headphones,
   finance: DollarSign,
+  accounts: Landmark,
   inventory: Package,
   staff: Users,
   reports: BarChart3,
@@ -31,7 +32,7 @@ const MODULE_ICONS = {
 
 const MODULE_GROUPS = [
   { label: 'Operations', modules: ['partners', 'shops', 'machines', 'collections', 'tickets'] },
-  { label: 'Finance', modules: ['finance'] },
+  { label: 'Finance', modules: ['finance', 'accounts'] },
   { label: 'Inventory', modules: ['inventory'] },
   { label: 'Administration', modules: ['staff', 'reports', 'settings', 'users'] },
 ];
@@ -149,10 +150,10 @@ export default function RoleBuilderTab() {
                     <Save size={14} className="mr-1" /> Save Permissions
                   </Button>
                 ) : undefined}>
-              {selected.is_system ? (
+              {selected.name === 'Admin' ? (
                 <div className="flex flex-col items-center justify-center py-10 text-slate-400">
                   <Shield size={32} className="mb-2 text-slate-300" />
-                  <Text type="secondary">System roles cannot be modified via the role builder.</Text>
+                  <Text type="secondary">Admin permissions are locked and cannot be modified.</Text>
                 </div>
               ) : (
                 <div className="space-y-6">

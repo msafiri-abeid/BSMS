@@ -9,9 +9,17 @@ const getSetting = async (key, def) => {
   return row ? row.value : def;
 };
 
+const resolveBizTypeFromShop = async (shopId) => {
+  if (!shopId) return null;
+  const shop = await Shop.findByPk(shopId, { attributes: ['business_type'], raw: true });
+  if (!shop) return null;
+  return shop.business_type === 'slot' ? 'bentabet' : shop.business_type;
+};
+
 const submitExpense = async (data, userId) => {
   const expense_date = data.expense_date || new Date().toISOString().split('T')[0];
-  return Expense.create({ ...data, expense_date, submitted_by: userId, status: 'pending' });
+  const bizType = await resolveBizTypeFromShop(data.shop_id);
+  return Expense.create({ ...data, business_type: bizType || data.business_type || 'meteora', expense_date, submitted_by: userId, status: 'pending' });
 };
 
 const approveExpense = async (expenseId, action, reason, userId) => {
@@ -726,7 +734,8 @@ const updateExpense = async (id, data, userId) => {
   const expense = await Expense.findByPk(id);
   if (!expense) throw new Error('Expense not found');
   if (expense.status !== 'pending') throw new Error('Can only edit pending expenses');
-  await expense.update({ ...data, submitted_by: userId });
+  const bizType = await resolveBizTypeFromShop(data.shop_id);
+  await expense.update({ ...data, business_type: bizType || data.business_type || expense.business_type, submitted_by: userId });
   return Expense.findByPk(id, {
     include: [
       { model: ExpenseCategory, as: 'category' },

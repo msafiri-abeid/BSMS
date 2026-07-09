@@ -34,6 +34,8 @@ export default function ExpensesPage() {
   const roleName = user?.role?.name;
   const isCashier = roleName === 'Cashier';
 
+  const watchedBizType = Form.useWatch('business_type', form);
+
   const params = {};
   if (search) params.search = search;
   if (statusFilter) params.status = statusFilter;
@@ -47,6 +49,9 @@ export default function ExpensesPage() {
   const { data: pending } = useQuery({ queryKey: ['pending-expenses'], queryFn: () => financeAPI.pendingExpenses().then(r => r.data.data), enabled: canApprove });
   const { data: categories } = useQuery({ queryKey: ['expense-categories'], queryFn: () => financeAPI.listCategories().then(r => r.data.data) });
   const { data: shopsList } = useQuery({ queryKey: ['shops'], queryFn: () => shopsAPI.list().then(r => r.data.data) });
+  const allShops = shopsList?.rows || shopsList || [];
+  const bizTypeToShop = (bt) => bt === 'bentabet' ? 'slot' : bt;
+  const filteredShops = watchedBizType ? allShops.filter(s => s.business_type === bizTypeToShop(watchedBizType)) : allShops;
   const { data: machinesByShop } = useQuery({
     queryKey: ['machines-by-shop', selectedShop],
     queryFn: () => machinesAPI.list({ shop_id: selectedShop, limit: 200 }).then(r => r.data.data),
@@ -317,7 +322,7 @@ export default function ExpensesPage() {
           <Form.Item name="shop_id" label={<span className="text-xs font-semibold text-slate-600">Shop</span>} rules={[{ required: true }]}>
             <Select placeholder="Select shop" showSearch optionFilterProp="children"
               onChange={(v) => { setSelectedShop(v); form.setFieldValue('machine_id', undefined); }}>
-              {(shopsList?.rows || shopsList || []).map(s => (
+              {filteredShops.map(s => (
                 <Option key={s.id} value={s.id}>{s.name}</Option>
               ))}
             </Select>
