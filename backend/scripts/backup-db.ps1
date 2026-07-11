@@ -24,10 +24,13 @@ param(
 
 # ─── CONFIGURATION ─────────────────────────────────────────────
 $DB_NAME = "bentabet_db"
-$DB_USER = "root"
-$DB_PASS = "FFSD@2026"
-$MYSQL_PATH = "C:\Program Files\MySQL\MySQL Server 8.0\bin"
-$BACKUP_DIR = "C:\Users\Traveller\Downloads\BSMS\BSMS\backups"
+$DB_USER = $env:DB_USER
+if (-not $DB_USER) { $DB_USER = "bentabet" }
+$DB_PASS = $env:DB_PASSWORD
+if (-not $DB_PASS) { Write-Host "ERROR: Set DB_PASSWORD environment variable first." -ForegroundColor Red; exit 1 }
+$MYSQL_PATH = $env:MYSQL_PATH
+if (-not $MYSQL_PATH) { $MYSQL_PATH = "/usr/bin" }
+$BACKUP_DIR = "/opt/bsms/backups"
 $RETENTION_DAYS = 30
 
 # Off-site sync (optional — requires rclone configured)

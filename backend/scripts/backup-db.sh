@@ -17,7 +17,7 @@ set -euo pipefail
 # ─── CONFIGURATION ─────────────────────────────────────────────
 DB_NAME="bentabet_db"
 DB_USER="bentabet"
-DB_PASS="your-production-password-here"
+DB_PASS="${DB_PASSWORD:?Set DB_PASSWORD environment variable}"
 BACKUP_DIR="/backups/daily"
 RETENTION_DAYS=30
 
