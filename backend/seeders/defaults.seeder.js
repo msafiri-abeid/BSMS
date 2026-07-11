@@ -6,12 +6,12 @@ const bcrypt = require('bcryptjs');
 const { ROLES, MODULES, ACTIONS, BCRYPT_ROUNDS } = require('../config/constants');
 const settingsService = require('../services/settings.service');
 
-if (process.env.NODE_ENV === 'production' && process.env.SKIP_SEED === 'true') {
-  console.log('[SEED] Skipping seed in production');
-  return;
-}
-
 module.exports = async () => {
+  if (process.env.NODE_ENV === 'production' && process.env.SKIP_SEED === 'true') {
+    console.log('[SEED] Skipping seed in production');
+    return;
+  }
+
   // Transition: migrate 'write' → 'create' + 'update'
   const oldWritePerms = await Permission.findAll({ where: { action: 'write' } });
   if (oldWritePerms.length > 0) {
