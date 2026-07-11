@@ -3,7 +3,7 @@ import axios from 'axios';
 import { useAuthStore } from '../store/authStore';
 
 const api = axios.create({
-  baseURL: 'https://api.betbenta.com',
+  baseURL: import.meta.env.VITE_API_URL || 'https://api.betbenta.com/api',
   timeout: 30000,
 });
 
@@ -49,7 +49,7 @@ api.interceptors.response.use(
       try {
         const stored = localStorage.getItem('bentabet-auth');
         const { state } = JSON.parse(stored);
-        const { data } = await axios.post('/api/auth/refresh', { refreshToken: state.refreshToken });
+        const { data } = await api.post('/auth/refresh', { refreshToken: state.refreshToken });
         const { tokens, user } = data.data;
         const newToken = tokens.accessToken;
         const newRefreshToken = tokens.refreshToken;
