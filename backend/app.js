@@ -10,6 +10,9 @@ const routes = require('./routes');
 
 const app = express();
 
+// Trust first proxy (nginx) — required for X-Forwarded-For / rate limiting
+app.set('trust proxy', 1);
+
 // Security headers
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 
