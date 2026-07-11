@@ -56,7 +56,7 @@ export default function RecordCollectionModal({ open, onClose }) {
 
   useEffect(() => {
     if (machineDetail) {
-      const opening = machineDetail.lastNovomaticReading?.closing_credits ?? machineDetail.previous_count ?? machineDetail.opening_count ?? 0;
+      const opening = machineDetail.previous_count ?? machineDetail.opening_count ?? 0;
       setOpeningCredits(opening);
       form.setFieldsValue({ opening_credits: opening });
       if (machineDetail.credit_value_tzs) setCreditValue(machineDetail.credit_value_tzs);

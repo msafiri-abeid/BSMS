@@ -131,7 +131,7 @@ const submitCollection = async ({ machineId, shopId, collectorId, currCount, met
           include: [{ model: NovomaticReading, as: 'novomaticReading' }],
           transaction: t,
         });
-        openingCredits = prevCollection?.novomaticReading?.closing_credits || machine.previous_count || machine.opening_count || 0;
+        openingCredits = machine.previous_count || machine.opening_count || 0;
       }
       calcData = calculateNovomatic(openingCredits, closingCredits, machine.credit_value_tzs);
       currCountFinal = closingCredits;
