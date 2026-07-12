@@ -46,11 +46,11 @@ const ALL_NAV = [
     key: "partners-group",
     label: "Shops & Partners",
     icon: <Users size={16} />,
-    module: "partners",
+    module: null,
     children: [
       { key: "/shops/slot", label: "Slot Shops", icon: <Store size={16} />, module: "shops", businessType: 'slot' },
-      { key: "/shops/meteora", label: "Meteora Shops", icon: <Store size={16} />, module: "shops", businessType: 'meteora' },
-      { key: "/partners", label: "Partners", icon: <Handshake size={16} />, module: "partners" },
+      { key: "/shops/meteora", label: "Meteora Shops", icon: <Store size={16} />, module: "shops", businessType: 'meteora', roles: ['Admin', 'General Manager', 'Operations Manager', 'Director', 'Finance', 'Sales'] },
+      { key: "/partners", label: "Partners", icon: <Handshake size={16} />, module: "partners", roles: ['Admin', 'General Manager', 'Operations Manager', 'Director', 'Finance', 'Sales'] },
     ],
   },
   {
