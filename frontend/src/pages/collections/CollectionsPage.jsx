@@ -337,12 +337,7 @@ export default function CollectionsPage() {
     <div>
       {/* Mode Toggle */}
       <div className="mb-4 flex items-center gap-2">
-        {['Cashier', 'Supervisor'].includes(roleName) ? (
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-brand-dark/5 border border-brand-dark/10">
-            <span className="font-semibold text-slate-700">Novomatic</span>
-            <span className="text-slate-400">— View only</span>
-          </div>
-        ) : (
+        {!['Cashier', 'Supervisor'].includes(roleName) && (
           <Segmented
             value={filters.manufacturer}
             onChange={(v) => {
