@@ -118,6 +118,7 @@ module.exports = async () => {
         await Permission.findOrCreate({ where: { role_id: role.id, module: 'collections', action: 'read' } });
         await Permission.findOrCreate({ where: { role_id: role.id, module: 'machines', action: 'read' } });
         await Permission.findOrCreate({ where: { role_id: role.id, module: 'shops', action: 'read' } });
+        await Permission.findOrCreate({ where: { role_id: role.id, module: 'partners', action: 'read' } });
         await Permission.findOrCreate({ where: { role_id: role.id, module: 'finance', action: 'read' } });
         await Permission.findOrCreate({ where: { role_id: role.id, module: 'finance', action: 'create' } });
         for (const act of ['read', 'create']) {
@@ -133,6 +134,7 @@ module.exports = async () => {
           }
         }
         await Permission.findOrCreate({ where: { role_id: role.id, module: 'shops', action: 'read' } });
+        await Permission.findOrCreate({ where: { role_id: role.id, module: 'partners', action: 'read' } });
         await Permission.findOrCreate({ where: { role_id: role.id, module: 'finance', action: 'read' } });
         await Permission.findOrCreate({ where: { role_id: role.id, module: 'finance', action: 'create' } });
       }

@@ -60,7 +60,7 @@ export default function CollectionsPage() {
   const isNovomaticFilter = filters.manufacturer === 'Novomatic';
 
   useEffect(() => {
-    if (roleName === 'Cashier') {
+    if (['Cashier', 'Supervisor'].includes(roleName)) {
       setFilters(f => ({ ...f, manufacturer: 'Novomatic', date: dayjs().subtract(1, 'day').format('YYYY-MM-DD') }));
     }
   }, [roleName]);
@@ -337,10 +337,10 @@ export default function CollectionsPage() {
     <div>
       {/* Mode Toggle */}
       <div className="mb-4 flex items-center gap-2">
-        {roleName === 'Cashier' ? (
-          <div className="flex items-center gap-2 px-3 py-1 rounded-md bg-slate-100 text-xs text-slate-500">
+        {['Cashier', 'Supervisor'].includes(roleName) ? (
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-brand-dark/5 border border-brand-dark/10">
             <span className="font-semibold text-slate-700">Novomatic</span>
-            <span className="text-slate-400">— Cashier restricted</span>
+            <span className="text-slate-400">— View only</span>
           </div>
         ) : (
           <Segmented

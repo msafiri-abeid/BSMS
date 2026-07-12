@@ -4,6 +4,7 @@ import { Plus, Search, X, Eye, Edit, Trash2, Building2, Handshake, Upload as Upl
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { partnersAPI, regionsAPI, districtsAPI, wardsAPI, streetsAPI } from '../../services/api';
+import { useAuthStore } from '../../store/authStore';
 import KpiCard from '../../components/KpiCard';
 import ActionMenu from '../../components/ActionMenu';
 import MobileCard from '../../components/MobileCard';
@@ -15,6 +16,7 @@ const fmt = (n) => `TZS ${(n || 0).toLocaleString()}`;
 
 export default function PartnersPage() {
   const navigate = useNavigate();
+  const isReadOnly = ['Cashier', 'Supervisor'].includes(useAuthStore((s) => s.user?.role?.name));
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form] = Form.useForm();
@@ -197,12 +199,17 @@ export default function PartnersPage() {
     }
   };
 
-  const actionItems = (r) => [
-    { key: 'view', icon: <Eye className="w-4 h-4" />, label: 'View' },
-    { key: 'edit', icon: <Edit className="w-4 h-4" />, label: 'Edit' },
-    { type: 'divider' },
-    { key: 'delete', icon: <Trash2 className="w-4 h-4" />, label: 'Delete', danger: true },
-  ];
+  const actionItems = (r) => {
+    const items = [
+      { key: 'view', icon: <Eye className="w-4 h-4" />, label: 'View' },
+    ];
+    if (!isReadOnly) {
+      items.push({ key: 'edit', icon: <Edit className="w-4 h-4" />, label: 'Edit' });
+      items.push({ type: 'divider' });
+      items.push({ key: 'delete', icon: <Trash2 className="w-4 h-4" />, label: 'Delete', danger: true });
+    }
+    return items;
+  };
 
   const cols = [
     { title: 'Name', dataIndex: 'name', sorter: (a, b) => a.name.localeCompare(b.name), width: 180 },
@@ -230,10 +237,12 @@ export default function PartnersPage() {
           <h4 className="text-base font-bold text-slate-800 m-0">Partners</h4>
           <span className="text-xs text-slate-500">{data?.count || 0} total</span>
         </div>
-        <Button type="primary" icon={<Plus size={14} />} onClick={() => { setEditing(null); form.resetFields(); setOpen(true); }}
-          className="!bg-brand-dark hover:!bg-brand-light border-none shadow-sm flex items-center gap-1.5 text-white">
-          Add Partner
-        </Button>
+        {!isReadOnly && (
+          <Button type="primary" icon={<Plus size={14} />} onClick={() => { setEditing(null); form.resetFields(); setOpen(true); }}
+            className="!bg-brand-dark hover:!bg-brand-light border-none shadow-sm flex items-center gap-1.5 text-white">
+            Add Partner
+          </Button>
+        )}
       </div>
 
       {/* KPI Cards */}

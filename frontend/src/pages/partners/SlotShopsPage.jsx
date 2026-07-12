@@ -4,6 +4,7 @@ import { Plus, Eye, Edit, Trash2, Store, Upload as UploadIcon, FileDown, X, Phon
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { shopsAPI, regionsAPI, districtsAPI, wardsAPI, streetsAPI, staffAPI } from '../../services/api';
+import { useAuthStore } from '../../store/authStore';
 import KpiCard from '../../components/KpiCard';
 import ActionMenu from '../../components/ActionMenu';
 import MobileCard from '../../components/MobileCard';
@@ -13,6 +14,7 @@ const { Option } = Select;
 
 export default function SlotShopsPage() {
   const navigate = useNavigate();
+  const isReadOnly = ['Cashier', 'Supervisor'].includes(useAuthStore((s) => s.user?.role?.name));
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form] = Form.useForm();
@@ -208,12 +210,17 @@ export default function SlotShopsPage() {
     }
   };
 
-  const actionItems = (r) => [
-    { key: 'view', icon: <Eye className="w-4 h-4" />, label: 'View' },
-    { key: 'edit', icon: <Edit className="w-4 h-4" />, label: 'Edit' },
-    { type: 'divider' },
-    { key: 'delete', icon: <Trash2 className="w-4 h-4" />, label: 'Delete', danger: true },
-  ];
+  const actionItems = (r) => {
+    const items = [
+      { key: 'view', icon: <Eye className="w-4 h-4" />, label: 'View' },
+    ];
+    if (!isReadOnly) {
+      items.push({ key: 'edit', icon: <Edit className="w-4 h-4" />, label: 'Edit' });
+      items.push({ type: 'divider' });
+      items.push({ key: 'delete', icon: <Trash2 className="w-4 h-4" />, label: 'Delete', danger: true });
+    }
+    return items;
+  };
 
   const cols = [
     {
@@ -260,10 +267,12 @@ export default function SlotShopsPage() {
           <h4 className="text-base font-bold text-slate-800 m-0">Slot Shops</h4>
           <span className="text-xs text-slate-500">{data?.count || 0} total</span>
         </div>
-        <Button type="primary" icon={<Plus size={14} />} onClick={() => { setEditing(null); form.resetFields(); setOpen(true); }}
-          className="!bg-brand-dark hover:!bg-brand-light border-none shadow-sm flex items-center gap-1.5 text-white">
-          Add Shop
-        </Button>
+        {!isReadOnly && (
+          <Button type="primary" icon={<Plus size={14} />} onClick={() => { setEditing(null); form.resetFields(); setOpen(true); }}
+            className="!bg-brand-dark hover:!bg-brand-light border-none shadow-sm flex items-center gap-1.5 text-white">
+            Add Shop
+          </Button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
