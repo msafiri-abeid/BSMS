@@ -454,6 +454,14 @@ function FinanceDashboard() {
         clearFilters={() => { setBusinessFilter(null); setShopFilter(null); setDateRange(null); }}
       />
 
+      <SectionHeader label="Operations" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <DashboardKpiCard title="Active Machines" value={d.activeMachines || 0} icon={Cpu} bgIconColor="bg-blue-50" iconColor="text-blue-600" link="/machines/novomatic" />
+        <DashboardKpiCard title="Active Shops" value={d.activeShops || 0} icon={Store} bgIconColor="bg-emerald-50" iconColor="text-emerald-600" link="/shops/slot" />
+        <DashboardKpiCard title="Collection Count" value={d.collectionCount || 0} icon={Wallet} bgIconColor="bg-brand-dark/5" iconColor="text-brand-dark" link="/collections" />
+        <DashboardKpiCard title="Outstanding Debts" value={d.outstandingDebt || 0} formatter={fmt} icon={CircleDollarSign} bgIconColor="bg-rose-50" iconColor="text-rose-600" />
+      </div>
+
       <SectionHeader label="Financial Overview" />
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <DashboardKpiCard title="Pending Approvals" value={d.pendingExpenses?.length || 0} icon={CheckSquare} bgIconColor="bg-amber-50" iconColor="text-amber-600" link="/finance/expenses" />

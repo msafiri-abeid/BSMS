@@ -55,7 +55,7 @@ module.exports = async () => {
         }
       }
 
-      // Finance: finance module full + reports read + accounts CRUD
+      // Finance: finance module full + reports read + accounts CRUD + read collections, machines, shops, partners
       if (name === 'Finance') {
         for (const act of ACTIONS) {
           await Permission.findOrCreate({ where: { role_id: role.id, module: 'finance', action: act } });
@@ -64,6 +64,10 @@ module.exports = async () => {
         for (const act of ['read', 'create', 'update']) {
           await Permission.findOrCreate({ where: { role_id: role.id, module: 'accounts', action: act } });
         }
+        await Permission.findOrCreate({ where: { role_id: role.id, module: 'collections', action: 'read' } });
+        await Permission.findOrCreate({ where: { role_id: role.id, module: 'machines', action: 'read' } });
+        await Permission.findOrCreate({ where: { role_id: role.id, module: 'shops', action: 'read' } });
+        await Permission.findOrCreate({ where: { role_id: role.id, module: 'partners', action: 'read' } });
       }
 
       // Operations Manager

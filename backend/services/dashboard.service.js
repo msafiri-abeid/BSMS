@@ -371,7 +371,7 @@ exports.financeDashboard = async (scope = {}) => {
     due_date: { [Op.lte]: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) },
   };
 
-  const [pendingExpenses, dueSoonInvoices, monthIncome, monthExpenses, stockAlertCount, invoiceDueAmount, pendingExpensesTotal] = await Promise.all([
+  const [pendingExpenses, dueSoonInvoices, monthIncome, monthExpenses, stockAlertCount, invoiceDueAmount, pendingExpensesTotal, activeMachines, activeShops, collectionCount, outstandingDebt] = await Promise.all([
     Expense.findAll({
       where: { ...expenseWhere, status: 'pending' },
       include: [{ model: User, as: 'submitter', attributes: ['name'] }],
@@ -383,6 +383,10 @@ exports.financeDashboard = async (scope = {}) => {
     LowStockAlert.count({ where: { acknowledged: false } }),
     Invoice.sum('total', { where: invoiceWhere }),
     Expense.sum('amount', { where: { ...expenseWhere, status: 'pending' } }),
+    Machine.count({ where: { status: 'active' } }),
+    Shop.count({ where: { status: 'active' } }),
+    Collection.count({ where: { ...collFilter, status: 'approved' } }),
+    MachineDebt.sum(sequelize.literal('amount - paid_amount'), { where: { status: ['pending', 'partial'] } }),
   ]);
 
   return {
@@ -393,6 +397,10 @@ exports.financeDashboard = async (scope = {}) => {
     stockAlertCount: stockAlertCount || 0,
     invoiceDueAmount: invoiceDueAmount || 0,
     pendingExpensesTotal: pendingExpensesTotal || 0,
+    activeMachines: activeMachines || 0,
+    activeShops: activeShops || 0,
+    collectionCount: collectionCount || 0,
+    outstandingDebt: outstandingDebt || 0,
   };
 };
 
