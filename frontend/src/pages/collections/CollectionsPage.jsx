@@ -119,7 +119,7 @@ export default function CollectionsPage() {
     if (!editRecord) return;
     try {
       const isNovomatic = editRecord.machine?.manufacturer === 'Novomatic';
-      const hasNewImage = editFileList[0]?.originFileObj;
+      const hasNewImage = editFileList[0];
 
       const payload = {
         status: editStatus,
