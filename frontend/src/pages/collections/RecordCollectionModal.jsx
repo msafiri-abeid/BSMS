@@ -54,9 +54,16 @@ export default function RecordCollectionModal({ open, onClose }) {
     enabled: !!selectedMachineId,
   });
 
+  const { data: prevNovoCollection } = useQuery({
+    queryKey: ['prev-novomatic-collection', selectedMachineId],
+    queryFn: () => collectionsAPI.list({ machine_id: selectedMachineId, manufacturer: 'Novomatic', limit: 1 }).then(r => r.data.data?.rows?.[0]),
+    enabled: !!selectedMachineId,
+  });
+
   useEffect(() => {
     if (machineDetail) {
-      const opening = machineDetail.previous_count ?? machineDetail.opening_count ?? 0;
+      const prevClosing = prevNovoCollection?.novomaticReading?.closing_credits;
+      const opening = prevClosing ?? machineDetail.previous_count ?? machineDetail.opening_count ?? 0;
       setOpeningCredits(opening);
       form.setFieldsValue({ opening_credits: opening });
       if (machineDetail.credit_value_tzs) setCreditValue(machineDetail.credit_value_tzs);
@@ -64,7 +71,7 @@ export default function RecordCollectionModal({ open, onClose }) {
       setOpeningCredits(0);
       form.setFieldsValue({ opening_credits: 0 });
     }
-  }, [machineDetail, form]);
+  }, [machineDetail, prevNovoCollection, form]);
 
   // Set default collection date on open
   useEffect(() => {
@@ -101,6 +108,7 @@ export default function RecordCollectionModal({ open, onClose }) {
       qc.invalidateQueries({ queryKey: ['collections'] });
       qc.invalidateQueries({ queryKey: ['machine-detail'] });
       qc.invalidateQueries({ queryKey: ['machine', selectedMachineId] });
+      qc.invalidateQueries({ queryKey: ['prev-novomatic-collection'] });
       handleClose();
     } catch (err) {
       if (err?.errorFields) return;

@@ -321,8 +321,31 @@ const updateCollection = async (id, data) => {
 };
 
 const removeCollection = async (id) => {
-  const collection = await Collection.findByPk(id);
+  const collection = await Collection.findByPk(id, {
+    include: [{ model: NovomaticReading, as: 'novomaticReading' }]
+  });
   if (!collection) return false;
+
+  // For Novomatic: restore machine.previous_count to the previous valid collection's closing
+  if (collection.novomaticReading) {
+    const prevCollection = await Collection.findOne({
+      where: {
+        machine_id: collection.machine_id,
+        id: { [Op.ne]: id },
+        status: { [Op.in]: ['approved', 'supervisor_approved'] }
+      },
+      order: [['collected_at', 'DESC']],
+      include: [{ model: NovomaticReading, as: 'novomaticReading' }],
+    });
+
+    const machine = await Machine.findByPk(collection.machine_id);
+    if (prevCollection?.novomaticReading) {
+      await machine.update({ previous_count: prevCollection.novomaticReading.closing_credits });
+    } else {
+      await machine.update({ previous_count: machine.opening_count || 0 });
+    }
+  }
+
   await collection.destroy();
   return true;
 };
