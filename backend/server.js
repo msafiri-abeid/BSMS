@@ -37,6 +37,7 @@ const io = new Server(server, {
 });
 
 require('./sockets/ticket.socket')(io);
+require('./sockets/notification.socket')(io);
 
 const start = async () => {
   try {

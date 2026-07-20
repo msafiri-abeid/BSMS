@@ -84,6 +84,11 @@ router.put('/collections/:id', authenticate, uploadMeter.single('meter_image'), 
   if (allowed.includes(req.user.role?.name)) return collectionC.update(req, res, next);
   return res.status(403).json({ success: false, message: 'Permission denied' });
 });
+router.put('/collections/:id/dispute', authenticate, (req, res, next) => {
+  const allowed = ['Admin', 'General Manager', 'Operations Manager', 'Supervisor'];
+  if (allowed.includes(req.user.role?.name)) return collectionC.dispute(req, res, next);
+  return res.status(403).json({ success: false, message: 'Permission denied' });
+});
 router.delete('/collections/:id', authenticate, (req, res, next) => {
   const allowed = ['Admin', 'General Manager', 'Operations Manager', 'Cashier'];
   if (allowed.includes(req.user.role?.name)) return collectionC.remove(req, res, next);
@@ -275,5 +280,12 @@ router.delete('/staff/employees/:id', authenticate, checkPermission('staff', 'de
 router.delete('/staff/employees/:id/documents', authenticate, checkPermission('staff', 'delete'), staffC.deleteDocument);
 router.get('/staff/documents/proxy', authenticate, staffC.proxyDocument);
 router.get('/staff/roles', authenticate, checkPermission('staff', 'read'), usersC.listRoles);
+
+// ── NOTIFICATIONS ─────────────────────────────────────────────
+const notificationC = require('../controllers/notification.controller');
+
+router.get('/notifications', authenticate, notificationC.list);
+router.put('/notifications/read-all', authenticate, notificationC.readAll);
+router.put('/notifications/:id/read', authenticate, notificationC.markRead);
 
 module.exports = router;

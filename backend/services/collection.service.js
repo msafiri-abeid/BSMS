@@ -1,7 +1,7 @@
 // services/collection.service.js
 const { Op, literal } = require('sequelize');
 const sequelize = require('../config/database');
-const { Collection, Machine, MachineDeployment, WeeklyTarget, NovomaticReading, CollectorAssignment, Setting, Shop, User, Partner, MachineDebt, Address, Account, AccountTransaction } = require('../models');
+const { Collection, Machine, MachineDeployment, WeeklyTarget, NovomaticReading, CollectorAssignment, Setting, Shop, User, Partner, MachineDebt, Address, Account, AccountTransaction, Notification } = require('../models');
 
 const getWeekBounds = (date = new Date()) => {
   const d = new Date(date);
@@ -252,6 +252,8 @@ const getCollections = async (filters = {}, user) => {
       { model: User, as: 'collector', attributes: ['id', 'name'] },
       { model: User, as: 'approver', attributes: ['id', 'name'] },
       { model: User, as: 'supervisorApprover', attributes: ['id', 'name'] },
+      { model: User, as: 'disputer', attributes: ['id', 'name'] },
+      { model: User, as: 'resolver', attributes: ['id', 'name'] },
       { model: NovomaticReading, as: 'novomaticReading', attributes: ['opening_credits', 'closing_credits', 'total_credits', 'screenshot_url', 'read_at'] },
     ],
     order: [['collected_at', 'DESC']],
@@ -426,4 +428,96 @@ const exportAssignmentsExcel = async (filters = {}) => {
   return wb.xlsx.writeBuffer();
 };
 
-module.exports = { submitCollection, getCollections, getWeekBounds, getMachineWeekBounds, calculateMeteora, calculateNovomatic, updateCollection, removeCollection, getAssignments, updateAssignment, removeAssignment, exportAssignmentsExcel };
+const disputeCollection = async (id, { reason, userId }) => {
+  const collection = await Collection.findByPk(id, {
+    include: [{ model: NovomaticReading, as: 'novomaticReading' }],
+  });
+  if (!collection) throw new Error('Collection not found');
+  if (collection.status === 'disputed') throw new Error('Collection is already disputed');
+  if (collection.status === 'approved') throw new Error('Cannot dispute an approved collection');
+
+  return sequelize.transaction(async (t) => {
+    // 1. Find the previous valid collection for the same machine
+    const prevCollection = await Collection.findOne({
+      where: {
+        machine_id: collection.machine_id,
+        id: { [Op.ne]: id },
+        status: { [Op.in]: ['approved', 'supervisor_approved', 'pending'] },
+      },
+      order: [['collected_at', 'DESC']],
+      include: [{ model: NovomaticReading, as: 'novomaticReading' }],
+      transaction: t,
+    });
+
+    const machine = await Machine.findByPk(collection.machine_id, { transaction: t });
+
+    // 2. Revert machine.previous_count
+    if (collection.novomaticReading) {
+      // Novomatic: revert to previous collection's closing credits
+      if (prevCollection?.novomaticReading) {
+        await machine.update({ previous_count: prevCollection.novomaticReading.closing_credits }, { transaction: t });
+      } else {
+        await machine.update({ previous_count: machine.opening_count || 0 }, { transaction: t });
+      }
+    } else {
+      // Meteora: revert to previous collection's curr_count
+      if (prevCollection) {
+        await machine.update({ previous_count: prevCollection.curr_count }, { transaction: t });
+      } else {
+        await machine.update({ previous_count: machine.opening_count || 0 }, { transaction: t });
+      }
+    }
+
+    // 3. Meteora: decrement weekly target collected_tzs
+    if (!collection.novomaticReading && collection.gross_tzs > 0) {
+      const cycleStart = await getMachineCycleStart(machine);
+      const { weekStart } = cycleStart
+        ? getMachineWeekBounds(cycleStart)
+        : getWeekBounds();
+      const target = await WeeklyTarget.findOne({
+        where: { machine_id: collection.machine_id, week_start: weekStart.toISOString().split('T')[0] },
+        transaction: t,
+      });
+      if (target) {
+        const newCollected = Math.max(0, (target.collected_tzs || 0) - collection.gross_tzs);
+        await target.update({ collected_tzs: newCollected }, { transaction: t });
+      }
+    }
+
+    // 4. Update collection status to disputed
+    await collection.update({
+      status: 'disputed',
+      disputed_by: userId,
+      disputed_at: new Date(),
+      dispute_reason: reason || null,
+    }, { transaction: t });
+
+    // 5. Create notification for the collector/cashier
+    if (collection.collector_id) {
+      await Notification.create({
+        user_id: collection.collector_id,
+        actor_id: userId,
+        type: 'collection_disputed',
+        title: 'Collection Disputed',
+        message: `Your collection for machine ${machine.slot_code} has been disputed. Reason: ${reason || 'No reason provided'}`,
+        reference_type: 'collection',
+        reference_id: collection.id,
+      }, { transaction: t });
+
+      try {
+        const { notifyUser } = require('../sockets/notification.socket');
+        notifyUser(collection.collector_id, {
+          type: 'collection_disputed',
+          title: 'Collection Disputed',
+          message: `Your collection for ${machine.slot_code} has been disputed.`,
+          reference_type: 'collection',
+          reference_id: collection.id,
+        });
+      } catch (_) {}
+    }
+
+    return collection.reload({ transaction: t });
+  });
+};
+
+module.exports = { submitCollection, getCollections, getWeekBounds, getMachineWeekBounds, calculateMeteora, calculateNovomatic, updateCollection, removeCollection, disputeCollection, getAssignments, updateAssignment, removeAssignment, exportAssignmentsExcel };

@@ -151,6 +151,7 @@ export const collectionsAPI = {
   removeAssignment: (id) => api.delete(`/collections/assignments/${id}`),
   openMachine: (id) => api.post(`/collections/assignments/${id}/open`),
   update: (id, d) => api.put(`/collections/${id}`, d),
+  dispute: (id, d) => api.put(`/collections/${id}/dispute`, d),
   remove: (id) => api.delete(`/collections/${id}`),
   weeklyTargets: (p) => api.get('/collections/weekly-targets', { params: p }),
   exportAssignments: (p) => api.get('/collections/assignments/export', { params: p, responseType: 'blob' }),
@@ -224,6 +225,12 @@ export const reportsAPI = {
   trialBalance: (p) => api.get('/finance/reports/trial-balance', { params: p }),
   cashFlow: (p) => api.get('/finance/reports/cash-flow', { params: p }),
   accountReport: (id, p) => api.get(`/finance/reports/account-report/${id}`, { params: p }),
+};
+
+export const notificationsAPI = {
+  list: () => api.get('/notifications'),
+  markRead: (id) => api.put(`/notifications/${id}/read`),
+  markAllRead: () => api.put('/notifications/read-all'),
 };
 
 export const inventoryAPI = {

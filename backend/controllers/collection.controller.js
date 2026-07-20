@@ -1,5 +1,5 @@
 // controllers/collection.controller.js
-const { submitCollection, getCollections, updateCollection, removeCollection, getAssignments, updateAssignment, removeAssignment } = require('../services/collection.service');
+const { submitCollection, getCollections, updateCollection, removeCollection, disputeCollection, getAssignments, updateAssignment, removeAssignment } = require('../services/collection.service');
 const { Machine, CollectorAssignment, WeeklyTarget, Collection } = require('../models');
 const { Op } = require('sequelize');
 
@@ -89,7 +89,7 @@ const update = async (req, res, next) => {
     const allowed = ['Admin', 'General Manager', 'Operations Manager', 'Supervisor'];
     const roleName = req.user.role?.name;
 
-    // Cashier: only own pending collections, cannot approve
+    // Cashier: only own pending/disputed collections, cannot approve
     if (roleName === 'Cashier') {
       const existing = await Collection.findByPk(req.params.id, {
         attributes: ['id', 'collector_id', 'status'],
@@ -98,11 +98,20 @@ const update = async (req, res, next) => {
       if (existing.collector_id !== req.user.id) {
         return res.status(403).json({ success: false, message: 'You can only edit your own collections' });
       }
-      if (existing.status !== 'pending') {
-        return res.status(403).json({ success: false, message: 'Can only edit pending collections' });
+      if (!['pending', 'disputed'].includes(existing.status)) {
+        return res.status(403).json({ success: false, message: 'Can only edit pending or disputed collections' });
       }
       if (req.body.status === 'approved') {
         delete req.body.status;
+      }
+      // When a Cashier edits a disputed collection, reset to pending (re-submitted)
+      if (existing.status === 'disputed') {
+        req.body.status = 'pending';
+        req.body.disputed_by = null;
+        req.body.disputed_at = null;
+        req.body.dispute_reason = null;
+        req.body.resolved_by = req.user.id;
+        req.body.resolved_at = new Date();
       }
     } else if (!allowed.includes(roleName)) {
       return res.status(403).json({ success: false, message: 'Permission denied' });
@@ -117,6 +126,18 @@ const update = async (req, res, next) => {
       req.body.approved_at = new Date();
     }
     const collection = await updateCollection(req.params.id, req.body);
+    if (!collection) return res.status(404).json({ success: false, message: 'Collection not found' });
+    res.json({ success: true, data: collection });
+  } catch (err) { next(err); }
+};
+
+const dispute = async (req, res, next) => {
+  try {
+    const { reason } = req.body;
+    if (!reason || !reason.trim()) {
+      return res.status(400).json({ success: false, message: 'Dispute reason is required' });
+    }
+    const collection = await disputeCollection(req.params.id, { reason, userId: req.user.id });
     if (!collection) return res.status(404).json({ success: false, message: 'Collection not found' });
     res.json({ success: true, data: collection });
   } catch (err) { next(err); }
@@ -204,4 +225,4 @@ const exportAssignments = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { submit, list, myAssignments, createAssignment, openMachine, update, remove, weeklyTargets, listAssignments, editAssignment, deleteAssignment, exportAssignments };
+module.exports = { submit, list, myAssignments, createAssignment, openMachine, update, dispute, remove, weeklyTargets, listAssignments, editAssignment, deleteAssignment, exportAssignments };

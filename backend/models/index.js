@@ -204,6 +204,11 @@ const Collection = sequelize.define('Collection', {
   approved_at: { type: DataTypes.DATE },
   supervisor_approved_by: { type: DataTypes.INTEGER },
   supervisor_approved_at: { type: DataTypes.DATE },
+  disputed_by: { type: DataTypes.INTEGER },
+  disputed_at: { type: DataTypes.DATE },
+  dispute_reason: { type: DataTypes.TEXT },
+  resolved_by: { type: DataTypes.INTEGER },
+  resolved_at: { type: DataTypes.DATE },
   status: { type: DataTypes.ENUM('pending', 'supervisor_approved', 'approved', 'disputed'), defaultValue: 'pending' },
 }, { tableName: 'collections', indexes: [
   { fields: ['machine_id'] },
@@ -582,6 +587,19 @@ const SmsLog = sequelize.define('SmsLog', {
   sent_at: { type: DataTypes.DATE },
 }, { tableName: 'sms_logs', updatedAt: false });
 
+// ─── NOTIFICATIONS ────────────────────────────────────────────
+const Notification = sequelize.define('Notification', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  user_id: { type: DataTypes.INTEGER, allowNull: false },
+  actor_id: { type: DataTypes.INTEGER },
+  type: { type: DataTypes.STRING(100), allowNull: false },
+  title: { type: DataTypes.STRING(255), allowNull: false },
+  message: { type: DataTypes.TEXT },
+  reference_type: { type: DataTypes.STRING(50) },
+  reference_id: { type: DataTypes.INTEGER },
+  is_read: { type: DataTypes.BOOLEAN, defaultValue: false },
+}, { tableName: 'notifications' });
+
 // ─── ACCOUNTING ───────────────────────────────────────────────
 const Account = sequelize.define('Account', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
@@ -691,6 +709,8 @@ Collection.belongsTo(Shop, { foreignKey: 'shop_id', as: 'shop' });
 Collection.belongsTo(User, { foreignKey: 'collector_id', as: 'collector' });
 Collection.belongsTo(User, { foreignKey: 'approved_by', as: 'approver' });
 Collection.belongsTo(User, { foreignKey: 'supervisor_approved_by', as: 'supervisorApprover' });
+Collection.belongsTo(User, { foreignKey: 'disputed_by', as: 'disputer' });
+Collection.belongsTo(User, { foreignKey: 'resolved_by', as: 'resolver' });
 
 // Performance association for machine performance tab
 Machine.hasMany(Collection, {
@@ -807,6 +827,10 @@ AccountTransfer.belongsTo(User, { foreignKey: 'recorded_by', as: 'recorder' });
 ShopCashDisposition.belongsTo(Shop, { foreignKey: 'shop_id', as: 'shop' });
 ShopCashDisposition.belongsTo(User, { foreignKey: 'submitted_by', as: 'submitter' });
 ShopCashDisposition.belongsTo(User, { foreignKey: 'approved_by', as: 'approver' });
+
+// Notification associations
+Notification.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+Notification.belongsTo(User, { foreignKey: 'actor_id', as: 'actor' });
 Shop.hasMany(ShopCashDisposition, { foreignKey: 'shop_id', as: 'cashDispositions' });
 
 module.exports = {
@@ -820,7 +844,7 @@ module.exports = {
   Sale, SaleItem, SalesReturn, StockAudit, AuditItem, StockTransfer, LowStockAlert,
   TicketGroup, Ticket, TicketActivity,
   Department, Position, Employee, Attendance,
-  SmsLog,
+  SmsLog, Notification,
   Account, AccountTransaction, AccountTransfer,
   ShopCashDisposition,
 };

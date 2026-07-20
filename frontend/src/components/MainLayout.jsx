@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Layout, Menu, Avatar, Dropdown, Space, Badge, Typography, Button, Drawer } from "antd";
+import { Layout, Menu, Avatar, Dropdown, Space, Typography, Button, Drawer } from "antd";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Wallet, ClipboardList, ListChecks, Crosshair,
@@ -14,6 +14,7 @@ import { useAuthStore } from "../store/authStore";
 import { authAPI } from "../services/api";
 import { App } from "antd";
 import logo from "./../assets/logo.png";
+import NotificationBell from "./NotificationBell";
 
 const { Sider, Header, Content } = Layout;
 const { Text } = Typography;
@@ -313,9 +314,7 @@ export default function MainLayout() {
                 <span className="hidden md:inline">Record Sale</span>
               </Button>
             )}
-            <Badge count={0} size="small">
-              <Button type="text" icon={<Bell size={18} />} />
-            </Badge>
+            <NotificationBell />
             <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
               <Space style={{ cursor: "pointer" }} className="gap-1 md:gap-2">
                 <Avatar size={32} className="!bg-brand-dark" icon={<User size={16} />} />

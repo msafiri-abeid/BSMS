@@ -180,6 +180,20 @@ export default function CollectionsPage() {
     onError: (e) => message.error(e.response?.data?.message || 'Review failed'),
   });
 
+  const [disputeModal, setDisputeModal] = useState(null);
+  const [disputeReason, setDisputeReason] = useState('');
+  const disputeMutation = useMutation({
+    mutationFn: ({ id, reason }) => collectionsAPI.dispute(id, { reason }),
+    onSuccess: () => {
+      message.success('Collection disputed');
+      qc.invalidateQueries({ queryKey: ['collections'] });
+      qc.invalidateQueries({ queryKey: ['machine-stats'] });
+      setDisputeModal(null);
+      setDisputeReason('');
+    },
+    onError: (e) => message.error(e.response?.data?.message || 'Dispute failed'),
+  });
+
   const handleExport = async () => {
     const res = await financeAPI.exportCollections();
     const url = URL.createObjectURL(new Blob([res.data]));
@@ -230,7 +244,7 @@ export default function CollectionsPage() {
     const items = [
       { key: 'view', icon: <Eye className="w-4 h-4" />, label: 'View' },
     ];
-    const isOwnPending = r.collector_id === userId && r.status === 'pending';
+    const isOwnPending = r.collector_id === userId && ['pending', 'disputed'].includes(r.status);
     const canEditRow = canWrite || (roleName === 'Cashier' && isOwnPending);
     const canDeleteRow = (canWrite && ['Admin', 'General Manager', 'Operations Manager'].includes(roleName)) || (roleName === 'Cashier' && isOwnPending);
     if (canEditRow) items.push({ key: 'edit', icon: <Edit3 className="w-4 h-4" />, label: 'Edit' });
@@ -521,11 +535,11 @@ export default function CollectionsPage() {
                 statusColor={r.status === 'approved' ? 'green' : r.status === 'disputed' ? 'red' : 'orange'}
                 actions={[
                   { key: 'view', label: 'View', icon: <Eye className="w-3.5 h-3.5" />, onClick: () => setViewRecord(r) },
+                  ...((r.status === 'pending' || r.status === 'disputed') && (canWrite || (roleName === 'Cashier' && r.collector_id === userId)) ? [
+                    { key: 'edit', label: 'Edit', type: 'primary', icon: <Edit3 className="w-3.5 h-3.5" />, onClick: () => setEditRecord(r) },
+                  ] : []),
                   ...(canApprove && r.status === 'pending' ? [
                     { key: 'approve', label: 'Approve', type: 'primary', icon: <CheckCircle className="w-3.5 h-3.5" />, onClick: () => reviewMutation.mutate({ id: r.id, status: 'approved' }), loading: reviewMutation.isPending },
-                  ] : []),
-                  ...(canWrite && (r.status === 'pending' || r.status === 'supervisor_approved') ? [
-                    { key: 'edit', label: 'Edit', icon: <Edit3 className="w-3.5 h-3.5" />, onClick: () => setEditRecord(r) },
                   ] : []),
                 ]}
               />
@@ -554,7 +568,7 @@ export default function CollectionsPage() {
                   </Button>
                   <Button icon={<XCircle className="w-4 h-4" />}
                     onClick={() => {
-                      reviewMutation.mutate({ id: viewRecord.id, status: 'disputed' });
+                      setDisputeModal(viewRecord);
                       setViewRecord(null);
                     }}
                     className="flex items-center gap-1.5 !bg-red-600 hover:!bg-red-700 border-none text-white">
@@ -618,6 +632,20 @@ export default function CollectionsPage() {
                 </div>
               )}
             </div>
+            {viewRecord.status === 'disputed' && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <XCircle className="w-4 h-4 text-red-500" />
+                  <span className="text-xs font-bold text-red-700 uppercase">Disputed</span>
+                </div>
+                {viewRecord.dispute_reason && (
+                  <p className="text-sm text-red-600">{viewRecord.dispute_reason}</p>
+                )}
+                <p className="text-xs text-red-400 mt-1">
+                  Disputed by {viewRecord.disputer?.name || '—'} on {viewRecord.disputed_at ? dayjs(viewRecord.disputed_at).format('DD MMM YYYY HH:mm') : '—'}
+                </p>
+              </div>
+            )}
           </div>
         )}
       </Modal>
@@ -753,6 +781,28 @@ export default function CollectionsPage() {
 
       <CreateAssignmentModal open={createModalOpen} onClose={() => setCreateModalOpen(false)} />
       <RecordCollectionModal open={recordModalOpen} onClose={() => setRecordModalOpen(false)} />
+
+      {/* Dispute Reason Modal */}
+      <Modal
+        title={<span className="text-sm font-bold text-slate-700">Dispute Collection</span>}
+        open={!!disputeModal}
+        onCancel={() => { setDisputeModal(null); setDisputeReason(''); }}
+        onOk={() => disputeReason.trim() && disputeMutation.mutate({ id: disputeModal.id, reason: disputeReason.trim() })}
+        okText="Dispute"
+        okButtonProps={{ danger: true, disabled: !disputeReason.trim() }}
+        confirmLoading={disputeMutation.isPending}
+        className="top-8"
+      >
+        <div className="mt-4">
+          <p className="text-sm text-slate-600 mb-3">
+            Disputing collection for <strong>{disputeModal?.machine?.slot_code}</strong>.
+            This will undo the meter reading and notify the collector.
+          </p>
+          <Text className="text-xs font-semibold text-slate-600 block mb-1">Reason (required)</Text>
+          <Input.TextArea rows={3} value={disputeReason} onChange={e => setDisputeReason(e.target.value)}
+            placeholder="Why is this collection incorrect?" className="rounded-lg" />
+        </div>
+      </Modal>
     </div>
   );
 }
