@@ -3,7 +3,7 @@ import { Badge, Dropdown, Button, Empty, Typography, Spin } from 'antd';
 import { Bell, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { notificationsAPI } from '../services/api';
-import { connectSocket, disconnectSocket } from '../socket';
+import socket, { connectSocket, disconnectSocket } from '../socket';
 import { useAuthStore } from '../store/authStore';
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
@@ -33,7 +33,6 @@ export default function NotificationBell() {
   useEffect(() => {
     if (!userId) return;
     connectSocket();
-    const socket = require('../socket').default;
     socket.emit('join:user', userId);
     socket.on('notification:new', () => {
       qc.invalidateQueries({ queryKey: ['notifications'] });

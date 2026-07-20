@@ -386,7 +386,11 @@ exports.financeDashboard = async (scope = {}) => {
     Machine.count({ where: { status: 'active' } }),
     Shop.count({ where: { status: 'active' } }),
     Collection.count({ where: { ...collFilter, status: 'approved' } }),
-    MachineDebt.sum(sequelize.literal('amount - paid_amount'), { where: { status: ['pending', 'partial'] } }),
+    MachineDebt.findOne({
+      attributes: [[sequelize.fn('SUM', sequelize.literal('`amount` - `paid_amount`')), 'outstanding']],
+      where: { status: ['pending', 'partial'] },
+      plain: true,
+    }).then(r => Number(r?.get('outstanding') || 0)),
   ]);
 
   return {
