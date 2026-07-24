@@ -62,7 +62,7 @@ const ALL_NAV = [
     children: [
       { key: "/finance/expenses", label: "Expenses", icon: <Receipt size={16} />, module: "finance" },
       { key: "/finance/invoices", label: "Invoices", icon: <FileSignature size={16} />, module: "finance", roles: ['Admin', 'General Manager', 'Finance'] },
-      { key: "/finance/payroll", label: "Payroll", icon: <Banknote size={16} />, module: "finance", roles: ['Admin', 'General Manager', 'Finance'] },
+      { key: "/finance/payroll", label: "Payroll", icon: <Banknote size={16} />, module: "finance", roles: ['Admin', 'General Manager', 'Finance', 'HR Manager'] },
     ],
   },
   {

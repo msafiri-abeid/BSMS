@@ -18,6 +18,7 @@ export default function EmployeeFormModal({
   onSubmit,
 }) {
   const deptId = Form.useWatch('department_id', form);
+  const statusVal = Form.useWatch('status', form);
   const [showCreateUser, setShowCreateUser] = useState(false);
 
   const filteredPositions = (deptId
@@ -170,10 +171,22 @@ export default function EmployeeFormModal({
                     >
                       <Input type="email" placeholder="Login email address" />
                     </Form.Item>
-                    <Form.Item name="user_is_active" label={<span className="text-xs font-semibold text-slate-600">Active</span>} valuePropName="checked" initialValue={editing?.user?.is_active !== false}>
-                      <Switch />
+                    <Form.Item
+                      name="user_is_active"
+                      label={<span className="text-xs font-semibold text-slate-600">Active</span>}
+                      valuePropName="checked"
+                      initialValue={editing?.user?.is_active !== false}
+                    >
+                      <Switch
+                        disabled={statusVal === 'inactive' || statusVal === 'terminated'}
+                      />
                     </Form.Item>
                   </div>
+                  {(statusVal === 'inactive' || statusVal === 'terminated') && (
+                    <div className="text-xs text-amber-600 -mt-1 mb-1">
+                      Account auto-disabled by employee status.
+                    </div>
+                  )}
                 </>
               )}
 

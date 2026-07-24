@@ -177,7 +177,7 @@ const generateInvoicePDF = (invoice) => new Promise((resolve, reject) => {
 });
 
 const createPayrollRun = async (data, userId) => {
-  const employees = await require('../models').Employee.findAll({ where: { status: 'active' } });
+  const employees = await require('../models').Employee.findAll({ where: { status: { [Op.in]: ['active', 'inactive'] } } });
   const runs = await Promise.all(employees.map(emp =>
     Payroll.create({
       employee_id: emp.id,

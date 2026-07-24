@@ -142,6 +142,16 @@ module.exports = async () => {
         await Permission.findOrCreate({ where: { role_id: role.id, module: 'finance', action: 'create' } });
         await Permission.findOrCreate({ where: { role_id: role.id, module: 'finance', action: 'update' } });
       }
+
+      // HR Manager: staff full CRUD (no delete) + finance create + reports read
+      if (name === 'HR Manager') {
+        for (const act of ['read', 'create', 'update']) {
+          await Permission.findOrCreate({ where: { role_id: role.id, module: 'staff', action: act } });
+        }
+        await Permission.findOrCreate({ where: { role_id: role.id, module: 'finance', action: 'read' } });
+        await Permission.findOrCreate({ where: { role_id: role.id, module: 'finance', action: 'create' } });
+        await Permission.findOrCreate({ where: { role_id: role.id, module: 'reports', action: 'read' } });
+      }
     }
   } else {
     console.log('[SEED] Permissions already exist — skipping permission seed (admin has configured via UI)');

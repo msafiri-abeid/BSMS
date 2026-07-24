@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { Table, Button, Tag, Dropdown, Input, Select, Space, Form, App, List, Typography, Modal } from 'antd';
 import {
-  Plus, FileDown, Eye, Edit3, Trash2, X, Users, CheckCircle, StopCircle, LogIn,
+  Plus, FileDown, Eye, Edit3, Trash2, X, Users, CheckCircle, StopCircle, LogIn, UserX,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -358,9 +358,10 @@ export default function EmployeesPage() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
         <KpiCard title="Total Staff" value={total} icon={Users} bgColor="bg-slate-50" iconColor="text-slate-600" />
         <KpiCard title="Active" value={active} icon={CheckCircle} bgColor="bg-emerald-50" iconColor="text-emerald-600" />
+        <KpiCard title="Inactive" value={employees.filter((e) => e.status === 'inactive').length} icon={UserX} bgColor="bg-amber-50" iconColor="text-amber-600" />
         <KpiCard title="Today's Login" value={todayLogins} icon={LogIn} bgColor="bg-cyan-50" iconColor="text-cyan-600" />
         <KpiCard title="Terminated" value={employees.filter((e) => e.status === 'terminated').length} icon={StopCircle} bgColor="bg-red-50" iconColor="text-red-600" />
       </div>

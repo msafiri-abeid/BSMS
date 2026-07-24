@@ -280,6 +280,11 @@ exports.adminDashboard = async (reqQuery) => {
     ],
   });
 
+  const last6MonthsRevenue = await sequelize.query(`
+    SELECT DATE_FORMAT(collected_at, '%Y-%m') as month, SUM(gross_tzs) as revenue
+    FROM collections WHERE status = 'approved' ${chartCollFilter} GROUP BY month ORDER BY month DESC LIMIT 6
+  `, { type: sequelize.QueryTypes.SELECT, replacements });
+
   return {
     kpis: {
       totalMachines, activeShops, openTickets, pendingExpenses,
@@ -309,6 +314,7 @@ exports.adminDashboard = async (reqQuery) => {
       collections: last30DaysCollections,
       sales: last30DaysSales,
     },
+    trend: last6MonthsRevenue.reverse(),
     topMachines,
   };
 };

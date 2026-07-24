@@ -275,6 +275,20 @@ function AdminDashboard() {
         </div>
       </div>
 
+      <SectionHeader label="Revenue Trend" />
+      <div className="bg-white rounded-xl border border-slate-100 p-4">
+        <p className="text-sm font-bold text-slate-700 mb-3">Revenue Trend — Last 6 Months</p>
+        <ResponsiveContainer width="100%" height={280}>
+          <LineChart data={d.trend || []}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+            <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#64748b' }} />
+            <YAxis tick={{ fontSize: 11, fill: '#64748b' }} tickFormatter={(v) => `${(v / 1000000).toFixed(1)}M`} />
+            <Tooltip formatter={(v) => fmt(v)} />
+            <Line type="monotone" dataKey="revenue" stroke="#021559" strokeWidth={2.5} dot={{ fill: '#021559', strokeWidth: 2 }} />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+
       <p className="text-sm font-bold text-slate-700 mb-3">Top Machines This Week</p>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="bg-white rounded-xl border border-slate-100 p-3">
@@ -486,68 +500,6 @@ function FinanceDashboard() {
   );
 }
 
-function DirectorDashboard() {
-  const [businessFilter, setBusinessFilter] = useState(null);
-  const [shopFilter, setShopFilter] = useState(null);
-  const [dateRange, setDateRange] = useState(null);
-
-  const params = {};
-  if (businessFilter) params.business_type = businessFilter;
-  if (shopFilter) params.shop_id = shopFilter;
-  if (dateRange && dateRange[0]) params.date_from = dateRange[0].format('YYYY-MM-DD');
-  if (dateRange && dateRange[1]) params.date_to = dateRange[1].format('YYYY-MM-DD');
-
-  const { data, isLoading } = useQuery({
-    queryKey: ['dashboard-director', params],
-    queryFn: () => dashboardAPI.director(params).then(r => r.data.data),
-  });
-
-  if (isLoading) return <Spin size="large" className="block my-20 mx-auto" />;
-  const d = data || {};
-  const hasFilters = businessFilter || shopFilter || dateRange;
-  const isProfit = (d.netProfit || 0) >= 0;
-
-  return (
-    <div className="space-y-6">
-      <DashboardFilter
-        businessType="selectable"
-        showShop showDateRange
-        businessFilter={businessFilter} setBusinessFilter={setBusinessFilter}
-        shopFilter={shopFilter} setShopFilter={setShopFilter}
-        dateRange={dateRange} setDateRange={setDateRange}
-        hasFilters={hasFilters}
-        clearFilters={() => { setBusinessFilter(null); setShopFilter(null); setDateRange(null); }}
-      />
-
-      <SectionHeader label="Executive Summary" />
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <DashboardKpiCard title={hasFilters ? "Total Revenue" : "Month Revenue"} value={d.monthRevenue || 0} formatter={fmt} icon={TrendingUp} bgIconColor="bg-emerald-50" iconColor="text-emerald-600" link="/collections" />
-        <DashboardKpiCard title={hasFilters ? "Total Expenses" : "Month Expenses"} value={d.monthExpenses || 0} formatter={fmt} icon={ArrowDownRight} bgIconColor="bg-red-50" iconColor="text-red-600" link="/finance/expenses" />
-        <DashboardKpiCard title={hasFilters ? "Net (Filtered)" : "Net Profit"} value={d.netProfit || 0} formatter={fmt} icon={isProfit ? TrendingUp : TrendingDown}
-          bgIconColor={isProfit ? "bg-emerald-50" : "bg-rose-50"} iconColor={isProfit ? "text-emerald-600" : "text-rose-600"} />
-        <DashboardKpiCard title="Stock Alerts" value={d.kpis?.stockAlerts || 0} icon={AlertTriangle} bgIconColor="bg-rose-50" iconColor="text-rose-600" link="/inventory/stock" />
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <DashboardKpiCard title="Active Shops" value={d.kpis?.activeShops || 0} icon={Store} bgIconColor="bg-orange-50" iconColor="text-orange-600" link="/shops" />
-        <DashboardKpiCard title="Active Machines" value={d.kpis?.activeMachines || 0} icon={Cpu} bgIconColor="bg-emerald-50" iconColor="text-emerald-600" link="/machines" />
-        <DashboardKpiCard title="Open Tickets" value={d.kpis?.openTickets || 0} icon={Ticket} bgIconColor="bg-red-50" iconColor="text-red-600" link="/tickets" />
-      </div>
-      <div className="bg-white rounded-xl border border-slate-100 p-4">
-        <p className="text-sm font-bold text-slate-700 mb-3">Revenue Trend — Last 6 Months</p>
-        <ResponsiveContainer width="100%" height={280}>
-          <LineChart data={d.trend || []}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-            <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#64748b' }} />
-            <YAxis tick={{ fontSize: 11, fill: '#64748b' }} tickFormatter={(v) => `${(v / 1000000).toFixed(1)}M`} />
-            <Tooltip formatter={(v) => fmt(v)} />
-            <Line type="monotone" dataKey="revenue" stroke="#021559" strokeWidth={2.5} dot={{ fill: '#021559', strokeWidth: 2 }} />
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
-    </div>
-  );
-}
-
 function SalesDashboard() {
   const navigate = useNavigate();
   const [businessFilter, setBusinessFilter] = useState(null);
@@ -567,27 +519,16 @@ function SalesDashboard() {
   const d = data || {};
   const hasFilters = businessFilter || dateRange;
 
-      const topColumns = [
-        { title: '#', width: 30, render: (_, __, i) => <span className="text-xs font-bold text-slate-400">{i + 1}</span> },
-        { title: 'Machine', dataIndex: ['machine', 'slot_code'], render: v => <span className="text-xs font-semibold text-slate-700">{v}</span> },
-        { title: 'Shop', dataIndex: ['shop', 'name'], render: v => <span className="text-xs text-slate-500">{v || '-'}</span> },
-        { title: 'Gross (TZS)', dataIndex: 'total_tzs', align: 'right', render: v => <span className="text-xs font-semibold text-emerald-700">{fmt(Number(v))}</span> },
-        ...(businessFilter !== 'slot' ? [
-          { title: 'Office (TZS)', dataIndex: 'office_tzs', align: 'right', render: v => <span className="text-xs font-semibold text-blue-700">{fmt(Number(v))}</span> },
-          { title: 'Owner (TZS)', dataIndex: 'owner_tzs', align: 'right', render: v => <span className="text-xs font-semibold text-amber-700">{fmt(Number(v))}</span> },
-        ] : []),
-      ];
-
       return (
     <div className="space-y-6">
       <DashboardFilter
         businessType="selectable"
-        showShop showDateRange
+        showShop={false} showDateRange
         businessFilter={businessFilter} setBusinessFilter={setBusinessFilter}
-        shopFilter={shopFilter} setShopFilter={setShopFilter}
+        shopFilter={null} setShopFilter={() => {}}
         dateRange={dateRange} setDateRange={setDateRange}
         hasFilters={hasFilters}
-        clearFilters={() => { setBusinessFilter(null); setShopFilter(null); setDateRange(null); }}
+        clearFilters={() => { setBusinessFilter(null); setDateRange(null); }}
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -668,13 +609,13 @@ export default function Dashboard() {
   const role = getRoleName();
 
   const titleMap = {
-    'Collector': 'My Daily Dashboard',
-    'Finance': 'Finance Dashboard',
-    'Director': 'Executive Dashboard',
-    'Operations Manager': 'Operations Dashboard',
-    'Cashier': 'Cashier Dashboard',
-    'Sales': 'Sales Dashboard',
-    'Technician': 'Technician Dashboard',
+    'Collector': 'Dashboard',
+    'Finance': 'Dashboard',
+    'Director': 'Dashboard',
+    'Operations Manager': 'Dashboard',
+    'Cashier': 'Dashboard',
+    'Sales': 'Dashboard',
+    'Technician': 'Dashboard',
   };
 
   return (
@@ -693,14 +634,13 @@ export default function Dashboard() {
         </span>
       </div>
 
-      {['Admin', 'General Manager', 'Operations Manager'].includes(role) && <AdminDashboard />}
+      {['Admin', 'General Manager', 'Operations Manager', 'Director', 'HR Manager'].includes(role) && <AdminDashboard />}
       {role === 'Collector' && <CollectorDashboard />}
       {role === 'Finance' && <FinanceDashboard />}
-      {role === 'Director' && <DirectorDashboard />}
       {role === 'Cashier' && <CashierDashboard />}
       {role === 'Sales' && <SalesDashboard />}
       {role === 'Technician' && <TechnicianDashboard />}
-      {!['Admin', 'General Manager', 'Operations Manager', 'Collector', 'Finance', 'Director', 'Cashier', 'Sales', 'Technician'].includes(role) && <AdminDashboard />}
+      {!['Admin', 'General Manager', 'Operations Manager', 'Director', 'HR Manager', 'Collector', 'Finance', 'Cashier', 'Sales', 'Technician'].includes(role) && <AdminDashboard />}
     </div>
   );
 }

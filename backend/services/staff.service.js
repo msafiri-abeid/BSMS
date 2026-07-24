@@ -269,7 +269,14 @@ const updateEmployee = async (id, data) => {
       }
       userUpdates.email = newEmail;
     }
-    if (user_is_active !== undefined) userUpdates.is_active = user_is_active;
+    const empStatus = safe.status || employee.status;
+    if (empStatus === 'inactive' || empStatus === 'terminated') {
+      userUpdates.is_active = false;
+    } else if (empStatus === 'active' && user_is_active !== undefined) {
+      userUpdates.is_active = user_is_active === 'true' || user_is_active === true;
+    } else if (empStatus === 'active') {
+      userUpdates.is_active = true;
+    }
     if (Object.keys(userUpdates).length) {
       await User.update(userUpdates, { where: { id: employee.user_id } });
     }

@@ -77,7 +77,7 @@ export default function MachineDetailPage() {
 
   const { data: expensesData, isLoading: expLoading } = useQuery({
     queryKey: ['machine-expenses', id],
-    queryFn: () => financeAPI.listExpenses({ machine_id: id }).then(r => r.data.data || []),
+    queryFn: () => financeAPI.listExpenses({ machine_id: id, status: 'approved' }).then(r => r.data.data || []),
     enabled: !!id && isNovomatic,
   });
   const expenses = expensesData?.rows || [];

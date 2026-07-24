@@ -92,7 +92,7 @@ export default function ShopDetailPage() {
   // Expenses filtered by selected day
   const { data: expenses } = useQuery({
     queryKey: ['shop-expenses', id, selectedDay],
-    queryFn: () => financeAPI.listExpenses({ shop_id: id, limit: 50, date: selectedDay }).then(r => r.data.data),
+    queryFn: () => financeAPI.listExpenses({ shop_id: id, limit: 50, date: selectedDay, status: 'approved' }).then(r => r.data.data),
     enabled: isSlot,
   });
   const expensesList = expenses?.rows || [];
