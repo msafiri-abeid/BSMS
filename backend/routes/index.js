@@ -280,7 +280,7 @@ router.put('/staff/employees/:id', authenticate, checkPermission('staff', 'updat
 router.delete('/staff/employees/:id', authenticate, checkPermission('staff', 'delete'), staffC.deleteEmployee);
 router.delete('/staff/employees/:id/documents', authenticate, checkPermission('staff', 'delete'), staffC.deleteDocument);
 router.get('/staff/documents/proxy', authenticate, staffC.proxyDocument);
-router.get('/staff/roles', authenticate, checkPermission('staff', 'read'), usersC.listRoles);
+router.get('/staff/roles', authenticate, usersC.listRoles);
 
 // ── NOTIFICATIONS ─────────────────────────────────────────────
 const notificationC = require('../controllers/notification.controller');
