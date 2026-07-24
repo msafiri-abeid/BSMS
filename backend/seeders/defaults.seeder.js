@@ -143,14 +143,18 @@ module.exports = async () => {
         await Permission.findOrCreate({ where: { role_id: role.id, module: 'finance', action: 'update' } });
       }
 
-      // HR Manager: staff full CRUD (no delete) + finance create + reports read
-      if (name === 'HR Manager') {
-        for (const act of ['read', 'create', 'update']) {
+      // HR: staff full CRUD + finance (submit expenses + payroll) + reports read + tickets submit+view
+      if (name === 'HR') {
+        for (const act of ['read', 'create', 'update', 'delete']) {
           await Permission.findOrCreate({ where: { role_id: role.id, module: 'staff', action: act } });
         }
-        await Permission.findOrCreate({ where: { role_id: role.id, module: 'finance', action: 'read' } });
-        await Permission.findOrCreate({ where: { role_id: role.id, module: 'finance', action: 'create' } });
+        for (const act of ['read', 'create', 'update']) {
+          await Permission.findOrCreate({ where: { role_id: role.id, module: 'finance', action: act } });
+        }
         await Permission.findOrCreate({ where: { role_id: role.id, module: 'reports', action: 'read' } });
+        for (const act of ['read', 'create']) {
+          await Permission.findOrCreate({ where: { role_id: role.id, module: 'tickets', action: act } });
+        }
       }
     }
   } else {

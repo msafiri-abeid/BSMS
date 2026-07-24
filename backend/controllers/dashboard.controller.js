@@ -48,3 +48,10 @@ exports.technicianDashboard = async (req, res, next) => {
     res.json({ success: true, data });
   } catch (err) { next(err); }
 };
+
+exports.hrDashboard = async (req, res, next) => {
+  try {
+    const data = await dashService.hrDashboard();
+    res.json({ success: true, data });
+  } catch (err) { next(err); }
+};

@@ -7,7 +7,7 @@ import {
   TrendingUp, ArrowDownRight, TrendingDown, Package, CircleDollarSign,
   BadgeAlert, LogIn, ShoppingCart, DollarSign, Receipt, AlertTriangle,
   BarChart3, Plus, Euro, Handshake, Users, Briefcase, Headphones,
-  Wrench, ShoppingBag,
+  Wrench, ShoppingBag, Banknote,
 } from 'lucide-react';
 import { dashboardAPI, shopsAPI } from '../../services/api';
 import { useAuthStore } from '../../store/authStore';
@@ -604,6 +604,70 @@ function TechnicianDashboard() {
   );
 }
 
+function HRDashboard() {
+  const navigate = useNavigate();
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['dashboard-hr'],
+    queryFn: () => dashboardAPI.hr().then(r => r.data.data),
+  });
+
+  if (isLoading) return <Spin size="large" className="block my-20 mx-auto" />;
+  const d = data || {};
+
+  const hireCols = [
+    { title: 'Code', dataIndex: 'employee_code', className: 'text-xs font-mono text-slate-500' },
+    { title: 'Name', dataIndex: 'full_name', className: 'text-xs font-semibold text-slate-700' },
+    { title: 'Department', dataIndex: ['department', 'name'], className: 'text-xs text-slate-600', render: v => v || '-' },
+    { title: 'Position', dataIndex: ['position', 'name'], className: 'text-xs text-slate-600', render: v => v || '-' },
+    { title: 'Hire Date', dataIndex: 'hire_date', render: v => <span className="text-xs text-slate-500">{v ? new Date(v).toLocaleDateString() : '-'}</span> },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <SectionHeader label="Workforce Overview" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <DashboardKpiCard title="Total Employees" value={d.kpis?.totalEmployees} icon={Users} bgIconColor="bg-blue-50" iconColor="text-blue-600" link="/staff/employees" />
+        <DashboardKpiCard title="Active Employees" value={d.kpis?.activeEmployees} icon={CheckSquare} bgIconColor="bg-emerald-50" iconColor="text-emerald-600" link="/staff/employees" />
+        <DashboardKpiCard title="Departments" value={d.kpis?.totalDepartments} icon={Briefcase} bgIconColor="bg-purple-50" iconColor="text-purple-600" link="/staff/departments" />
+        <DashboardKpiCard title="Positions" value={d.kpis?.totalPositions} icon={FileText} bgIconColor="bg-orange-50" iconColor="text-orange-600" link="/staff/positions" />
+      </div>
+
+      <SectionHeader label="Activity & Tickets" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <DashboardKpiCard title="New Hires (Month)" value={d.kpis?.newHiresThisMonth} icon={Users} bgIconColor="bg-cyan-50" iconColor="text-cyan-600" />
+        <DashboardKpiCard title="Open Tickets" value={d.kpis?.openTickets} icon={Headphones} bgIconColor="bg-red-50" iconColor="text-red-600" link="/tickets" />
+        <DashboardKpiCard title="Pending Expenses" value={d.kpis?.pendingExpenses} icon={FileText} bgIconColor="bg-amber-50" iconColor="text-amber-600" link="/finance/expenses" />
+      </div>
+
+      <div className="bg-gradient-to-r from-brand-dark to-[#0a206a] rounded-xl p-5 flex items-center justify-between">
+        <div>
+          <p className="text-white text-lg font-bold tracking-tight">Quick Actions</p>
+          <p className="text-blue-200 text-xs mt-0.5">Manage staff, departments, and payroll</p>
+        </div>
+        <div className="flex gap-2 flex-wrap justify-end">
+          <Button type="default" icon={<Users size={14} />} onClick={() => navigate('/staff/employees')} className="!bg-white !text-brand-dark !border-0 !text-xs !font-semibold">
+            Employees
+          </Button>
+          <Button type="default" icon={<Briefcase size={14} />} onClick={() => navigate('/staff/departments')} className="!bg-white !text-brand-dark !border-0 !text-xs !font-semibold">
+            Departments
+          </Button>
+          <Button type="default" icon={<Banknote size={14} />} onClick={() => navigate('/finance/payroll')} className="!bg-white !text-brand-dark !border-0 !text-xs !font-semibold">
+            Payroll
+          </Button>
+        </div>
+      </div>
+
+      {d.recentHires?.length > 0 && (
+        <div className="bg-white rounded-xl border border-slate-100 p-4">
+          <p className="text-sm font-bold text-slate-700 mb-3">Recent Hires</p>
+          <Table dataSource={d.recentHires} columns={hireCols} rowKey="id" size="small" pagination={false} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const getRoleName = useAuthStore(s => s.getRoleName);
   const role = getRoleName();
@@ -616,6 +680,7 @@ export default function Dashboard() {
     'Cashier': 'Dashboard',
     'Sales': 'Dashboard',
     'Technician': 'Dashboard',
+    'HR': 'Dashboard',
   };
 
   return (
@@ -634,13 +699,14 @@ export default function Dashboard() {
         </span>
       </div>
 
-      {['Admin', 'General Manager', 'Operations Manager', 'Director', 'HR Manager'].includes(role) && <AdminDashboard />}
+      {['Admin', 'General Manager', 'Operations Manager', 'Director'].includes(role) && <AdminDashboard />}
+      {role === 'HR' && <HRDashboard />}
       {role === 'Collector' && <CollectorDashboard />}
       {role === 'Finance' && <FinanceDashboard />}
       {role === 'Cashier' && <CashierDashboard />}
       {role === 'Sales' && <SalesDashboard />}
       {role === 'Technician' && <TechnicianDashboard />}
-      {!['Admin', 'General Manager', 'Operations Manager', 'Director', 'HR Manager', 'Collector', 'Finance', 'Cashier', 'Sales', 'Technician'].includes(role) && <AdminDashboard />}
+      {!['Admin', 'General Manager', 'Operations Manager', 'Director', 'HR', 'Collector', 'Finance', 'Cashier', 'Sales', 'Technician'].includes(role) && <AdminDashboard />}
     </div>
   );
 }

@@ -285,25 +285,25 @@ function RoleBuilderTab() {
 
   const createMutation = useMutation({
     mutationFn: (d) => settingsAPI.createRole(d),
-    onSuccess: () => { message.success('Role created'); qc.invalidateQueries({ queryKey: ['roles'] }); setNewRoleName(''); },
+    onSuccess: () => { message.success('Role created'); qc.invalidateQueries({ queryKey: ['roles'] }); qc.invalidateQueries({ queryKey: ['staff-roles'] }); setNewRoleName(''); },
     onError: (e) => message.error(e.response?.data?.message || 'Error'),
   });
 
   const updateRoleMutation = useMutation({
     mutationFn: ({ id, data }) => settingsAPI.updateRole(id, data),
-    onSuccess: () => { message.success('Role updated'); qc.invalidateQueries({ queryKey: ['roles'] }); setEditModal(null); },
+    onSuccess: () => { message.success('Role updated'); qc.invalidateQueries({ queryKey: ['roles'] }); qc.invalidateQueries({ queryKey: ['staff-roles'] }); setEditModal(null); },
     onError: (e) => message.error(e.response?.data?.message || 'Error'),
   });
 
   const deleteRoleMutation = useMutation({
     mutationFn: (id) => settingsAPI.deleteRole(id),
-    onSuccess: () => { message.success('Role deleted'); qc.invalidateQueries({ queryKey: ['roles'] }); if (selected?.id === editModal?.id) setSelected(null); },
+    onSuccess: () => { message.success('Role deleted'); qc.invalidateQueries({ queryKey: ['roles'] }); qc.invalidateQueries({ queryKey: ['staff-roles'] }); if (selected?.id === editModal?.id) setSelected(null); },
     onError: (e) => message.error(e.response?.data?.message || 'Error'),
   });
 
   const permMutation = useMutation({
     mutationFn: ({ roleId, permissions }) => settingsAPI.updatePermissions(roleId, { permissions }),
-    onSuccess: () => { message.success('Permissions saved'); qc.invalidateQueries({ queryKey: ['roles'] }); },
+    onSuccess: () => { message.success('Permissions saved'); qc.invalidateQueries({ queryKey: ['roles'] }); qc.invalidateQueries({ queryKey: ['staff-roles'] }); },
     onError: (e) => message.error(e.response?.data?.message || 'Error'),
   });
 

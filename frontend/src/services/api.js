@@ -208,6 +208,7 @@ export const dashboardAPI = {
   cashier: (p) => api.get('/dashboard/cashier', { params: p }),
   sales: (p) => api.get('/dashboard/sales', { params: p }),
   technician: (p) => api.get('/dashboard/technician', { params: p }),
+  hr: (p) => api.get('/dashboard/hr', { params: p }),
 };
 
 export const accountsAPI = {

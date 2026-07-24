@@ -6,6 +6,7 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { staffAPI } from '../../services/api';
+import { useAuthStore } from '../../store/authStore';
 import { STATUS_COLORS, empName, buildEmployeeFormData } from './staffUtils';
 import EmployeeFormModal from './components/EmployeeFormModal';
 
@@ -85,6 +86,8 @@ export default function EmployeesPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const qc = useQueryClient();
   const { message, modal } = App.useApp();
+  const { hasPermission } = useAuthStore();
+  const canDelete = hasPermission('staff', 'delete');
 
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -205,7 +208,9 @@ export default function EmployeesPage() {
       { key: 'view', label: 'View', icon: <Eye className="w-4 h-4" /> },
       { key: 'edit', label: 'Edit', icon: <Edit3 className="w-4 h-4" /> },
     ];
-    items.push({ type: 'divider' }, { key: 'delete', label: 'Delete', icon: <Trash2 className="w-4 h-4" />, danger: true });
+    if (canDelete) {
+      items.push({ type: 'divider' }, { key: 'delete', label: 'Delete', icon: <Trash2 className="w-4 h-4" />, danger: true });
+    }
     return items;
   };
 

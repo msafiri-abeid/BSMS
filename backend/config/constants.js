@@ -37,7 +37,7 @@ module.exports = {
     low: 72,
   },
 
-  ROLES: ['Admin', 'General Manager', 'Director', 'Operations Manager', 'Finance', 'Sales', 'Collector', 'Technician', 'Cashier', 'Supervisor', 'HR Manager'],
+  ROLES: ['Admin', 'General Manager', 'Director', 'Operations Manager', 'Finance', 'Sales', 'Collector', 'Technician', 'Cashier', 'Supervisor', 'HR'],
 
   MODULES: ['accounts', 'partners', 'shops', 'machines', 'collections', 'finance', 'inventory', 'tickets', 'staff', 'reports', 'settings', 'users'],
 

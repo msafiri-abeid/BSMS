@@ -1,4 +1,4 @@
-const { sequelize, Collection, Machine, Shop, Ticket, Expense, WeeklyTarget, CollectorAssignment, Invoice, TokenInventory, MachineDebt, User, Sale, StockMovement, LowStockAlert, Product, StockLevel, Partner } = require('../models');
+const { sequelize, Collection, Machine, Shop, Ticket, Expense, WeeklyTarget, CollectorAssignment, Invoice, TokenInventory, MachineDebt, User, Sale, StockMovement, LowStockAlert, Product, StockLevel, Partner, Employee, Department, Position } = require('../models');
 const { Op } = require('sequelize');
 
 const todayStart = () => {
@@ -646,5 +646,47 @@ exports.technicianDashboard = async (userId, scope = {}) => {
       allOpenTickets: allOpenTickets || 0,
     },
     myOpenTickets,
+  };
+};
+
+exports.hrDashboard = async () => {
+  const month = monthStart();
+  const year = yearStart();
+
+  const [
+    totalEmployees, activeEmployees, totalDepartments, totalPositions,
+    newHiresThisMonth, openTickets, pendingExpenses,
+  ] = await Promise.all([
+    Employee.count(),
+    Employee.count({ where: { status: 'active' } }),
+    Department.count(),
+    Position.count(),
+    Employee.count({ where: { hire_date: { [Op.gte]: month } } }),
+    Ticket.count({ where: { status: ['open', 'in_progress', 'reopened'] } }),
+    Expense.count({ where: { status: 'pending' } }),
+  ]);
+
+  const recentHires = await Employee.findAll({
+    where: { status: 'active' },
+    order: [['hire_date', 'DESC']],
+    limit: 5,
+    attributes: ['id', 'employee_code', 'full_name', 'email', 'phone', 'hire_date', 'status'],
+    include: [
+      { model: Department, as: 'department', attributes: ['name'] },
+      { model: Position, as: 'position', attributes: ['name'] },
+    ],
+  });
+
+  return {
+    kpis: {
+      totalEmployees: totalEmployees || 0,
+      activeEmployees: activeEmployees || 0,
+      totalDepartments: totalDepartments || 0,
+      totalPositions: totalPositions || 0,
+      newHiresThisMonth: newHiresThisMonth || 0,
+      openTickets: openTickets || 0,
+      pendingExpenses: pendingExpenses || 0,
+    },
+    recentHires,
   };
 };
