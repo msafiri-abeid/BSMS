@@ -7,10 +7,9 @@ const { ROLES, MODULES, ACTIONS, BCRYPT_ROUNDS } = require('../config/constants'
 const settingsService = require('../services/settings.service');
 
 module.exports = async () => {
-  if (process.env.NODE_ENV === 'production' && process.env.SKIP_SEED === 'true') {
-    console.log('[SEED] Skipping seed in production');
-    return;
-  }
+  const isProduction = process.env.NODE_ENV === 'production' && process.env.SKIP_SEED === 'true';
+
+  // ─── ALWAYS: safe idempotent migrations ───
 
   // Transition: migrate 'write' → 'create' + 'update'
   const oldWritePerms = await Permission.findAll({ where: { action: 'write' } });
@@ -26,142 +25,149 @@ module.exports = async () => {
   // Transition: only Admin is a system role
   await Role.update({ is_system: false }, { where: { name: { [require('sequelize').Op.ne]: 'Admin' } } });
 
-  // Seed roles
-  const existingPermCount = await Permission.count();
-  const skipSeed = existingPermCount > 0;
+  // ─── ALWAYS: ensure all defined roles exist (findOrCreate = idempotent) ───
+  for (const name of ROLES) {
+    await Role.findOrCreate({ where: { name }, defaults: { name, is_system: name === 'Admin' } });
+  }
+  console.log('[SEED] Roles ensured');
 
-  if (!skipSeed || process.env.RE_SEED_PERMISSIONS === 'true') {
-    for (const name of ROLES) {
-      const [role] = await Role.findOrCreate({ where: { name }, defaults: { name, is_system: name === 'Admin' } });
+  // ─── ALWAYS: seed permissions for any role that has 0 permissions ───
+  // This ensures new roles (e.g. HR) get their default permissions even in production.
+  // Existing roles with permissions are never touched.
+  const allRoles = await Role.findAll();
+  for (const role of allRoles) {
+    const rolePermCount = await Permission.count({ where: { role_id: role.id } });
+    if (rolePermCount > 0 && process.env.RE_SEED_PERMISSIONS !== 'true') continue;
 
-      const rolePermCount = await Permission.count({ where: { role_id: role.id } });
-      if (rolePermCount > 0 && process.env.RE_SEED_PERMISSIONS !== 'true') continue;
-
-      // Give Admin full permissions
-      if (name === 'Admin') {
-        for (const module of MODULES) {
-          for (const action of ACTIONS) {
-            await Permission.findOrCreate({ where: { role_id: role.id, module, action } });
-          }
-        }
-      }
-
-      // Collector: read collections + own data
-      if (name === 'Collector') {
-        for (const mod of ['collections', 'tickets']) {
-          for (const act of ['read', 'create', 'update']) {
-            await Permission.findOrCreate({ where: { role_id: role.id, module: mod, action: act } });
-          }
-        }
-      }
-
-      // Finance: finance module full + reports read + accounts CRUD + read collections, machines, shops, partners
-      if (name === 'Finance') {
-        for (const act of ACTIONS) {
-          await Permission.findOrCreate({ where: { role_id: role.id, module: 'finance', action: act } });
-        }
-        await Permission.findOrCreate({ where: { role_id: role.id, module: 'reports', action: 'read' } });
-        for (const act of ['read', 'create', 'update']) {
-          await Permission.findOrCreate({ where: { role_id: role.id, module: 'accounts', action: act } });
-        }
-        await Permission.findOrCreate({ where: { role_id: role.id, module: 'collections', action: 'read' } });
-        await Permission.findOrCreate({ where: { role_id: role.id, module: 'machines', action: 'read' } });
-        await Permission.findOrCreate({ where: { role_id: role.id, module: 'shops', action: 'read' } });
-        await Permission.findOrCreate({ where: { role_id: role.id, module: 'partners', action: 'read' } });
-      }
-
-      // Operations Manager
-      if (name === 'Operations Manager') {
-        for (const mod of ['machines', 'shops', 'collections', 'tickets', 'inventory', 'reports']) {
-          for (const act of ['read', 'create', 'update']) {
-            await Permission.findOrCreate({ where: { role_id: role.id, module: mod, action: act } });
-          }
-        }
-        await Permission.findOrCreate({ where: { role_id: role.id, module: 'accounts', action: 'read' } });
-      }
-
-      // Director: read everything + accounts
-      if (name === 'Director') {
-        for (const mod of ['partners', 'shops', 'machines', 'collections', 'finance', 'reports', 'staff']) {
-          await Permission.findOrCreate({ where: { role_id: role.id, module: mod, action: 'read' } });
-        }
-        await Permission.findOrCreate({ where: { role_id: role.id, module: 'accounts', action: 'read' } });
-      }
-
-      // General Manager: read/write most modules
-      if (name === 'General Manager') {
-        for (const mod of MODULES.filter(m => m !== 'settings')) {
-          for (const act of ['read', 'create', 'update', 'approve']) {
-            await Permission.findOrCreate({ where: { role_id: role.id, module: mod, action: act } });
-          }
-        }
-      }
-
-      // Technician: tickets only
-      if (name === 'Technician') {
-        for (const act of ['read', 'create', 'update']) {
-          await Permission.findOrCreate({ where: { role_id: role.id, module: 'tickets', action: act } });
-        }
-        await Permission.findOrCreate({ where: { role_id: role.id, module: 'machines', action: 'read' } });
-      }
-
-      // Sales
-      if (name === 'Sales') {
-        for (const mod of ['partners', 'shops', 'reports']) {
-          for (const act of ['read', 'create', 'update']) {
-            await Permission.findOrCreate({ where: { role_id: role.id, module: mod, action: act } });
-          }
-        }
-      }
-
-      // Cashier: Novomatic operator — dashboard, collections (Novomatic), machines (Novomatic), expenses, tickets, sales
-      if (name === 'Cashier') {
-        for (const act of ['read', 'create', 'update']) {
-          await Permission.findOrCreate({ where: { role_id: role.id, module: 'inventory', action: act } });
-        }
-        await Permission.findOrCreate({ where: { role_id: role.id, module: 'collections', action: 'read' } });
-        await Permission.findOrCreate({ where: { role_id: role.id, module: 'machines', action: 'read' } });
-        await Permission.findOrCreate({ where: { role_id: role.id, module: 'shops', action: 'read' } });
-        await Permission.findOrCreate({ where: { role_id: role.id, module: 'finance', action: 'read' } });
-        await Permission.findOrCreate({ where: { role_id: role.id, module: 'finance', action: 'create' } });
-        await Permission.findOrCreate({ where: { role_id: role.id, module: 'finance', action: 'update' } });
-        for (const act of ['read', 'create']) {
-          await Permission.findOrCreate({ where: { role_id: role.id, module: 'tickets', action: act } });
-        }
-      }
-
-      // Supervisor: approve novomatic collections + read machines
-      if (name === 'Supervisor') {
-        for (const mod of ['collections', 'machines']) {
-          for (const act of ['read', 'approve']) {
-            await Permission.findOrCreate({ where: { role_id: role.id, module: mod, action: act } });
-          }
-        }
-        await Permission.findOrCreate({ where: { role_id: role.id, module: 'shops', action: 'read' } });
-        await Permission.findOrCreate({ where: { role_id: role.id, module: 'finance', action: 'read' } });
-        await Permission.findOrCreate({ where: { role_id: role.id, module: 'finance', action: 'create' } });
-        await Permission.findOrCreate({ where: { role_id: role.id, module: 'finance', action: 'update' } });
-      }
-
-      // HR: staff full CRUD + finance (submit expenses + payroll) + reports read + tickets submit+view
-      if (name === 'HR') {
-        for (const act of ['read', 'create', 'update', 'delete']) {
-          await Permission.findOrCreate({ where: { role_id: role.id, module: 'staff', action: act } });
-        }
-        for (const act of ['read', 'create', 'update']) {
-          await Permission.findOrCreate({ where: { role_id: role.id, module: 'finance', action: act } });
-        }
-        await Permission.findOrCreate({ where: { role_id: role.id, module: 'reports', action: 'read' } });
-        for (const act of ['read', 'create']) {
-          await Permission.findOrCreate({ where: { role_id: role.id, module: 'tickets', action: act } });
+    // Give Admin full permissions
+    if (role.name === 'Admin') {
+      for (const module of MODULES) {
+        for (const action of ACTIONS) {
+          await Permission.findOrCreate({ where: { role_id: role.id, module, action } });
         }
       }
     }
-  } else {
-    console.log('[SEED] Permissions already exist — skipping permission seed (admin has configured via UI)');
+
+    // Collector: read collections + own data
+    if (role.name === 'Collector') {
+      for (const mod of ['collections', 'tickets']) {
+        for (const act of ['read', 'create', 'update']) {
+          await Permission.findOrCreate({ where: { role_id: role.id, module: mod, action: act } });
+        }
+      }
+    }
+
+    // Finance: finance module full + reports read + accounts CRUD + read collections, machines, shops, partners
+    if (role.name === 'Finance') {
+      for (const act of ACTIONS) {
+        await Permission.findOrCreate({ where: { role_id: role.id, module: 'finance', action: act } });
+      }
+      await Permission.findOrCreate({ where: { role_id: role.id, module: 'reports', action: 'read' } });
+      for (const act of ['read', 'create', 'update']) {
+        await Permission.findOrCreate({ where: { role_id: role.id, module: 'accounts', action: act } });
+      }
+      await Permission.findOrCreate({ where: { role_id: role.id, module: 'collections', action: 'read' } });
+      await Permission.findOrCreate({ where: { role_id: role.id, module: 'machines', action: 'read' } });
+      await Permission.findOrCreate({ where: { role_id: role.id, module: 'shops', action: 'read' } });
+      await Permission.findOrCreate({ where: { role_id: role.id, module: 'partners', action: 'read' } });
+    }
+
+    // Operations Manager
+    if (role.name === 'Operations Manager') {
+      for (const mod of ['machines', 'shops', 'collections', 'tickets', 'inventory', 'reports']) {
+        for (const act of ['read', 'create', 'update']) {
+          await Permission.findOrCreate({ where: { role_id: role.id, module: mod, action: act } });
+        }
+      }
+      await Permission.findOrCreate({ where: { role_id: role.id, module: 'accounts', action: 'read' } });
+    }
+
+    // Director: read everything + accounts
+    if (role.name === 'Director') {
+      for (const mod of ['partners', 'shops', 'machines', 'collections', 'finance', 'reports', 'staff']) {
+        await Permission.findOrCreate({ where: { role_id: role.id, module: mod, action: 'read' } });
+      }
+      await Permission.findOrCreate({ where: { role_id: role.id, module: 'accounts', action: 'read' } });
+    }
+
+    // General Manager: read/write most modules
+    if (role.name === 'General Manager') {
+      for (const mod of MODULES.filter(m => m !== 'settings')) {
+        for (const act of ['read', 'create', 'update', 'approve']) {
+          await Permission.findOrCreate({ where: { role_id: role.id, module: mod, action: act } });
+        }
+      }
+    }
+
+    // Technician: tickets only
+    if (role.name === 'Technician') {
+      for (const act of ['read', 'create', 'update']) {
+        await Permission.findOrCreate({ where: { role_id: role.id, module: 'tickets', action: act } });
+      }
+      await Permission.findOrCreate({ where: { role_id: role.id, module: 'machines', action: 'read' } });
+    }
+
+    // Sales
+    if (role.name === 'Sales') {
+      for (const mod of ['partners', 'shops', 'reports']) {
+        for (const act of ['read', 'create', 'update']) {
+          await Permission.findOrCreate({ where: { role_id: role.id, module: mod, action: act } });
+        }
+      }
+    }
+
+    // Cashier: Novomatic operator — dashboard, collections (Novomatic), machines (Novomatic), expenses, tickets, sales
+    if (role.name === 'Cashier') {
+      for (const act of ['read', 'create', 'update']) {
+        await Permission.findOrCreate({ where: { role_id: role.id, module: 'inventory', action: act } });
+      }
+      await Permission.findOrCreate({ where: { role_id: role.id, module: 'collections', action: 'read' } });
+      await Permission.findOrCreate({ where: { role_id: role.id, module: 'machines', action: 'read' } });
+      await Permission.findOrCreate({ where: { role_id: role.id, module: 'shops', action: 'read' } });
+      await Permission.findOrCreate({ where: { role_id: role.id, module: 'finance', action: 'read' } });
+      await Permission.findOrCreate({ where: { role_id: role.id, module: 'finance', action: 'create' } });
+      await Permission.findOrCreate({ where: { role_id: role.id, module: 'finance', action: 'update' } });
+      for (const act of ['read', 'create']) {
+        await Permission.findOrCreate({ where: { role_id: role.id, module: 'tickets', action: act } });
+      }
+    }
+
+    // Supervisor: approve novomatic collections + read machines
+    if (role.name === 'Supervisor') {
+      for (const mod of ['collections', 'machines']) {
+        for (const act of ['read', 'approve']) {
+          await Permission.findOrCreate({ where: { role_id: role.id, module: mod, action: act } });
+        }
+      }
+      await Permission.findOrCreate({ where: { role_id: role.id, module: 'shops', action: 'read' } });
+      await Permission.findOrCreate({ where: { role_id: role.id, module: 'finance', action: 'read' } });
+      await Permission.findOrCreate({ where: { role_id: role.id, module: 'finance', action: 'create' } });
+      await Permission.findOrCreate({ where: { role_id: role.id, module: 'finance', action: 'update' } });
+    }
+
+    // HR: staff full CRUD + finance (submit expenses + payroll) + reports read + tickets submit+view
+    if (role.name === 'HR') {
+      for (const act of ['read', 'create', 'update', 'delete']) {
+        await Permission.findOrCreate({ where: { role_id: role.id, module: 'staff', action: act } });
+      }
+      for (const act of ['read', 'create', 'update']) {
+        await Permission.findOrCreate({ where: { role_id: role.id, module: 'finance', action: act } });
+      }
+      await Permission.findOrCreate({ where: { role_id: role.id, module: 'reports', action: 'read' } });
+      for (const act of ['read', 'create']) {
+        await Permission.findOrCreate({ where: { role_id: role.id, module: 'tickets', action: act } });
+      }
+    }
+  }
+  console.log('[SEED] Permissions ensured');
+
+  // ─── PRODUCTION: skip heavy seeding below (already exists) ───
+  if (isProduction) {
+    console.log('[SEED] Roles + permissions ensured, skipping heavy seed in production');
+    return;
   }
 
-  // Seed default admin user + employee record
+  // ─── DEV / INITIAL: seed default admin user + employee record ───
   const adminRole = await Role.findOne({ where: { name: 'Admin' } });
   let adminUser = null;
   if (adminRole) {
@@ -247,4 +253,3 @@ module.exports = async () => {
   console.log(`[SEED] Default accounts seeded (${slotShops.length} Slot shop accounts created)`);
   console.log('[SEED] Defaults seeded');
 };
-
