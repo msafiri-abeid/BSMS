@@ -2,9 +2,9 @@ import { useState, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Table, Tag, Button, Spin, Space, DatePicker, InputNumber, Input, Modal, App, Image, Radio, Upload, Select } from 'antd';
-import { ArrowLeft, Store, Cpu, TrendingUp, DollarSign, PiggyBank, MapPin, Globe, FileText, BarChart3, History, ExternalLink, Receipt, Smartphone, Wallet, Landmark, Plus, Eye, Camera, CheckCircle, XCircle, Upload as UploadIcon, Download, ArrowLeftRight } from 'lucide-react';
+import { ArrowLeft, Store, Cpu, TrendingUp, DollarSign, PiggyBank, MapPin, FileText, BarChart3, History, ExternalLink, Receipt, Smartphone, Wallet, Landmark, Plus, Eye, Camera, CheckCircle, XCircle, Upload as UploadIcon, Download, ArrowLeftRight } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
-import { shopsAPI, financeAPI, collectionsAPI } from '../../services/api';
+import { shopsAPI, financeAPI, collectionsAPI, accountsAPI } from '../../services/api';
 import KpiCard from '../../components/KpiCard';
 import { useAuthStore } from '../../store/authStore';
 import dayjs from 'dayjs';
@@ -14,8 +14,7 @@ const STATUS_COLORS = { active: 'green', inactive: 'red', suspended: 'orange' };
 const MFG_COLORS = { Meteora: 'blue', Novomatic: 'purple' };
 const fmt = (n) => `TZS ${(n || 0).toLocaleString()}`;
 const DISP_STATUS_COLORS = { pending: 'orange', approved: 'green', rejected: 'red' };
-const FLOAT_TRANSFER_STATUS = { pending: 'orange', approved: 'green', rejected: 'red' };
-const FLOAT_TRANSFER_LABELS = { float_in: 'Float In', float_out: 'Float Out', deposit_to_bank: 'Deposit to Bank' };
+
 
 export default function ShopDetailPage() {
   const { id } = useParams();
@@ -44,7 +43,6 @@ export default function ShopDetailPage() {
   const { hasPermission } = useAuthStore();
   const canApprove = hasPermission('finance', 'approve');
   const canManageCash = ['Admin', 'General Manager', 'Operations Manager', 'Supervisor'].includes(roleName) || roleName === 'Cashier';
-  const canApproveAccounts = hasPermission('accounts', 'approve');
 
   const { data: shop, isLoading } = useQuery({
     queryKey: ['shop', id],
@@ -145,17 +143,19 @@ export default function ShopDetailPage() {
     enabled: floatTransferOpen,
   });
 
-  const { data: floatTransfers } = useQuery({
-    queryKey: ['float-transfers', id],
-    queryFn: () => financeAPI.listFloatTransfers({ shop_id: id, limit: 20 }).then(r => r.data.data),
-    enabled: isSlot,
+  const { data: accountTxns } = useQuery({
+    queryKey: ['shop-account-txns', id, floatAccount?.id],
+    queryFn: () => accountsAPI.transactions(floatAccount.id, { limit: 50 }).then(r => r.data.data),
+    enabled: isSlot && !!floatAccount?.id,
   });
+  const txnRows = accountTxns?.rows || [];
 
   const cashDispMutation = useMutation({
     mutationFn: (data) => financeAPI.submitShopCash(data),
     onSuccess: () => {
       message.success('Cash disposition saved');
       qc.invalidateQueries({ queryKey: ['shop-cash-dispositions', id] });
+      qc.invalidateQueries({ queryKey: ['shop-account-txns', id] });
       setCashDispOpen(false);
     },
     onError: (e) => message.error(e.response?.data?.message || 'Failed to save'),
@@ -167,6 +167,7 @@ export default function ShopDetailPage() {
       message.success('Cash disposition approved');
       qc.invalidateQueries({ queryKey: ['shop-cash-dispositions', id] });
       qc.invalidateQueries({ queryKey: ['shop-float-account', id] });
+      qc.invalidateQueries({ queryKey: ['shop-account-txns', id] });
     },
     onError: (e) => message.error(e.response?.data?.message || 'Failed to approve'),
   });
@@ -186,7 +187,7 @@ export default function ShopDetailPage() {
     mutationFn: (data) => financeAPI.submitFloatTransfer(data),
     onSuccess: () => {
       message.success('Float transfer submitted for approval');
-      qc.invalidateQueries({ queryKey: ['float-transfers', id] });
+      qc.invalidateQueries({ queryKey: ['shop-account-txns', id] });
       setFloatTransferOpen(false);
       setFloatTransferForm({ type: 'float_out', from_shop_id: null, to_shop_id: null, amount: 0, charges: 0, description: '', receipt: null });
     },
@@ -197,8 +198,8 @@ export default function ShopDetailPage() {
     mutationFn: ({ id: transferId, ...data }) => financeAPI.approveFloatTransfer(transferId, data),
     onSuccess: () => {
       message.success('Transfer processed');
-      qc.invalidateQueries({ queryKey: ['float-transfers', id] });
       qc.invalidateQueries({ queryKey: ['shop-float-account', id] });
+      qc.invalidateQueries({ queryKey: ['shop-account-txns', id] });
     },
     onError: (e) => message.error(e.response?.data?.message || 'Failed to process'),
   });
@@ -341,12 +342,12 @@ export default function ShopDetailPage() {
         )}
       </div>
 
-      {/* Cash Disposition Section — right after KPIs */}
+      {/* Shop Transactions — unified section (Cash Disposition + Float Transfers + Account Ledger) */}
       {isSlot && (
         <div className="rounded-lg border border-slate-100 overflow-hidden mb-6">
           <div className="px-4 py-3 bg-white border-b border-slate-100 flex items-center justify-between">
             <h5 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2 m-0">
-              <Landmark size={14} className="text-brand-dark" /> Cash Disposition — {dayjs(selectedDay).format('DD MMM YYYY')}
+              <Wallet size={14} className="text-brand-dark" /> Shop Transactions
             </h5>
             <Space>
               {canManageCash && (!currentDisp || currentDisp.status === 'rejected') && (
@@ -362,7 +363,7 @@ export default function ShopDetailPage() {
                     setCashDispOpen(true);
                   }}
                   className="!bg-brand-dark hover:!bg-brand-light hover:!text-white text-white border-none flex items-center gap-1">
-                  {currentDisp ? 'Edit' : 'Record'}
+                  {currentDisp ? 'Edit Disposition' : 'Record Disposition'}
                 </Button>
               )}
               {currentDisp && canApprove && currentDisp.status === 'pending' && (
@@ -371,7 +372,7 @@ export default function ShopDetailPage() {
                     onClick={() => approveDispMutation.mutate({ action: 'approve' })}
                     loading={approveDispMutation.isPending}
                     className="!bg-green-600 hover:!bg-green-700 hover:!text-white text-white border-none flex items-center gap-1">
-                    Approve
+                    Approve Disposition
                   </Button>
                   <Button size="small" icon={<XCircle className="w-3.5 h-3.5" />}
                     onClick={() => setRejectDispModal(true)}
@@ -380,72 +381,116 @@ export default function ShopDetailPage() {
                   </Button>
                 </>
               )}
+              {canManageCash && (
+                <Button size="small" icon={<ArrowLeftRight className="w-3.5 h-3.5" />}
+                  onClick={() => setFloatTransferOpen(true)}
+                  className="!bg-brand-dark hover:!bg-brand-light hover:!text-white text-white border-none flex items-center gap-1">
+                  New Transfer
+                </Button>
+              )}
             </Space>
           </div>
+
+          {/* Daily Cash Disposition Card */}
           {currentDisp ? (
-            <div className="p-4 bg-white">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-                <div className="rounded-lg bg-slate-50 p-3 border border-slate-100">
-                  <span className="text-[10px] uppercase tracking-wider text-slate-500">Total Gross</span>
-                  <p className="text-lg font-bold text-slate-800 m-0">{fmt(currentDisp.total_gross_tzs)}</p>
+            <div className="p-4 bg-white border-b border-slate-100">
+              <div className="flex items-center gap-2 mb-3">
+                <Landmark size={13} className="text-brand-dark" />
+                <h6 className="text-[10px] font-bold uppercase tracking-wider text-slate-400 m-0">
+                  Cash Disposition — {dayjs(selectedDay).format('DD MMM YYYY')}
+                </h6>
+                <Tag color={DISP_STATUS_COLORS[currentDisp.status]} className="!text-[10px] uppercase !ml-auto">{currentDisp.status}</Tag>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="rounded-lg bg-slate-50 p-2.5 border border-slate-100">
+                  <span className="text-[10px] uppercase tracking-wider text-slate-500">Gross</span>
+                  <p className="text-sm font-bold text-slate-800 m-0">{fmt(currentDisp.total_gross_tzs)}</p>
                 </div>
-                <div className="rounded-lg bg-blue-50 p-3 border border-blue-100">
-                  <span className="text-[10px] uppercase tracking-wider text-blue-600">Selcom Payments</span>
-                  <p className="text-lg font-bold text-blue-700 m-0">{fmt(currentDisp.selcom_tzs)}</p>
+                <div className="rounded-lg bg-blue-50 p-2.5 border border-blue-100">
+                  <span className="text-[10px] uppercase tracking-wider text-blue-600">Selcom</span>
+                  <p className="text-sm font-bold text-blue-700 m-0">{fmt(currentDisp.selcom_tzs)}</p>
                   {currentDisp.selcom_receipt_url && (
                     <a href={currentDisp.selcom_receipt_url} target="_blank" rel="noopener noreferrer"
-                      className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1 mt-1">
-                      <Download size={12} /> Receipt
+                      className="text-[10px] text-blue-600 hover:text-blue-800 flex items-center gap-0.5 mt-0.5">
+                      <Download size={10} /> Receipt
                     </a>
                   )}
                 </div>
-                <div className="rounded-lg bg-emerald-50 p-3 border border-emerald-100">
+                <div className="rounded-lg bg-emerald-50 p-2.5 border border-emerald-100">
                   <span className="text-[10px] uppercase tracking-wider text-emerald-600">Cash at Hand</span>
-                  <p className="text-lg font-bold text-emerald-700 m-0">{fmt(currentDisp.cash_at_hand_tzs)}</p>
-                  <span className="text-[10px] text-emerald-500">{currentDisp.cash_allocation === 'deposit' ? '→ Bank Deposit' : '→ Shop Float'}</span>
+                  <p className="text-sm font-bold text-emerald-700 m-0">{fmt(currentDisp.cash_at_hand_tzs)}</p>
+                  <span className="text-[10px] text-emerald-500">{currentDisp.cash_allocation === 'deposit' ? '→ Bank' : '→ Float'}</span>
                 </div>
-                <div className="rounded-lg p-3 border" style={{ backgroundColor: currentDisp.status === 'approved' ? '#f0fdf4' : currentDisp.status === 'rejected' ? '#fef2f2' : '#fffbeb', borderColor: currentDisp.status === 'approved' ? '#bbf7d0' : currentDisp.status === 'rejected' ? '#fecaca' : '#fde68a' }}>
-                  <span className="text-[10px] uppercase tracking-wider text-slate-500">Status</span>
-                  <p className="text-lg font-bold m-0">
-                    <Tag color={DISP_STATUS_COLORS[currentDisp.status]} className="!text-xs">{currentDisp.status.toUpperCase()}</Tag>
-                  </p>
-                  {currentDisp.approver && (
-                    <span className="text-[10px] text-slate-500">by {currentDisp.approver.name}</span>
-                  )}
-                </div>
+                {currentDisp.cash_allocation === 'deposit' && currentDisp.bank_deposit_amount > 0 && (
+                  <div className="rounded-lg bg-amber-50 p-2.5 border border-amber-100">
+                    <span className="text-[10px] uppercase tracking-wider text-amber-600">Bank Deposit</span>
+                    <p className="text-sm font-bold text-amber-700 m-0">{fmt(currentDisp.bank_deposit_amount)}</p>
+                    {currentDisp.bank_charges > 0 && <span className="text-[10px] text-amber-500">Charges: {fmt(currentDisp.bank_charges)}</span>}
+                    {currentDisp.bank_deposit_receipt_url && (
+                      <a href={currentDisp.bank_deposit_receipt_url} target="_blank" rel="noopener noreferrer"
+                        className="text-[10px] text-blue-600 hover:text-blue-800 flex items-center gap-0.5 mt-0.5">
+                        <Download size={10} /> Slip
+                      </a>
+                    )}
+                  </div>
+                )}
               </div>
-              {currentDisp.cash_allocation === 'deposit' && currentDisp.bank_deposit_amount > 0 && (
-                <div className="flex items-center gap-3 p-3 rounded-lg bg-amber-50 border border-amber-100 text-sm">
-                  <Landmark size={16} className="text-amber-600" />
-                  <span><strong>Bank Deposit:</strong> {fmt(currentDisp.bank_deposit_amount)}</span>
-                  {currentDisp.bank_charges > 0 && <span className="text-xs text-amber-600">(Charges: {fmt(currentDisp.bank_charges)})</span>}
-                  {currentDisp.bank_deposit_receipt_url && (
-                    <a href={currentDisp.bank_deposit_receipt_url} target="_blank" rel="noopener noreferrer"
-                      className="text-blue-600 hover:text-blue-800 flex items-center gap-1 text-xs">
-                      <Download size={12} /> Deposit Slip
-                    </a>
-                  )}
-                </div>
+              {currentDisp.approver && (
+                <div className="mt-2 text-[10px] text-slate-400">Approved by {currentDisp.approver.name}</div>
               )}
               {currentDisp.notes && (
-                <div className="mt-3 text-xs text-slate-500">
-                  <span className="font-semibold">Notes:</span> {currentDisp.notes}
-                </div>
+                <div className="mt-2 text-[10px] text-slate-500"><span className="font-semibold">Notes:</span> {currentDisp.notes}</div>
               )}
             </div>
           ) : (
-            <div className="p-8 text-center bg-white">
-              <Landmark className="w-8 h-8 mx-auto mb-2 text-slate-300" />
-              <p className="text-sm text-slate-400">No cash disposition recorded for {dayjs(selectedDay).format('DD MMM YYYY')}</p>
+            <div className="p-6 text-center bg-white border-b border-slate-100">
+              <Landmark className="w-7 h-7 mx-auto mb-1.5 text-slate-300" />
+              <p className="text-xs text-slate-400 m-0">No cash disposition for {dayjs(selectedDay).format('DD MMM YYYY')}</p>
               {canManageCash && (
-                <Button size="small" icon={<Plus className="w-3.5 h-3.5" />}
-                  onClick={() => { setCashDispOpen(true); }}
-                  className="!bg-brand-dark hover:!bg-brand-light hover:!text-white text-white border-none mt-2">
-                  Record Cash Disposition
+                <Button size="small" icon={<Plus className="w-3 h-3" />}
+                  onClick={() => setCashDispOpen(true)}
+                  className="!text-brand-dark hover:!text-brand-light border-brand-dark/30 mt-2 text-xs">
+                  Record Disposition
                 </Button>
               )}
             </div>
           )}
+
+          {/* Transaction History Ledger */}
+          <div className="p-4 bg-white">
+            <h6 className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-1.5 m-0">
+              <BarChart3 size={12} className="text-brand-dark" /> Transaction History
+              {floatAccount && <span className="font-normal normal-case text-slate-400">— {floatAccount.name} ({fmt(floatBalance)})</span>}
+            </h6>
+            {txnRows.length > 0 ? (
+              <Table dataSource={txnRows} rowKey="id" size="small" pagination={{ pageSize: 8, showSizeChanger: false, size: 'small' }}
+                columns={[
+                  { title: 'Date', dataIndex: 'transaction_date', render: (v) => dayjs(v).format('DD MMM'), width: 80 },
+                  { title: 'Type', dataIndex: 'type', render: (v) => (
+                    <Tag color={v === 'in' ? 'green' : 'red'} className="!text-[10px] uppercase">{v === 'in' ? 'IN' : 'OUT'}</Tag>
+                  ), width: 60 },
+                  { title: 'Reference', dataIndex: 'reference_type', render: (v) => (
+                    <span className="text-[10px] text-slate-500 capitalize">{v?.replace(/_/g, ' ') || '—'}</span>
+                  ), width: 110 },
+                  { title: 'Description', dataIndex: 'description', render: (v) => (
+                    <span className="text-xs text-slate-600 line-clamp-1">{v || '—'}</span>
+                  ) },
+                  { title: 'Amount', dataIndex: 'amount', render: (v, r) => (
+                    <span className={`font-semibold text-xs ${r.type === 'in' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                      {r.type === 'in' ? '+' : '−'}{fmt(v)}
+                    </span>
+                  ), width: 130 },
+                  { title: 'Balance', dataIndex: 'balance_after', render: (v) => (
+                    <span className="font-semibold text-xs text-slate-700">{fmt(v)}</span>
+                  ), width: 130 },
+                ]} />
+            ) : (
+              <div className="py-6 text-center">
+                <BarChart3 className="w-6 h-6 mx-auto mb-1 text-slate-200" />
+                <p className="text-[11px] text-slate-400 m-0">No transactions yet</p>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -672,49 +717,6 @@ export default function ShopDetailPage() {
               <div className="p-8 text-center bg-white">
                 <Receipt className="w-8 h-8 mx-auto mb-2 text-slate-300" />
                 <p className="text-sm text-slate-400">No expenses recorded for {dayjs(selectedDay).format('DD MMM YYYY')}</p>
-              </div>
-            )}
-          </div>
-
-          {/* Float Transfers Section */}
-          <div className="rounded-lg border border-slate-100 overflow-hidden mb-6">
-            <div className="px-4 py-3 bg-white border-b border-slate-100 flex items-center justify-between">
-              <h5 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2 m-0">
-                <ArrowLeftRight size={14} className="text-brand-dark" /> Float Transfers
-              </h5>
-              {canManageCash && (
-                <Button size="small" icon={<Plus className="w-3.5 h-3.5" />}
-                  onClick={() => setFloatTransferOpen(true)}
-                  className="!bg-brand-dark hover:!bg-brand-light hover:!text-white text-white border-none flex items-center gap-1">
-                  New Transfer
-                </Button>
-              )}
-            </div>
-            {floatTransfers?.rows?.length > 0 ? (
-              <Table dataSource={floatTransfers.rows} rowKey="id" size="small" pagination={false}
-                columns={[
-                  { title: 'Type', dataIndex: 'type', render: (v) => <Tag color={v === 'float_in' ? 'green' : v === 'float_out' ? 'orange' : 'blue'} className="!text-[10px]">{FLOAT_TRANSFER_LABELS[v]}</Tag>, width: 120 },
-                  { title: 'From', key: 'from', render: (_, r) => <span className="text-xs">{r.fromShop?.name || '—'}</span>, width: 130 },
-                  { title: 'To', key: 'to', render: (_, r) => <span className="text-xs">{r.toShop?.name || '—'}</span>, width: 130 },
-                  { title: 'Amount', dataIndex: 'amount', render: (v) => <span className="font-semibold">{fmt(v)}</span>, width: 120 },
-                  { title: 'Charges', dataIndex: 'charges', render: (v) => v > 0 ? <span className="text-xs text-amber-600">{fmt(v)}</span> : '—', width: 90 },
-                  { title: 'Status', dataIndex: 'status', render: (v) => <Tag color={FLOAT_TRANSFER_STATUS[v]} className="!text-[10px] uppercase">{v}</Tag>, width: 90 },
-                  { title: 'By', key: 'submitter', render: (_, r) => <span className="text-xs">{r.submitter?.name || '—'}</span>, width: 100 },
-                  { title: '', key: 'actions', width: 60, render: (_, r) => (
-                    canApproveAccounts && r.status === 'pending' ? (
-                      <Space size={4}>
-                        <Button type="text" size="small" icon={<CheckCircle className="w-3.5 h-3.5 text-green-600" />}
-                          onClick={() => approveTransferMutation.mutate({ id: r.id, action: 'approve' })} />
-                        <Button type="text" size="small" icon={<XCircle className="w-3.5 h-3.5 text-red-600" />}
-                          onClick={() => setRejectTransferModal(r)} />
-                      </Space>
-                    ) : null
-                  )},
-                ]} />
-            ) : (
-              <div className="p-6 text-center bg-white">
-                <ArrowLeftRight className="w-8 h-8 mx-auto mb-2 text-slate-300" />
-                <p className="text-sm text-slate-400">No float transfers yet</p>
               </div>
             )}
           </div>
