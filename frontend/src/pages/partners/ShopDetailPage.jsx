@@ -127,7 +127,7 @@ export default function ShopDetailPage() {
 
   const { data: floatAccount } = useQuery({
     queryKey: ['shop-float-account', id],
-    queryFn: () => financeAPI.listAccounts({ shop_id: id, account_type: 'cash' }).then(r => {
+    queryFn: () => accountsAPI.list({ shop_id: id, account_type: 'cash' }).then(r => {
       const accounts = r.data.data?.rows || r.data.data || [];
       return accounts.find(a => a.business_type === 'bentabet') || accounts[0] || null;
     }),
