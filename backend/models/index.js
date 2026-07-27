@@ -282,6 +282,7 @@ const Expense = sequelize.define('Expense', {
   expense_date: { type: DataTypes.DATEONLY, allowNull: false },
   business_type: { type: DataTypes.ENUM('meteora', 'bentabet'), defaultValue: 'meteora' },
   payment_source: { type: DataTypes.ENUM('cash', 'selcom'), defaultValue: 'cash' },
+  account_id: { type: DataTypes.INTEGER },
   submitted_by: { type: DataTypes.INTEGER, allowNull: false },
   approved_by: { type: DataTypes.INTEGER },
   approved_at: { type: DataTypes.DATE },
@@ -604,13 +605,19 @@ const Notification = sequelize.define('Notification', {
 const Account = sequelize.define('Account', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
   name: { type: DataTypes.STRING(150), allowNull: false },
-  account_type: { type: DataTypes.ENUM('cash', 'bank', 'mobile_money', 'selcom'), allowNull: false },
+  account_type: { type: DataTypes.ENUM('cash', 'bank', 'mobile_money'), allowNull: false },
   business_type: { type: DataTypes.ENUM('meteora', 'bentabet'), defaultValue: 'meteora' },
   shop_id: { type: DataTypes.INTEGER },
   opening_balance: { type: DataTypes.INTEGER, defaultValue: 0 },
   current_balance: { type: DataTypes.INTEGER, defaultValue: 0 },
   is_active: { type: DataTypes.BOOLEAN, defaultValue: true },
   description: { type: DataTypes.TEXT },
+  bank_name: { type: DataTypes.STRING(150) },
+  account_number: { type: DataTypes.STRING(50) },
+  till_number: { type: DataTypes.STRING(20) },
+  currency: { type: DataTypes.STRING(10), defaultValue: 'TZS' },
+  swift_code: { type: DataTypes.STRING(20) },
+  float_minimum: { type: DataTypes.INTEGER, defaultValue: 0 },
   created_by: { type: DataTypes.INTEGER, allowNull: false },
 }, { tableName: 'accounts' });
 
@@ -652,6 +659,7 @@ const ShopCashDisposition = sequelize.define('ShopCashDisposition', {
   cash_allocation: { type: DataTypes.ENUM('float', 'deposit') },
   bank_deposit_receipt_url: { type: DataTypes.TEXT },
   bank_deposit_amount: { type: DataTypes.INTEGER },
+  bank_charges: { type: DataTypes.INTEGER, defaultValue: 0 },
   status: { type: DataTypes.ENUM('pending', 'approved', 'rejected'), defaultValue: 'pending' },
   submitted_by: { type: DataTypes.INTEGER, allowNull: false },
   approved_by: { type: DataTypes.INTEGER },
@@ -659,6 +667,25 @@ const ShopCashDisposition = sequelize.define('ShopCashDisposition', {
   rejection_reason: { type: DataTypes.TEXT },
   notes: { type: DataTypes.TEXT },
 }, { tableName: 'shop_cash_dispositions', indexes: [{ name: 'uq_cash_disposition_shop_date', unique: true, fields: ['shop_id', 'date'] }] });
+
+// ─── FLOAT TRANSFERS ─────────────────────────────────────────
+const FloatTransfer = sequelize.define('FloatTransfer', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  from_shop_id: { type: DataTypes.INTEGER },
+  to_shop_id: { type: DataTypes.INTEGER },
+  from_account_id: { type: DataTypes.INTEGER, allowNull: false },
+  to_account_id: { type: DataTypes.INTEGER, allowNull: false },
+  amount: { type: DataTypes.INTEGER, allowNull: false },
+  charges: { type: DataTypes.INTEGER, defaultValue: 0 },
+  type: { type: DataTypes.ENUM('float_in', 'float_out', 'deposit_to_bank'), allowNull: false },
+  status: { type: DataTypes.ENUM('pending', 'approved', 'rejected'), defaultValue: 'pending' },
+  receipt_url: { type: DataTypes.TEXT },
+  description: { type: DataTypes.TEXT },
+  submitted_by: { type: DataTypes.INTEGER, allowNull: false },
+  approved_by: { type: DataTypes.INTEGER },
+  approved_at: { type: DataTypes.DATE },
+  rejection_reason: { type: DataTypes.TEXT },
+}, { tableName: 'float_transfers' });
 
 // ─── ASSOCIATIONS ─────────────────────────────────────────────
 Role.hasMany(Permission, { foreignKey: 'role_id', as: 'permissions' });
@@ -833,6 +860,18 @@ Notification.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 Notification.belongsTo(User, { foreignKey: 'actor_id', as: 'actor' });
 Shop.hasMany(ShopCashDisposition, { foreignKey: 'shop_id', as: 'cashDispositions' });
 
+// Expense → Account association
+Expense.belongsTo(Account, { foreignKey: 'account_id', as: 'payAccount' });
+Account.hasMany(Expense, { foreignKey: 'account_id', as: 'expenses' });
+
+// FloatTransfer associations
+FloatTransfer.belongsTo(Shop, { foreignKey: 'from_shop_id', as: 'fromShop' });
+FloatTransfer.belongsTo(Shop, { foreignKey: 'to_shop_id', as: 'toShop' });
+FloatTransfer.belongsTo(Account, { foreignKey: 'from_account_id', as: 'fromAccount' });
+FloatTransfer.belongsTo(Account, { foreignKey: 'to_account_id', as: 'toAccount' });
+FloatTransfer.belongsTo(User, { foreignKey: 'submitted_by', as: 'submitter' });
+FloatTransfer.belongsTo(User, { foreignKey: 'approved_by', as: 'approver' });
+
 module.exports = {
   sequelize,
   Role, Permission, User, RefreshToken, Setting,
@@ -846,5 +885,5 @@ module.exports = {
   Department, Position, Employee, Attendance,
   SmsLog, Notification,
   Account, AccountTransaction, AccountTransfer,
-  ShopCashDisposition,
+  ShopCashDisposition, FloatTransfer,
 };

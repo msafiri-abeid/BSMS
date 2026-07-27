@@ -1,18 +1,21 @@
 import { useState, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Table, Tag, Button, Spin, Space, DatePicker, InputNumber, Input, Modal, App, Image, Radio, Upload } from 'antd';
-import { ArrowLeft, Store, Cpu, TrendingUp, DollarSign, PiggyBank, MapPin, User, Globe, FileText, Phone, Target, BarChart3, History, ExternalLink, Receipt, Smartphone, Wallet, Landmark, Plus, Eye, Camera, CheckCircle, XCircle, ShieldCheck, Upload as UploadIcon, Download } from 'lucide-react';
+import { Table, Tag, Button, Spin, Space, DatePicker, InputNumber, Input, Modal, App, Image, Radio, Upload, Select } from 'antd';
+import { ArrowLeft, Store, Cpu, TrendingUp, DollarSign, PiggyBank, MapPin, Globe, FileText, BarChart3, History, ExternalLink, Receipt, Smartphone, Wallet, Landmark, Plus, Eye, Camera, CheckCircle, XCircle, Upload as UploadIcon, Download, ArrowLeftRight } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import { shopsAPI, financeAPI, collectionsAPI } from '../../services/api';
 import KpiCard from '../../components/KpiCard';
 import { useAuthStore } from '../../store/authStore';
 import dayjs from 'dayjs';
 
+const { Option } = Select;
 const STATUS_COLORS = { active: 'green', inactive: 'red', suspended: 'orange' };
 const MFG_COLORS = { Meteora: 'blue', Novomatic: 'purple' };
 const fmt = (n) => `TZS ${(n || 0).toLocaleString()}`;
 const DISP_STATUS_COLORS = { pending: 'orange', approved: 'green', rejected: 'red' };
+const FLOAT_TRANSFER_STATUS = { pending: 'orange', approved: 'green', rejected: 'red' };
+const FLOAT_TRANSFER_LABELS = { float_in: 'Float In', float_out: 'Float Out', deposit_to_bank: 'Deposit to Bank' };
 
 export default function ShopDetailPage() {
   const { id } = useParams();
@@ -21,20 +24,27 @@ export default function ShopDetailPage() {
   const { message } = App.useApp();
   const qc = useQueryClient();
   const [cashDispOpen, setCashDispOpen] = useState(false);
-  const [selectedDay, setSelectedDay] = useState(dayjs().format('YYYY-MM-DD'));
+  const [selectedDay, setSelectedDay] = useState(dayjs().subtract(1, 'day').format('YYYY-MM-DD'));
   const [cashDispForm, setCashDispForm] = useState({
-    selcom_tzs: 0, cash_allocation: 'float', bank_deposit_amount: 0,
+    selcom_tzs: 0, cash_allocation: 'float', bank_deposit_amount: 0, bank_charges: 0,
     selcom_receipt: null, bank_deposit_receipt: null, notes: '',
   });
   const [viewDetail, setViewDetail] = useState(null);
   const [rejectDispModal, setRejectDispModal] = useState(null);
   const [rejectReason, setRejectReason] = useState('');
+  const [floatTransferOpen, setFloatTransferOpen] = useState(false);
+  const [floatTransferForm, setFloatTransferForm] = useState({
+    type: 'float_out', from_shop_id: null, to_shop_id: null, amount: 0, charges: 0, description: '', receipt: null,
+  });
+  const [rejectTransferModal, setRejectTransferModal] = useState(null);
+  const [rejectTransferReason, setRejectTransferReason] = useState('');
 
   const roleName = useAuthStore((s) => s.user?.role?.name);
   const user = useAuthStore((s) => s.user);
   const { hasPermission } = useAuthStore();
   const canApprove = hasPermission('finance', 'approve');
   const canManageCash = ['Admin', 'General Manager', 'Operations Manager', 'Supervisor'].includes(roleName) || roleName === 'Cashier';
+  const canApproveAccounts = hasPermission('accounts', 'approve');
 
   const { data: shop, isLoading } = useQuery({
     queryKey: ['shop', id],
@@ -49,7 +59,6 @@ export default function ShopDetailPage() {
   const meteoraMachines = machines.filter(m => m.manufacturer === 'Meteora');
   const displayMachines = isSlot ? novomaticMachines : meteoraMachines;
 
-  // Performance summary filtered by selected day
   const perfSummary = useMemo(() => {
     if (machines.length === 0) return null;
     return machines.reduce((acc, m) => {
@@ -66,7 +75,6 @@ export default function ShopDetailPage() {
     }, { gross: 0, net: 0, office: 0, owner: 0 });
   }, [machines, selectedDay]);
 
-  // Chart data: daily trend (last 30 days, but highlight selected day)
   const dailyMap = {};
   machines.forEach(m => {
     (m.performance || []).forEach(p => {
@@ -86,10 +94,8 @@ export default function ShopDetailPage() {
     }));
 
   const latestPerf = (m) => (m.performance && m.performance[0]) || null;
-
   const backPath = location.pathname.startsWith('/shops/slot/') ? '/shops/slot' : '/shops/meteora';
 
-  // Expenses filtered by selected day
   const { data: expenses } = useQuery({
     queryKey: ['shop-expenses', id, selectedDay],
     queryFn: () => financeAPI.listExpenses({ shop_id: id, limit: 50, date: selectedDay, status: 'approved' }).then(r => r.data.data),
@@ -98,7 +104,6 @@ export default function ShopDetailPage() {
   const expensesList = expenses?.rows || [];
   const totalExpenses = isSlot && expensesList.length > 0 ? expensesList.reduce((s, e) => s + (e.amount || 0), 0) : 0;
 
-  // Collections filtered by selected day
   const { data: collectionsData } = useQuery({
     queryKey: ['shop-novomatic-collections', id, selectedDay],
     queryFn: () => collectionsAPI.list({ shop_id: id, manufacturer: 'Novomatic', date: selectedDay, limit: 100 }).then(r => r.data.data),
@@ -108,18 +113,43 @@ export default function ShopDetailPage() {
     ...c,
     _slotCode: c.machine?.slot_code || '—',
     _manufacturer: c.machine?.manufacturer || '—',
-    _cashier: c.collector?.full_name || 'Unassigned',
+    _cashier: c.collector?.name || 'Unassigned',
     _opening: c.novomaticReading?.opening_credits,
     _closing: c.novomaticReading?.closing_credits,
     _totalCredits: c.novomaticReading?.total_credits,
   }));
 
-  // Cash disposition for selected day
+  const grossFromCollections = collectionRows.reduce((s, r) => s + (r.gross_tzs || 0), 0);
+
   const { data: cashDispositions } = useQuery({
     queryKey: ['shop-cash-dispositions', id, selectedDay],
     queryFn: () => financeAPI.listShopCash({ shop_id: id, date: selectedDay }).then(r => r.data.data),
   });
   const currentDisp = Array.isArray(cashDispositions) ? cashDispositions[0] : null;
+
+  const { data: floatAccount } = useQuery({
+    queryKey: ['shop-float-account', id],
+    queryFn: () => financeAPI.listAccounts({ shop_id: id, account_type: 'cash' }).then(r => {
+      const accounts = r.data.data?.rows || r.data.data || [];
+      return accounts.find(a => a.business_type === 'bentabet') || accounts[0] || null;
+    }),
+    enabled: isSlot,
+  });
+  const floatBalance = floatAccount?.current_balance || 0;
+  const floatMinimum = floatAccount?.float_minimum || 400000;
+  const floatHealthy = floatBalance >= floatMinimum;
+
+  const { data: allShops } = useQuery({
+    queryKey: ['shops-list-for-transfer'],
+    queryFn: () => shopsAPI.list({ business_type: 'slot', status: 'active', limit: 200 }).then(r => r.data.data?.rows || r.data.data || []),
+    enabled: floatTransferOpen,
+  });
+
+  const { data: floatTransfers } = useQuery({
+    queryKey: ['float-transfers', id],
+    queryFn: () => financeAPI.listFloatTransfers({ shop_id: id, limit: 20 }).then(r => r.data.data),
+    enabled: isSlot,
+  });
 
   const cashDispMutation = useMutation({
     mutationFn: (data) => financeAPI.submitShopCash(data),
@@ -136,6 +166,7 @@ export default function ShopDetailPage() {
     onSuccess: () => {
       message.success('Cash disposition approved');
       qc.invalidateQueries({ queryKey: ['shop-cash-dispositions', id] });
+      qc.invalidateQueries({ queryKey: ['shop-float-account', id] });
     },
     onError: (e) => message.error(e.response?.data?.message || 'Failed to approve'),
   });
@@ -151,6 +182,27 @@ export default function ShopDetailPage() {
     onError: (e) => message.error(e.response?.data?.message || 'Failed to reject'),
   });
 
+  const floatTransferMutation = useMutation({
+    mutationFn: (data) => financeAPI.submitFloatTransfer(data),
+    onSuccess: () => {
+      message.success('Float transfer submitted for approval');
+      qc.invalidateQueries({ queryKey: ['float-transfers', id] });
+      setFloatTransferOpen(false);
+      setFloatTransferForm({ type: 'float_out', from_shop_id: null, to_shop_id: null, amount: 0, charges: 0, description: '', receipt: null });
+    },
+    onError: (e) => message.error(e.response?.data?.message || 'Failed to submit'),
+  });
+
+  const approveTransferMutation = useMutation({
+    mutationFn: ({ id: transferId, ...data }) => financeAPI.approveFloatTransfer(transferId, data),
+    onSuccess: () => {
+      message.success('Transfer processed');
+      qc.invalidateQueries({ queryKey: ['float-transfers', id] });
+      qc.invalidateQueries({ queryKey: ['shop-float-account', id] });
+    },
+    onError: (e) => message.error(e.response?.data?.message || 'Failed to process'),
+  });
+
   const handleSubmitCashDisp = () => {
     const fd = new FormData();
     fd.append('shop_id', id);
@@ -159,6 +211,7 @@ export default function ShopDetailPage() {
     fd.append('cash_allocation', cashDispForm.cash_allocation || 'float');
     if (cashDispForm.cash_allocation === 'deposit') {
       fd.append('bank_deposit_amount', cashDispForm.bank_deposit_amount || 0);
+      fd.append('bank_charges', cashDispForm.bank_charges || 0);
       if (cashDispForm.bank_deposit_receipt?.originFileObj) {
         fd.append('bank_deposit_receipt', cashDispForm.bank_deposit_receipt.originFileObj);
       }
@@ -168,6 +221,43 @@ export default function ShopDetailPage() {
     }
     fd.append('notes', cashDispForm.notes || '');
     cashDispMutation.mutate(fd);
+  };
+
+  const handleSubmitFloatTransfer = () => {
+    const fd = new FormData();
+    const f = floatTransferForm;
+    fd.append('type', f.type);
+    fd.append('amount', f.amount || 0);
+    fd.append('charges', f.charges || 0);
+    fd.append('description', f.description || '');
+    if (f.type === 'float_out' || f.type === 'deposit_to_bank') {
+      fd.append('from_shop_id', id);
+      fd.append('from_account_id', floatAccount?.id || '');
+    }
+    if (f.type === 'float_in') {
+      fd.append('to_shop_id', id);
+      fd.append('to_account_id', floatAccount?.id || '');
+      fd.append('from_shop_id', f.from_shop_id || '');
+      const fromShop = (allShops || []).find(s => s.id === f.from_shop_id);
+      if (fromShop) {
+        fd.append('from_account_id', fromShop.cash_account_id || '');
+      }
+    }
+    if (f.type === 'float_out') {
+      fd.append('to_shop_id', f.to_shop_id || '');
+      const toShop = (allShops || []).find(s => s.id === f.to_shop_id);
+      if (toShop) {
+        fd.append('to_account_id', toShop.cash_account_id || '');
+      }
+    }
+    if (f.type === 'deposit_to_bank') {
+      const bankAccQuery = qc.getQueryData(['accounts', { account_type: 'bank', business_type: 'bentabet' }]);
+      fd.append('to_account_id', '');
+    }
+    if (f.receipt?.originFileObj) {
+      fd.append('receipt', f.receipt.originFileObj);
+    }
+    floatTransferMutation.mutate(fd);
   };
 
   const machineCols = [
@@ -216,7 +306,6 @@ export default function ShopDetailPage() {
   }
 
   const addr = shop.address || {};
-  const grossFromCollections = collectionRows.reduce((s, r) => s + (r.gross_tzs || 0), 0);
   const cashAtHandPreview = grossFromCollections - (cashDispForm.selcom_tzs || 0);
 
   return (
@@ -236,7 +325,7 @@ export default function ShopDetailPage() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 mb-6">
         <KpiCard title="Total Machines" value={displayMachines.length} icon={Cpu} bgColor="bg-indigo-50" iconColor="text-indigo-600" />
         <KpiCard title="Gross Revenue" value={isSlot ? grossFromCollections : (perfSummary?.gross || 0)} formatter={fmt} icon={TrendingUp} bgColor="bg-emerald-50" iconColor="text-emerald-600" />
         <KpiCard title="Net Revenue" value={isSlot ? grossFromCollections - totalExpenses : (perfSummary?.net || 0)} formatter={fmt} icon={DollarSign} bgColor="bg-blue-50" iconColor="text-blue-600" />
@@ -245,7 +334,120 @@ export default function ShopDetailPage() {
         ) : (
           <KpiCard title="Office Share" value={perfSummary?.office || 0} formatter={fmt} icon={PiggyBank} bgColor="bg-amber-50" iconColor="text-amber-600" />
         )}
+        {isSlot && (
+          <KpiCard title="Float Available" value={floatBalance} formatter={fmt} icon={Wallet}
+            bgColor={floatHealthy ? 'bg-emerald-50' : 'bg-rose-50'}
+            iconColor={floatHealthy ? 'text-emerald-600' : 'text-rose-600'} />
+        )}
       </div>
+
+      {/* Cash Disposition Section — right after KPIs */}
+      {isSlot && (
+        <div className="rounded-lg border border-slate-100 overflow-hidden mb-6">
+          <div className="px-4 py-3 bg-white border-b border-slate-100 flex items-center justify-between">
+            <h5 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2 m-0">
+              <Landmark size={14} className="text-brand-dark" /> Cash Disposition — {dayjs(selectedDay).format('DD MMM YYYY')}
+            </h5>
+            <Space>
+              {canManageCash && (!currentDisp || currentDisp.status === 'rejected') && (
+                <Button size="small" icon={<Plus className="w-3.5 h-3.5" />}
+                  onClick={() => {
+                    setCashDispForm({
+                      selcom_tzs: currentDisp?.selcom_tzs || 0,
+                      cash_allocation: currentDisp?.cash_allocation || 'float',
+                      bank_deposit_amount: currentDisp?.bank_deposit_amount || 0,
+                      bank_charges: currentDisp?.bank_charges || 0,
+                      selcom_receipt: null, bank_deposit_receipt: null, notes: currentDisp?.notes || '',
+                    });
+                    setCashDispOpen(true);
+                  }}
+                  className="!bg-brand-dark hover:!bg-brand-light hover:!text-white text-white border-none flex items-center gap-1">
+                  {currentDisp ? 'Edit' : 'Record'}
+                </Button>
+              )}
+              {currentDisp && canApprove && currentDisp.status === 'pending' && (
+                <>
+                  <Button size="small" icon={<CheckCircle className="w-3.5 h-3.5" />}
+                    onClick={() => approveDispMutation.mutate({ action: 'approve' })}
+                    loading={approveDispMutation.isPending}
+                    className="!bg-green-600 hover:!bg-green-700 hover:!text-white text-white border-none flex items-center gap-1">
+                    Approve
+                  </Button>
+                  <Button size="small" icon={<XCircle className="w-3.5 h-3.5" />}
+                    onClick={() => setRejectDispModal(true)}
+                    className="!text-red-600 !border-red-300 hover:!bg-red-50 flex items-center gap-1">
+                    Reject
+                  </Button>
+                </>
+              )}
+            </Space>
+          </div>
+          {currentDisp ? (
+            <div className="p-4 bg-white">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                <div className="rounded-lg bg-slate-50 p-3 border border-slate-100">
+                  <span className="text-[10px] uppercase tracking-wider text-slate-500">Total Gross</span>
+                  <p className="text-lg font-bold text-slate-800 m-0">{fmt(currentDisp.total_gross_tzs)}</p>
+                </div>
+                <div className="rounded-lg bg-blue-50 p-3 border border-blue-100">
+                  <span className="text-[10px] uppercase tracking-wider text-blue-600">Selcom Payments</span>
+                  <p className="text-lg font-bold text-blue-700 m-0">{fmt(currentDisp.selcom_tzs)}</p>
+                  {currentDisp.selcom_receipt_url && (
+                    <a href={currentDisp.selcom_receipt_url} target="_blank" rel="noopener noreferrer"
+                      className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1 mt-1">
+                      <Download size={12} /> Receipt
+                    </a>
+                  )}
+                </div>
+                <div className="rounded-lg bg-emerald-50 p-3 border border-emerald-100">
+                  <span className="text-[10px] uppercase tracking-wider text-emerald-600">Cash at Hand</span>
+                  <p className="text-lg font-bold text-emerald-700 m-0">{fmt(currentDisp.cash_at_hand_tzs)}</p>
+                  <span className="text-[10px] text-emerald-500">{currentDisp.cash_allocation === 'deposit' ? '→ Bank Deposit' : '→ Shop Float'}</span>
+                </div>
+                <div className="rounded-lg p-3 border" style={{ backgroundColor: currentDisp.status === 'approved' ? '#f0fdf4' : currentDisp.status === 'rejected' ? '#fef2f2' : '#fffbeb', borderColor: currentDisp.status === 'approved' ? '#bbf7d0' : currentDisp.status === 'rejected' ? '#fecaca' : '#fde68a' }}>
+                  <span className="text-[10px] uppercase tracking-wider text-slate-500">Status</span>
+                  <p className="text-lg font-bold m-0">
+                    <Tag color={DISP_STATUS_COLORS[currentDisp.status]} className="!text-xs">{currentDisp.status.toUpperCase()}</Tag>
+                  </p>
+                  {currentDisp.approver && (
+                    <span className="text-[10px] text-slate-500">by {currentDisp.approver.name}</span>
+                  )}
+                </div>
+              </div>
+              {currentDisp.cash_allocation === 'deposit' && currentDisp.bank_deposit_amount > 0 && (
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-amber-50 border border-amber-100 text-sm">
+                  <Landmark size={16} className="text-amber-600" />
+                  <span><strong>Bank Deposit:</strong> {fmt(currentDisp.bank_deposit_amount)}</span>
+                  {currentDisp.bank_charges > 0 && <span className="text-xs text-amber-600">(Charges: {fmt(currentDisp.bank_charges)})</span>}
+                  {currentDisp.bank_deposit_receipt_url && (
+                    <a href={currentDisp.bank_deposit_receipt_url} target="_blank" rel="noopener noreferrer"
+                      className="text-blue-600 hover:text-blue-800 flex items-center gap-1 text-xs">
+                      <Download size={12} /> Deposit Slip
+                    </a>
+                  )}
+                </div>
+              )}
+              {currentDisp.notes && (
+                <div className="mt-3 text-xs text-slate-500">
+                  <span className="font-semibold">Notes:</span> {currentDisp.notes}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="p-8 text-center bg-white">
+              <Landmark className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+              <p className="text-sm text-slate-400">No cash disposition recorded for {dayjs(selectedDay).format('DD MMM YYYY')}</p>
+              {canManageCash && (
+                <Button size="small" icon={<Plus className="w-3.5 h-3.5" />}
+                  onClick={() => { setCashDispOpen(true); }}
+                  className="!bg-brand-dark hover:!bg-brand-light hover:!text-white text-white border-none mt-2">
+                  Record Cash Disposition
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
         {/* Shop Details Card */}
@@ -263,12 +465,7 @@ export default function ShopDetailPage() {
               <p className="font-semibold text-slate-700">
                 {isSlot
                   ? (shop.supervisor
-                    ? <>
-                        <Button type="link" size="small" className="!p-0 !text-brand-dark font-semibold !text-sm"
-                          onClick={() => navigate(`/staff/employees/${shop.supervisor.id}`)}>
-                          {shop.supervisor.full_name}
-                        </Button>
-                      </>
+                    ? <Button type="link" size="small" className="!p-0 !text-brand-dark font-semibold !text-sm" onClick={() => navigate(`/staff/employees/${shop.supervisor.id}`)}>{shop.supervisor.full_name}</Button>
                     : <span className="text-slate-300">—</span>)
                   : (shop.partner?.name || <span className="text-slate-300">—</span>)}
               </p>
@@ -478,6 +675,49 @@ export default function ShopDetailPage() {
               </div>
             )}
           </div>
+
+          {/* Float Transfers Section */}
+          <div className="rounded-lg border border-slate-100 overflow-hidden mb-6">
+            <div className="px-4 py-3 bg-white border-b border-slate-100 flex items-center justify-between">
+              <h5 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2 m-0">
+                <ArrowLeftRight size={14} className="text-brand-dark" /> Float Transfers
+              </h5>
+              {canManageCash && (
+                <Button size="small" icon={<Plus className="w-3.5 h-3.5" />}
+                  onClick={() => setFloatTransferOpen(true)}
+                  className="!bg-brand-dark hover:!bg-brand-light hover:!text-white text-white border-none flex items-center gap-1">
+                  New Transfer
+                </Button>
+              )}
+            </div>
+            {floatTransfers?.rows?.length > 0 ? (
+              <Table dataSource={floatTransfers.rows} rowKey="id" size="small" pagination={false}
+                columns={[
+                  { title: 'Type', dataIndex: 'type', render: (v) => <Tag color={v === 'float_in' ? 'green' : v === 'float_out' ? 'orange' : 'blue'} className="!text-[10px]">{FLOAT_TRANSFER_LABELS[v]}</Tag>, width: 120 },
+                  { title: 'From', key: 'from', render: (_, r) => <span className="text-xs">{r.fromShop?.name || '—'}</span>, width: 130 },
+                  { title: 'To', key: 'to', render: (_, r) => <span className="text-xs">{r.toShop?.name || '—'}</span>, width: 130 },
+                  { title: 'Amount', dataIndex: 'amount', render: (v) => <span className="font-semibold">{fmt(v)}</span>, width: 120 },
+                  { title: 'Charges', dataIndex: 'charges', render: (v) => v > 0 ? <span className="text-xs text-amber-600">{fmt(v)}</span> : '—', width: 90 },
+                  { title: 'Status', dataIndex: 'status', render: (v) => <Tag color={FLOAT_TRANSFER_STATUS[v]} className="!text-[10px] uppercase">{v}</Tag>, width: 90 },
+                  { title: 'By', key: 'submitter', render: (_, r) => <span className="text-xs">{r.submitter?.name || '—'}</span>, width: 100 },
+                  { title: '', key: 'actions', width: 60, render: (_, r) => (
+                    canApproveAccounts && r.status === 'pending' ? (
+                      <Space size={4}>
+                        <Button type="text" size="small" icon={<CheckCircle className="w-3.5 h-3.5 text-green-600" />}
+                          onClick={() => approveTransferMutation.mutate({ id: r.id, action: 'approve' })} />
+                        <Button type="text" size="small" icon={<XCircle className="w-3.5 h-3.5 text-red-600" />}
+                          onClick={() => setRejectTransferModal(r)} />
+                      </Space>
+                    ) : null
+                  )},
+                ]} />
+            ) : (
+              <div className="p-6 text-center bg-white">
+                <ArrowLeftRight className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+                <p className="text-sm text-slate-400">No float transfers yet</p>
+              </div>
+            )}
+          </div>
         </>
       )}
 
@@ -522,110 +762,6 @@ export default function ShopDetailPage() {
         </div>
       )}
 
-      {/* Cash Disposition Section */}
-      <div className="rounded-lg border border-slate-100 overflow-hidden mt-6">
-        <div className="px-4 py-3 bg-white border-b border-slate-100 flex items-center justify-between">
-          <h5 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2 m-0">
-            <Landmark size={14} className="text-brand-dark" /> Cash Disposition — {dayjs(selectedDay).format('DD MMM YYYY')}
-          </h5>
-          <Space>
-            {canManageCash && (!currentDisp || currentDisp.status === 'rejected') && (
-              <Button size="small" icon={<Plus className="w-3.5 h-3.5" />}
-                onClick={() => {
-                  setCashDispForm({
-                    selcom_tzs: currentDisp?.selcom_tzs || 0,
-                    cash_allocation: currentDisp?.cash_allocation || 'float',
-                    bank_deposit_amount: currentDisp?.bank_deposit_amount || 0,
-                    selcom_receipt: null, bank_deposit_receipt: null, notes: currentDisp?.notes || '',
-                  });
-                  setCashDispOpen(true);
-                }}
-                className="!bg-brand-dark hover:!bg-brand-light text-white border-none flex items-center gap-1">
-                {currentDisp ? 'Edit' : 'Record'}
-              </Button>
-            )}
-            {currentDisp && canApprove && currentDisp.status === 'pending' && (
-              <>
-                <Button size="small" icon={<CheckCircle className="w-3.5 h-3.5" />}
-                  onClick={() => approveDispMutation.mutate({ action: 'approve' })}
-                  loading={approveDispMutation.isPending}
-                  className="!bg-green-600 hover:!bg-green-700 text-white border-none flex items-center gap-1">
-                  Approve
-                </Button>
-                <Button size="small" icon={<XCircle className="w-3.5 h-3.5" />}
-                  onClick={() => setRejectDispModal(true)}
-                  className="!text-red-600 !border-red-300 hover:!bg-red-50 flex items-center gap-1">
-                  Reject
-                </Button>
-              </>
-            )}
-          </Space>
-        </div>
-        {currentDisp ? (
-          <div className="p-4 bg-white">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-              <div className="rounded-lg bg-slate-50 p-3 border border-slate-100">
-                <span className="text-[10px] uppercase tracking-wider text-slate-500">Total Gross</span>
-                <p className="text-lg font-bold text-slate-800 m-0">{fmt(currentDisp.total_gross_tzs)}</p>
-              </div>
-              <div className="rounded-lg bg-blue-50 p-3 border border-blue-100">
-                <span className="text-[10px] uppercase tracking-wider text-blue-600">Selcom Payments</span>
-                <p className="text-lg font-bold text-blue-700 m-0">{fmt(currentDisp.selcom_tzs)}</p>
-                {currentDisp.selcom_receipt_url && (
-                  <a href={currentDisp.selcom_receipt_url} target="_blank" rel="noopener noreferrer"
-                    className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1 mt-1">
-                    <Download size={12} /> Receipt
-                  </a>
-                )}
-              </div>
-              <div className="rounded-lg bg-emerald-50 p-3 border border-emerald-100">
-                <span className="text-[10px] uppercase tracking-wider text-emerald-600">Cash at Hand</span>
-                <p className="text-lg font-bold text-emerald-700 m-0">{fmt(currentDisp.cash_at_hand_tzs)}</p>
-                <span className="text-[10px] text-emerald-500">{currentDisp.cash_allocation === 'deposit' ? '→ Bank Deposit' : '→ Shop Float'}</span>
-              </div>
-              <div className="rounded-lg p-3 border" style={{ backgroundColor: currentDisp.status === 'approved' ? '#f0fdf4' : currentDisp.status === 'rejected' ? '#fef2f2' : '#fffbeb', borderColor: currentDisp.status === 'approved' ? '#bbf7d0' : currentDisp.status === 'rejected' ? '#fecaca' : '#fde68a' }}>
-                <span className="text-[10px] uppercase tracking-wider text-slate-500">Status</span>
-                <p className="text-lg font-bold m-0">
-                  <Tag color={DISP_STATUS_COLORS[currentDisp.status]} className="!text-xs">{currentDisp.status.toUpperCase()}</Tag>
-                </p>
-                {currentDisp.approver && (
-                  <span className="text-[10px] text-slate-500">by {currentDisp.approver.name}</span>
-                )}
-              </div>
-            </div>
-            {currentDisp.cash_allocation === 'deposit' && currentDisp.bank_deposit_amount > 0 && (
-              <div className="flex items-center gap-3 p-3 rounded-lg bg-amber-50 border border-amber-100 text-sm">
-                <Landmark size={16} className="text-amber-600" />
-                <span><strong>Bank Deposit:</strong> {fmt(currentDisp.bank_deposit_amount)}</span>
-                {currentDisp.bank_deposit_receipt_url && (
-                  <a href={currentDisp.bank_deposit_receipt_url} target="_blank" rel="noopener noreferrer"
-                    className="text-blue-600 hover:text-blue-800 flex items-center gap-1 text-xs">
-                    <Download size={12} /> Deposit Slip
-                  </a>
-                )}
-              </div>
-            )}
-            {currentDisp.notes && (
-              <div className="mt-3 text-xs text-slate-500">
-                <span className="font-semibold">Notes:</span> {currentDisp.notes}
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="p-8 text-center bg-white">
-            <Landmark className="w-8 h-8 mx-auto mb-2 text-slate-300" />
-            <p className="text-sm text-slate-400">No cash disposition recorded for {dayjs(selectedDay).format('DD MMM YYYY')}</p>
-            {canManageCash && (
-              <Button size="small" icon={<Plus className="w-3.5 h-3.5" />}
-                onClick={() => { setCashDispOpen(true); }}
-                className="!bg-brand-dark hover:!bg-brand-light text-white border-none mt-2">
-                Record Cash Disposition
-              </Button>
-            )}
-          </div>
-        )}
-      </div>
-
       {/* Record Cash Disposition Modal */}
       <Modal
         title={<span className="text-sm font-bold text-slate-700">Record Cash Disposition — {dayjs(selectedDay).format('DD MMM YYYY')}</span>}
@@ -641,7 +777,6 @@ export default function ShopDetailPage() {
         destroyOnClose
       >
         <div className="space-y-3 mt-4">
-          {/* Auto-calculated Gross */}
           <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
             <div className="flex justify-between items-center">
               <span className="text-xs font-semibold text-slate-600">Total Gross (from collections)</span>
@@ -666,7 +801,6 @@ export default function ShopDetailPage() {
             </Upload>
           </div>
 
-          {/* Auto-calculated Cash at Hand */}
           <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200">
             <div className="flex justify-between items-center">
               <span className="text-xs font-semibold text-emerald-700">Cash at Hand (Gross − Selcom)</span>
@@ -674,7 +808,6 @@ export default function ShopDetailPage() {
             </div>
           </div>
 
-          {/* Cash Allocation */}
           <div>
             <span className="text-xs font-semibold text-slate-500 block mb-1">Cash Allocation</span>
             <Radio.Group value={cashDispForm.cash_allocation}
@@ -694,6 +827,14 @@ export default function ShopDetailPage() {
                 <InputNumber min={0} max={cashAtHandPreview} className="w-full rounded-lg h-9"
                   value={cashDispForm.bank_deposit_amount}
                   onChange={(v) => setCashDispForm(f => ({ ...f, bank_deposit_amount: v || 0 }))} />
+              </div>
+              <div>
+                <span className="text-xs font-semibold text-slate-500 block mb-1">
+                  <Receipt size={12} className="inline mr-1" />Bank Charges (TZS)
+                </span>
+                <InputNumber min={0} max={cashAtHandPreview} className="w-full rounded-lg h-9"
+                  value={cashDispForm.bank_charges}
+                  onChange={(v) => setCashDispForm(f => ({ ...f, bank_charges: v || 0 }))} />
               </div>
               <div>
                 <span className="text-xs font-semibold text-slate-500 block mb-1">Bank Deposit Slip</span>
@@ -730,18 +871,120 @@ export default function ShopDetailPage() {
         </div>
       </Modal>
 
+      {/* Float Transfer Modal */}
+      <Modal
+        title={<span className="text-sm font-bold text-slate-700">New Float Transfer</span>}
+        open={floatTransferOpen}
+        onCancel={() => { setFloatTransferOpen(false); setFloatTransferForm({ type: 'float_out', from_shop_id: null, to_shop_id: null, amount: 0, charges: 0, description: '', receipt: null }); }}
+        onOk={handleSubmitFloatTransfer}
+        confirmLoading={floatTransferMutation.isPending}
+        okText="Submit"
+        okButtonProps={{ className: '!bg-brand-dark rounded-lg' }}
+        cancelButtonProps={{ className: 'rounded-lg' }}
+        width={520}
+        className="top-8"
+        destroyOnClose
+      >
+        <div className="space-y-3 mt-4">
+          <div>
+            <span className="text-xs font-semibold text-slate-500 block mb-1">Transfer Type</span>
+            <Radio.Group value={floatTransferForm.type}
+              onChange={(e) => setFloatTransferForm(f => ({ ...f, type: e.target.value }))}>
+              <Radio.Button value="float_out">Float Out (Send)</Radio.Button>
+              <Radio.Button value="float_in">Float In (Receive)</Radio.Button>
+              <Radio.Button value="deposit_to_bank">Deposit to Bank</Radio.Button>
+            </Radio.Group>
+          </div>
+
+          {floatTransferForm.type === 'float_out' && (
+            <div>
+              <span className="text-xs font-semibold text-slate-500 block mb-1">Send To Shop</span>
+              <Select placeholder="Select destination shop" className="w-full" showSearch optionFilterProp="children"
+                value={floatTransferForm.to_shop_id}
+                onChange={(v) => setFloatTransferForm(f => ({ ...f, to_shop_id: v }))}>
+                {(allShops || []).filter(s => s.id !== Number(id)).map(s => (
+                  <Option key={s.id} value={s.id}>{s.name}</Option>
+                ))}
+              </Select>
+            </div>
+          )}
+
+          {floatTransferForm.type === 'float_in' && (
+            <div>
+              <span className="text-xs font-semibold text-slate-500 block mb-1">Receive From Shop</span>
+              <Select placeholder="Select source shop" className="w-full" showSearch optionFilterProp="children"
+                value={floatTransferForm.from_shop_id}
+                onChange={(v) => setFloatTransferForm(f => ({ ...f, from_shop_id: v }))}>
+                {(allShops || []).filter(s => s.id !== Number(id)).map(s => (
+                  <Option key={s.id} value={s.id}>{s.name}</Option>
+                ))}
+              </Select>
+            </div>
+          )}
+
+          <div>
+            <span className="text-xs font-semibold text-slate-500 block mb-1">Amount (TZS)</span>
+            <InputNumber min={1} className="w-full rounded-lg h-9"
+              formatter={v => `TZS ${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+              parser={v => Number(v.replace(/[^0-9]/g, ''))}
+              value={floatTransferForm.amount}
+              onChange={(v) => setFloatTransferForm(f => ({ ...f, amount: v || 0 }))} />
+          </div>
+
+          {floatTransferForm.type === 'deposit_to_bank' && (
+            <div>
+              <span className="text-xs font-semibold text-slate-500 block mb-1">Bank Charges (TZS)</span>
+              <InputNumber min={0} className="w-full rounded-lg h-9"
+                value={floatTransferForm.charges}
+                onChange={(v) => setFloatTransferForm(f => ({ ...f, charges: v || 0 }))} />
+            </div>
+          )}
+
+          <div>
+            <span className="text-xs font-semibold text-slate-500 block mb-1">Receipt</span>
+            <Upload beforeUpload={() => false} maxCount={1} accept="image/*,application/pdf"
+              fileList={floatTransferForm.receipt ? [floatTransferForm.receipt] : []}
+              onChange={(info) => setFloatTransferForm(f => ({ ...f, receipt: info.fileList?.[0] || null }))}>
+              <Button icon={<UploadIcon size={14} />}>Attach Receipt</Button>
+            </Upload>
+          </div>
+
+          <div>
+            <span className="text-xs font-semibold text-slate-500 block mb-1">Description</span>
+            <Input.TextArea rows={2} className="rounded-lg" value={floatTransferForm.description}
+              onChange={(e) => setFloatTransferForm(f => ({ ...f, description: e.target.value }))} />
+          </div>
+        </div>
+      </Modal>
+
+      {/* Reject Transfer Modal */}
+      <Modal
+        title={<span className="text-sm font-bold text-slate-700">Reject Float Transfer</span>}
+        open={!!rejectTransferModal}
+        onCancel={() => { setRejectTransferModal(null); setRejectTransferReason(''); }}
+        onOk={() => {
+          if (rejectTransferModal) {
+            approveTransferMutation.mutate({ id: rejectTransferModal.id, action: 'reject', reason: rejectTransferReason });
+            setRejectTransferModal(null);
+            setRejectTransferReason('');
+          }
+        }}
+        confirmLoading={approveTransferMutation.isPending}
+        className="top-8"
+      >
+        <div className="mt-4">
+          <span className="text-xs font-semibold text-slate-500 block mb-1">Reason for Rejection</span>
+          <Input.TextArea rows={3} className="rounded-lg" value={rejectTransferReason}
+            onChange={(e) => setRejectTransferReason(e.target.value)} />
+        </div>
+      </Modal>
+
       {/* Collection Detail Modal */}
       <Modal
         title={<span className="text-sm font-bold text-slate-700">Collection Details — {viewDetail?.machine?.slot_code || viewDetail?._slotCode}</span>}
         open={!!viewDetail}
         onCancel={() => setViewDetail(null)}
-        footer={
-          viewDetail ? (
-            <Space>
-              <Button onClick={() => setViewDetail(null)}>Close</Button>
-            </Space>
-          ) : null
-        }
+        footer={viewDetail ? (<Space><Button onClick={() => setViewDetail(null)}>Close</Button></Space>) : null}
         width={600}
         className="top-8"
       >

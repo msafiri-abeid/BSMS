@@ -161,6 +161,13 @@ module.exports = async () => {
   }
   console.log('[SEED] Permissions ensured');
 
+  // ─── ALWAYS: migrate 'selcom' account_type → 'bank' ───
+  await Account.update({ account_type: 'bank' }, { where: { account_type: 'selcom' } });
+  console.log('[SEED] Migrated selcom accounts to bank type');
+
+  // ─── ALWAYS: set float_minimum for all Bentabet cash accounts ───
+  await Account.update({ float_minimum: 400000 }, { where: { account_type: 'cash', business_type: 'bentabet' } });
+
   // ─── PRODUCTION: skip heavy seeding below (already exists) ───
   if (isProduction) {
     console.log('[SEED] Roles + permissions ensured, skipping heavy seed in production');
@@ -224,28 +231,38 @@ module.exports = async () => {
   console.log('[SEED] Expense categories deactivated');
 
   // Seed default accounts
+  const selcomBankDetails = { bank_name: 'Selcom Microfinance Bank', account_number: '5527106496307', till_number: '70019700', swift_code: 'ACTZTZTZ', currency: 'TZS' };
   const defaultAccounts = [
     { name: 'Main Office Cash', account_type: 'cash', business_type: 'meteora', opening_balance: 0, description: 'Default cash account for office expenses and collections' },
-    { name: 'Main Bank Account', account_type: 'bank', business_type: 'meteora', opening_balance: 0, description: 'Default bank account for Novomatic player payments and bank transfers' },
-    { name: 'Main Selcom Account', account_type: 'selcom', business_type: 'meteora', opening_balance: 0, description: 'Default Selcom merchant account for Meteora Selcom payments' },
-    { name: 'Bentabet Revenue Account', account_type: 'selcom', business_type: 'bentabet', opening_balance: 0, description: 'Central Selcom revenue account for all Bentabet shops' },
-    { name: 'Bentabet Bank Account', account_type: 'bank', business_type: 'bentabet', opening_balance: 0, description: 'Bank account for Bentabet cash deposits' },
+    { name: 'Main Bank Account', account_type: 'bank', business_type: 'meteora', opening_balance: 0, description: 'Default bank account for Novomatic player payments and bank transfers', ...selcomBankDetails },
+    { name: 'Bentabet Revenue Account', account_type: 'bank', business_type: 'bentabet', opening_balance: 0, description: 'Central Selcom revenue account for all Bentabet shops', ...selcomBankDetails },
+    { name: 'Bentabet Bank Account', account_type: 'bank', business_type: 'bentabet', opening_balance: 0, description: 'Bank account for Bentabet cash deposits', ...selcomBankDetails },
   ];
   for (const acc of defaultAccounts) {
     await Account.findOrCreate({ where: { name: acc.name }, defaults: { ...acc, current_balance: acc.opening_balance, is_active: true, created_by: adminUser?.id || 1 } });
+    // Update bank details on existing accounts (idempotent)
+    if (acc.bank_name) {
+      await Account.update({ bank_name: acc.bank_name, account_number: acc.account_number, till_number: acc.till_number, swift_code: acc.swift_code, currency: acc.currency }, { where: { name: acc.name } });
+    }
   }
   // Tag any existing accounts without business_type (migration safety)
   await Account.update({ business_type: 'meteora' }, { where: { business_type: null, account_type: { [Op.in]: ['cash', 'bank'] } } });
   // Seed per-shop Selcom + cash accounts for Slot shops
   const slotShops = await Shop.findAll({ where: { business_type: 'slot', status: 'active' } });
   for (const shop of slotShops) {
-    await Account.findOrCreate({
+    // Per-shop Selcom account (now type 'bank' with Selcom Microfinance Bank details)
+    const [selcomAcc, selcomCreated] = await Account.findOrCreate({
       where: { shop_id: shop.id, account_type: 'selcom' },
-      defaults: { name: `Selcom - ${shop.name}`, account_type: 'selcom', business_type: 'bentabet', opening_balance: 0, current_balance: 0, is_active: true, shop_id: shop.id, created_by: adminUser?.id || 1, description: `Selcom merchant account for ${shop.name}` }
+      defaults: { name: `Selcom - ${shop.name}`, account_type: 'bank', business_type: 'bentabet', opening_balance: 0, current_balance: 0, is_active: true, shop_id: shop.id, created_by: adminUser?.id || 1, description: `Selcom merchant account for ${shop.name}`, ...selcomBankDetails }
     });
+    if (!selcomCreated) {
+      // Existing account — update type and bank details
+      await Account.update({ account_type: 'bank', ...selcomBankDetails }, { where: { id: selcomAcc.id } });
+    }
+    // Per-shop Cash float account
     await Account.findOrCreate({
       where: { shop_id: shop.id, account_type: 'cash' },
-      defaults: { name: `Cash - ${shop.name}`, account_type: 'cash', business_type: 'bentabet', opening_balance: 0, current_balance: 0, is_active: true, shop_id: shop.id, created_by: adminUser?.id || 1, description: `Cash float account for ${shop.name}` }
+      defaults: { name: `Cash - ${shop.name}`, account_type: 'cash', business_type: 'bentabet', opening_balance: 0, current_balance: 0, is_active: true, shop_id: shop.id, created_by: adminUser?.id || 1, description: `Cash float account for ${shop.name}`, float_minimum: 400000 }
     });
     // Tag existing per-shop accounts that may have been created without business_type
     await Account.update({ business_type: 'bentabet' }, { where: { shop_id: shop.id, business_type: null } });

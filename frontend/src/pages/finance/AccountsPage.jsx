@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Table, Tag, Button, Space, Input, Typography, Modal, App, Form, Select, InputNumber } from 'antd';
-import { Plus, Search, X, Landmark, Building2, Landmark as Banknote, Smartphone, Smartphone as SelcomIcon, Pencil, Trash2, FileDown } from 'lucide-react';
+import { Plus, Search, X, Landmark, Building2, Landmark as Banknote, Smartphone, Pencil, Trash2, FileDown, Wallet } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { accountsAPI, shopsAPI } from '../../services/api';
 import { useAuthStore } from '../../store/authStore';
@@ -14,8 +14,8 @@ const { Option } = Select;
 
 const fmt = (n) => `TZS ${(n || 0).toLocaleString()}`;
 
-const TYPE_ICONS = { cash: Landmark, bank: Banknote, mobile_money: Smartphone, selcom: SelcomIcon };
-const TYPE_COLORS = { cash: 'text-emerald-600', bank: 'text-blue-600', mobile_money: 'text-purple-600', selcom: 'text-cyan-600' };
+const TYPE_ICONS = { cash: Landmark, bank: Banknote, mobile_money: Smartphone };
+const TYPE_COLORS = { cash: 'text-emerald-600', bank: 'text-blue-600', mobile_money: 'text-purple-600' };
 
 export default function AccountsPage() {
   const [filters, setFilters] = useState({ limit: 50, offset: 0 });
@@ -44,7 +44,7 @@ export default function AccountsPage() {
     cash: rows.filter(r => r.account_type === 'cash').reduce((s, r) => s + (r.current_balance || 0), 0),
     bank: rows.filter(r => r.account_type === 'bank').reduce((s, r) => s + (r.current_balance || 0), 0),
     mobile: rows.filter(r => r.account_type === 'mobile_money').reduce((s, r) => s + (r.current_balance || 0), 0),
-    selcom: rows.filter(r => r.account_type === 'selcom').reduce((s, r) => s + (r.current_balance || 0), 0),
+    totalAssets: rows.reduce((s, r) => s + (r.current_balance || 0), 0),
   };
 
   const createMutation = useMutation({
@@ -111,10 +111,18 @@ export default function AccountsPage() {
 
   const cols = [
     { title: 'Name', dataIndex: 'name', render: (v, r) => (
-      <Button type="link" size="small" className="!p-0 !text-brand-dark font-semibold" onClick={() => navigate(`/finance/accounts/${r.id}`)}>
-        {v}
-      </Button>
-    ), width: 180 },
+      <div>
+        <Button type="link" size="small" className="!p-0 !text-brand-dark font-semibold" onClick={() => navigate(`/finance/accounts/${r.id}`)}>
+          {v}
+        </Button>
+        {r.account_type === 'bank' && r.bank_name && (
+          <div className="text-[10px] text-slate-400">{r.bank_name}{r.account_number ? ` • ${r.account_number}` : ''}</div>
+        )}
+        {r.account_type === 'cash' && r.float_minimum > 0 && (
+          <div className="text-[10px] text-slate-400">Float min: {fmt(r.float_minimum)}</div>
+        )}
+      </div>
+    ), width: 200 },
     { title: 'Type', dataIndex: 'account_type', render: (v) => {
       const Icon = TYPE_ICONS[v] || Landmark;
       return <span className={`flex items-center gap-1 text-xs capitalize ${TYPE_COLORS[v] || ''}`}><Icon size={13} />{v.replace('_', ' ')}</span>;
@@ -165,7 +173,7 @@ export default function AccountsPage() {
         <KpiCard title="Cash Balance" value={totals.cash} icon={Landmark} bgColor="bg-emerald-50" iconColor="text-emerald-600" formatter={fmt} />
         <KpiCard title="Bank Balance" value={totals.bank} icon={Banknote} bgColor="bg-blue-50" iconColor="text-blue-600" formatter={fmt} />
         <KpiCard title="Mobile Money" value={totals.mobile} icon={Smartphone} bgColor="bg-purple-50" iconColor="text-purple-600" formatter={fmt} />
-        <KpiCard title="Selcom" value={totals.selcom} icon={SelcomIcon} bgColor="bg-cyan-50" iconColor="text-cyan-600" formatter={fmt} />
+        <KpiCard title="Total Assets" value={totals.totalAssets} icon={Wallet} bgColor="bg-amber-50" iconColor="text-amber-600" formatter={fmt} />
       </div>
 
       {/* Filters */}
@@ -176,7 +184,6 @@ export default function AccountsPage() {
             <Option value="cash">Cash</Option>
             <Option value="bank">Bank</Option>
             <Option value="mobile_money">Mobile Money</Option>
-            <Option value="selcom">Selcom</Option>
           </Select>
           <Select size="small" placeholder="Status" allowClear className="w-full sm:w-32"
             onChange={(v) => setFilters(f => ({ ...f, is_active: v, offset: 0 }))}>
@@ -267,9 +274,39 @@ export default function AccountsPage() {
               <Option value="cash">Cash</Option>
               <Option value="bank">Bank</Option>
               <Option value="mobile_money">Mobile Money</Option>
-              <Option value="selcom">Selcom</Option>
             </Select>
           </Form.Item>
+          {Form.useWatch('account_type', form) === 'bank' && (
+            <>
+              <Form.Item name="bank_name" label="Bank Name" rules={[{ required: true, message: 'Bank name is required' }]}>
+                <Input placeholder="e.g. Selcom Microfinance Bank" />
+              </Form.Item>
+              <Form.Item name="account_number" label="Account Number">
+                <Input placeholder="e.g. 5527106496307" />
+              </Form.Item>
+              <Form.Item name="till_number" label="Till Number">
+                <Input placeholder="e.g. 70019700" />
+              </Form.Item>
+              <div className="grid grid-cols-2 gap-3">
+                <Form.Item name="currency" label="Currency" initialValue="TZS">
+                  <Select>
+                    <Option value="TZS">TZS</Option>
+                    <Option value="USD">USD</Option>
+                  </Select>
+                </Form.Item>
+                <Form.Item name="swift_code" label="SWIFT Code">
+                  <Input placeholder="e.g. ACTZTZTZ" />
+                </Form.Item>
+              </div>
+            </>
+          )}
+          {Form.useWatch('account_type', form) === 'cash' && (
+            <Form.Item name="float_minimum" label="Float Minimum Threshold (TZS)">
+              <InputNumber className="w-full" min={0} placeholder="400,000"
+                formatter={v => `TZS ${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                parser={v => Number(v.replace(/[^0-9]/g, ''))} />
+            </Form.Item>
+          )}
           <Form.Item name="shop_id" label="Shop (optional)">
             <Select placeholder="Link to shop (optional)" allowClear>
               {shops.map(s => <Option key={s.id} value={s.id}>{s.name}</Option>)}

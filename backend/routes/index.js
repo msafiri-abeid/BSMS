@@ -127,6 +127,11 @@ router.get('/finance/reports/trial-balance', authenticate, checkPermission('acco
 router.get('/finance/reports/cash-flow', authenticate, checkPermission('accounts', 'read'), financeC.cashFlow);
 router.get('/finance/reports/account-report/:id', authenticate, checkPermission('accounts', 'read'), financeC.accountReport);
 
+// ── FLOAT TRANSFERS ──────────────────────────────────────────
+router.get('/finance/float-transfers', authenticate, checkPermission('accounts', 'read'), financeC.listFloatTransfers);
+router.post('/finance/float-transfers', authenticate, checkPermission('accounts', 'create'), uploadReceipt.single('receipt'), financeC.submitFloatTransfer);
+router.put('/finance/float-transfers/:id/approve', authenticate, checkPermission('accounts', 'approve'), financeC.approveFloatTransfer);
+
 // ── TICKETS ───────────────────────────────────────────────────
 router.get('/tickets', authenticate, ticketC.list);
 router.post('/tickets', authenticate, uploadTicket.array('attachments', 5), ticketC.create);

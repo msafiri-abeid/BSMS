@@ -349,7 +349,7 @@ export default function TokenInventoryPage() {
       {/* Desktop Table */}
       <div className="hidden overflow-x-auto md:block">
         <Table
-          dataSource={rows}
+          dataSource={movementsWithBalance}
           columns={cols}
           rowKey="id"
           loading={isLoading}

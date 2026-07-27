@@ -88,11 +88,13 @@ export default function App() {
               <Route path="partners/:id" element={<PartnerDetailPage />} />
               <Route path="shops/meteora" element={<MeteoraShopsPage />} />
               <Route path="shops/slot" element={<SlotShopsPage />} />
+              <Route path="shops" element={<Navigate to="/shops/meteora" replace />} />
               <Route path="shops/meteora/:id" element={<ShopDetailPage />} />
               <Route path="shops/slot/:id" element={<ShopDetailPage />} />
               <Route path="shops/:id" element={<ShopDetailPage />} />
               <Route path="machines/meteora" element={<MeteoraMachinesPage />} />
               <Route path="machines/novomatic" element={<NovomaticMachinesPage />} />
+              <Route path="machines" element={<Navigate to="/machines/meteora" replace />} />
               <Route path="machines/meteora/:id" element={<MachineDetailPage />} />
               <Route path="machines/novomatic/:id" element={<MachineDetailPage />} />
               <Route path="machines/:id" element={<MachineDetailPage />} />

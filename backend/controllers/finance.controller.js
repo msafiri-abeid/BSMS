@@ -191,6 +191,28 @@ const approveShopCashDisposition = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+const submitFloatTransfer = async (req, res, next) => {
+  try {
+    const receipt_url = req.file?.path || null;
+    const result = await financeService.submitFloatTransfer({ ...req.body, receipt_url }, req.user.id);
+    res.status(201).json({ success: true, data: result });
+  } catch (err) { next(err); }
+};
+
+const approveFloatTransfer = async (req, res, next) => {
+  try {
+    const result = await financeService.approveFloatTransfer(req.params.id, req.body.action, req.body.reason, req.user.id);
+    res.json({ success: true, data: result });
+  } catch (err) { next(err); }
+};
+
+const listFloatTransfers = async (req, res, next) => {
+  try {
+    const data = await financeService.listFloatTransfers(req.query);
+    res.json({ success: true, data });
+  } catch (err) { next(err); }
+};
+
 const exportCollections = async (req, res, next) => {
   try {
     const buffer = await financeService.exportCollectionsExcel(req.query);
@@ -286,4 +308,5 @@ module.exports = {
   listTransactions, transferAccounts,
   balanceSheet, trialBalance, cashFlow, accountReport,
   listShopCashDispositions, submitShopCashDisposition, approveShopCashDisposition,
+  submitFloatTransfer, approveFloatTransfer, listFloatTransfers,
 };

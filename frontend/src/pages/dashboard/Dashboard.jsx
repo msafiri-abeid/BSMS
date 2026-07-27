@@ -167,6 +167,9 @@ function AdminDashboard() {
   const d = data || {};
   const hasFilters = businessFilter || shopFilter || dateRange;
 
+  const machinesLink = businessFilter === 'slot' ? '/machines/novomatic' : businessFilter === 'meteora' ? '/machines/meteora' : null;
+  const shopsLink = businessFilter === 'slot' ? '/shops/slot' : businessFilter === 'meteora' ? '/shops/meteora' : null;
+
   const allMachines = d.topMachines || [];
   const novomaticMachines = allMachines.filter(m => m.machine?.manufacturer === 'Novomatic');
   const meteoraMachines = allMachines.filter(m => m.machine?.manufacturer === 'Meteora');
@@ -197,8 +200,8 @@ function AdminDashboard() {
 
       <SectionHeader label="Operations" />
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        <DashboardKpiCard title="Active Machines" value={d.kpis?.totalMachines} icon={Cpu} bgIconColor="bg-emerald-50" iconColor="text-emerald-600" link="/machines" />
-        <DashboardKpiCard title="Active Shops" value={d.kpis?.activeShops} icon={Store} bgIconColor="bg-orange-50" iconColor="text-orange-600" link="/shops" />
+        <DashboardKpiCard title="Active Machines" value={d.kpis?.totalMachines} icon={Cpu} bgIconColor="bg-emerald-50" iconColor="text-emerald-600" link={machinesLink} />
+        <DashboardKpiCard title="Active Shops" value={d.kpis?.activeShops} icon={Store} bgIconColor="bg-orange-50" iconColor="text-orange-600" link={shopsLink} />
         <DashboardKpiCard title={hasFilters ? "Logins" : "Today's Login"} value={d.kpis?.todayLogins} icon={LogIn} bgIconColor="bg-cyan-50" iconColor="text-cyan-600" />
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -456,6 +459,9 @@ function FinanceDashboard() {
   const d = data || {};
   const hasFilters = businessFilter || shopFilter || dateRange;
 
+  const machinesLink = businessFilter === 'slot' ? '/machines/novomatic' : businessFilter === 'meteora' ? '/machines/meteora' : null;
+  const shopsLink = businessFilter === 'slot' ? '/shops/slot' : businessFilter === 'meteora' ? '/shops/meteora' : null;
+
   return (
     <div className="space-y-6">
       <DashboardFilter
@@ -470,8 +476,8 @@ function FinanceDashboard() {
 
       <SectionHeader label="Operations" />
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <DashboardKpiCard title="Active Machines" value={d.activeMachines || 0} icon={Cpu} bgIconColor="bg-blue-50" iconColor="text-blue-600" link="/machines/novomatic" />
-        <DashboardKpiCard title="Active Shops" value={d.activeShops || 0} icon={Store} bgIconColor="bg-emerald-50" iconColor="text-emerald-600" link="/shops/slot" />
+        <DashboardKpiCard title="Active Machines" value={d.activeMachines || 0} icon={Cpu} bgIconColor="bg-blue-50" iconColor="text-blue-600" link={machinesLink} />
+        <DashboardKpiCard title="Active Shops" value={d.activeShops || 0} icon={Store} bgIconColor="bg-emerald-50" iconColor="text-emerald-600" link={shopsLink} />
         <DashboardKpiCard title="Collection Count" value={d.collectionCount || 0} icon={Wallet} bgIconColor="bg-brand-dark/5" iconColor="text-brand-dark" link="/collections" />
         <DashboardKpiCard title="Outstanding Debts" value={d.outstandingDebt || 0} formatter={fmt} icon={CircleDollarSign} bgIconColor="bg-rose-50" iconColor="text-rose-600" />
       </div>
@@ -519,6 +525,8 @@ function SalesDashboard() {
   const d = data || {};
   const hasFilters = businessFilter || dateRange;
 
+  const shopsLink = businessFilter === 'slot' ? '/shops/slot' : businessFilter === 'meteora' ? '/shops/meteora' : null;
+
       return (
     <div className="space-y-6">
       <DashboardFilter
@@ -533,7 +541,7 @@ function SalesDashboard() {
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <DashboardKpiCard title="Total Partners" value={d.kpis?.totalPartners} icon={Handshake} bgIconColor="bg-purple-50" iconColor="text-purple-600" link="/partners" />
-        <DashboardKpiCard title="Active Shops" value={d.kpis?.activeShops} icon={Store} bgIconColor="bg-orange-50" iconColor="text-orange-600" link="/shops" />
+        <DashboardKpiCard title="Active Shops" value={d.kpis?.activeShops} icon={Store} bgIconColor="bg-orange-50" iconColor="text-orange-600" link={shopsLink} />
         <DashboardKpiCard title="New Partners (Month)" value={d.kpis?.newPartnersThisMonth} icon={Users} bgIconColor="bg-blue-50" iconColor="text-blue-600" />
       </div>
       <div className="bg-gradient-to-r from-brand-dark to-[#0a206a] rounded-xl p-5 flex items-center justify-between">
@@ -545,7 +553,7 @@ function SalesDashboard() {
           <Button type="default" icon={<Handshake size={14} />} onClick={() => navigate('/partners')} className="!bg-white !text-brand-dark !border-0 !text-xs !font-semibold">
             Partners
           </Button>
-          <Button type="default" icon={<Store size={14} />} onClick={() => navigate('/shops')} className="!bg-white !text-brand-dark !border-0 !text-xs !font-semibold">
+          <Button type="default" icon={<Store size={14} />} onClick={() => navigate(shopsLink || '/shops/slot')} className="!bg-white !text-brand-dark !border-0 !text-xs !font-semibold">
             Shops
           </Button>
         </div>

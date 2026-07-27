@@ -2,7 +2,7 @@
 const PDFDocument = require('pdfkit');
 const ExcelJS = require('exceljs');
 const { Op } = require('sequelize');
-const { Expense, Invoice, Payment, CreditNote, Payroll, ExpenseCategory, Partner, Shop, Machine, Setting, User, Account, AccountTransaction, AccountTransfer, ShopCashDisposition } = require('../models');
+const { Expense, Invoice, Payment, CreditNote, Payroll, ExpenseCategory, Partner, Shop, Machine, Setting, User, Account, AccountTransaction, AccountTransfer, ShopCashDisposition, FloatTransfer } = require('../models');
 
 const getSetting = async (key, def) => {
   const row = await Setting.findOne({ where: { key } });
@@ -36,27 +36,33 @@ const approveExpense = async (expenseId, action, reason, userId) => {
   // Auto-record account transaction for approved expenses
   if (action === 'approve') {
     try {
-      const paymentSource = expense.payment_source || 'cash';
-      const accountType = paymentSource === 'selcom' ? 'selcom' : 'cash';
-      const bizType = expense.business_type || 'meteora';
-
       let account = null;
-      if (bizType === 'bentabet') {
-        // Bentabet expenses: find bentabet-type account
-        if (accountType === 'selcom') {
-          account = await Account.findOne({ where: { name: 'Bentabet Revenue Account', is_active: true } });
+
+      // Priority 1: Use expense.account_id if set (new flow)
+      if (expense.account_id) {
+        account = await Account.findByPk(expense.account_id);
+      }
+
+      // Priority 2: Legacy fallback — find account by business_type + payment_source
+      if (!account) {
+        const paymentSource = expense.payment_source || 'cash';
+        const bizType = expense.business_type || 'meteora';
+
+        if (bizType === 'bentabet') {
+          if (paymentSource === 'selcom') {
+            account = await Account.findOne({ where: { name: 'Bentabet Revenue Account', is_active: true } });
+          } else {
+            account = expense.shop_id
+              ? await Account.findOne({ where: { shop_id: expense.shop_id, account_type: 'cash', business_type: 'bentabet', is_active: true } })
+              : null;
+          }
         } else {
-          // Try shop-specific cash float first, then fall back to a generic bentabet cash account
-          account = expense.shop_id
-            ? await Account.findOne({ where: { shop_id: expense.shop_id, account_type: 'cash', business_type: 'bentabet', is_active: true } })
+          const accountType = paymentSource === 'selcom' ? 'bank' : 'cash';
+          const shopAccount = expense.shop_id
+            ? await Account.findOne({ where: { shop_id: expense.shop_id, account_type: accountType, is_active: true } })
             : null;
+          account = shopAccount || await Account.findOne({ where: { name: accountType === 'bank' ? 'Main Bank Account' : 'Main Office Cash', is_active: true } });
         }
-      } else {
-        // Meteora expenses: existing behavior
-        const shopAccount = expense.shop_id
-          ? await Account.findOne({ where: { shop_id: expense.shop_id, account_type: accountType, is_active: true } })
-          : null;
-        account = shopAccount || await Account.findOne({ where: { name: accountType === 'selcom' ? 'Main Selcom Account' : 'Main Office Cash', is_active: true } });
       }
 
       if (account) {
@@ -682,18 +688,20 @@ const approveShopCashDisposition = async (dispositionId, action, reason, userId)
         const bankAccount = await Account.findOne({ where: { name: 'Bentabet Bank Account', is_active: true } });
         if (bankAccount) {
           const depositAmount = disp.bank_deposit_amount || disp.cash_at_hand_tzs;
+          const charges = disp.bank_charges || 0;
+          const netDeposit = depositAmount - charges;
           const bankBalBefore = bankAccount.current_balance;
-          const bankBalAfter = bankBalBefore + depositAmount;
+          const bankBalAfter = bankBalBefore + netDeposit;
           await AccountTransaction.create({
             account_id: bankAccount.id,
             type: 'in',
-            amount: depositAmount,
+            amount: netDeposit,
             balance_before: bankBalBefore,
             balance_after: bankBalAfter,
             reference_type: 'cash_disposition',
             reference_id: disp.id,
             payment_method: 'cash',
-            description: `Bank deposit - ${disp.shop?.name || `Shop #${shopId}`} (${disp.date})`,
+            description: `Bank deposit - ${disp.shop?.name || `Shop #${shopId}`} (${disp.date})${charges > 0 ? ` [charges: ${charges}]` : ''}`,
             recorded_by: userId,
             transaction_date: disp.date,
           });
@@ -730,6 +738,125 @@ const approveShopCashDisposition = async (dispositionId, action, reason, userId)
   return disp;
 };
 
+// ── FLOAT TRANSFERS ──────────────────────────────────────────
+
+const submitFloatTransfer = async (data, userId) => {
+  const { from_shop_id, to_shop_id, from_account_id, to_account_id, amount, charges, type, description, receipt_url } = data;
+  if (!from_account_id || !to_account_id) throw new Error('Source and destination accounts are required');
+  if (!amount || amount <= 0) throw new Error('Amount must be positive');
+  if (from_account_id === to_account_id) throw new Error('Cannot transfer to the same account');
+
+  const fromAccount = await Account.findByPk(from_account_id);
+  if (!fromAccount) throw new Error('Source account not found');
+  if (fromAccount.current_balance < amount) throw new Error('Insufficient balance in source account');
+
+  return FloatTransfer.create({
+    from_shop_id: from_shop_id || null,
+    to_shop_id: to_shop_id || null,
+    from_account_id,
+    to_account_id,
+    amount,
+    charges: charges || 0,
+    type,
+    description: description || '',
+    receipt_url: receipt_url || null,
+    submitted_by: userId,
+    status: 'pending',
+  });
+};
+
+const approveFloatTransfer = async (transferId, action, reason, userId) => {
+  const transfer = await FloatTransfer.findByPk(transferId, {
+    include: [
+      { model: Shop, as: 'fromShop', attributes: ['id', 'name'] },
+      { model: Shop, as: 'toShop', attributes: ['id', 'name'] },
+      { model: Account, as: 'fromAccount', attributes: ['id', 'name', 'current_balance'] },
+      { model: Account, as: 'toAccount', attributes: ['id', 'name', 'current_balance'] },
+    ],
+  });
+  if (!transfer || transfer.status !== 'pending') throw new Error('Transfer not found or already processed');
+
+  if (action === 'reject') {
+    await transfer.update({ status: 'rejected', approved_by: userId, approved_at: new Date(), rejection_reason: reason || '' });
+    return transfer;
+  }
+
+  const today = new Date().toISOString().split('T')[0];
+  const fromAccount = await Account.findByPk(transfer.from_account_id);
+  const toAccount = await Account.findByPk(transfer.to_account_id);
+
+  // Debit source
+  const fromBalBefore = fromAccount.current_balance;
+  const fromBalAfter = fromBalBefore - transfer.amount;
+  await AccountTransaction.create({
+    account_id: transfer.from_account_id,
+    type: 'out',
+    amount: transfer.amount,
+    balance_before: fromBalBefore,
+    balance_after: fromBalAfter,
+    reference_type: 'transfer',
+    reference_id: transfer.id,
+    payment_method: 'internal',
+    description: transfer.description || `Float transfer out → ${toAccount.name}`,
+    recorded_by: userId,
+    transaction_date: today,
+  });
+  await fromAccount.update({ current_balance: fromBalAfter });
+
+  // Credit destination (net of charges)
+  const charges = transfer.charges || 0;
+  const netAmount = transfer.amount - charges;
+  const toBalBefore = toAccount.current_balance;
+  const toBalAfter = toBalBefore + netAmount;
+  await AccountTransaction.create({
+    account_id: transfer.to_account_id,
+    type: 'in',
+    amount: netAmount,
+    balance_before: toBalBefore,
+    balance_after: toBalAfter,
+    reference_type: 'transfer',
+    reference_id: transfer.id,
+    payment_method: 'internal',
+    description: transfer.description || `Float transfer in ← ${fromAccount.name}${charges > 0 ? ` [charges: ${charges}]` : ''}`,
+    recorded_by: userId,
+    transaction_date: today,
+  });
+  await toAccount.update({ current_balance: toBalAfter });
+
+  await transfer.update({ status: 'approved', approved_by: userId, approved_at: new Date() });
+  return transfer;
+};
+
+const listFloatTransfers = async (query) => {
+  const { shop_id, status, type, date_from, date_to, limit = 50, offset = 0 } = query;
+  const where = {};
+  if (shop_id) {
+    const { [Op.or]: orCond } = { [Op.or]: [{ from_shop_id: shop_id }, { to_shop_id: shop_id }] };
+    Object.assign(where, { [Op.or]: [{ from_shop_id: shop_id }, { to_shop_id: shop_id }] });
+  }
+  if (status) where.status = status;
+  if (type) where.type = type;
+  if (date_from || date_to) {
+    where.createdAt = {};
+    if (date_from) where.createdAt[Op.gte] = new Date(date_from);
+    if (date_to) where.createdAt[Op.lte] = new Date(date_to + 'T23:59:59');
+  }
+  return FloatTransfer.findAndCountAll({
+    where,
+    limit: +limit,
+    offset: +offset,
+    include: [
+      { model: Shop, as: 'fromShop', attributes: ['id', 'name'] },
+      { model: Shop, as: 'toShop', attributes: ['id', 'name'] },
+      { model: Account, as: 'fromAccount', attributes: ['id', 'name'] },
+      { model: Account, as: 'toAccount', attributes: ['id', 'name'] },
+      { model: User, as: 'submitter', attributes: ['id', 'name'] },
+      { model: User, as: 'approver', attributes: ['id', 'name'] },
+    ],
+    order: [['createdAt', 'DESC']],
+  });
+};
+
 const updateExpense = async (id, data, userId) => {
   const expense = await Expense.findByPk(id);
   if (!expense) throw new Error('Expense not found');
@@ -762,4 +889,5 @@ module.exports = {
   listAccountTransactions, transferBetweenAccounts,
   generateBalanceSheet, generateTrialBalance, generateCashFlow, generateAccountReport,
   approveShopCashDisposition,
+  submitFloatTransfer, approveFloatTransfer, listFloatTransfers,
 };

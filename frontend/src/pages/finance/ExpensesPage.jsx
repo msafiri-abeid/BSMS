@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Table, Button, Modal, Form, Input, Select, InputNumber, Upload, Tag, Space, App, Typography, List, Empty, Segmented, DatePicker } from 'antd';
-import { Plus, CheckCircle, XCircle, Upload as UploadIcon, FileDown, Search, X, Store, Cpu, Smartphone, Wallet, Eye, Edit3, Trash2 } from 'lucide-react';
+import { Plus, CheckCircle, XCircle, Upload as UploadIcon, FileDown, Search, X, Store, Cpu, Smartphone, Wallet, Eye, Edit3, Trash2, Landmark } from 'lucide-react';
 import ActionMenu from '../../components/ActionMenu';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { financeAPI, shopsAPI, machinesAPI } from '../../services/api';
+import { financeAPI, shopsAPI, machinesAPI, accountsAPI } from '../../services/api';
 import { useAuthStore } from '../../store/authStore';
 import KpiCard from '../../components/KpiCard';
 import MobileCard from '../../components/MobileCard';
@@ -57,6 +57,17 @@ export default function ExpensesPage() {
     queryFn: () => machinesAPI.list({ shop_id: selectedShop, limit: 200 }).then(r => r.data.data),
     enabled: !!selectedShop,
   });
+
+  const { data: accountsList } = useQuery({
+    queryKey: ['accounts-for-expense'],
+    queryFn: () => accountsAPI.list({ limit: 100, is_active: 'true' }).then(r => r.data.data),
+    enabled: !!watchedBizType,
+  });
+  const allAccounts = accountsList?.rows || [];
+  const watchedShopId = Form.useWatch('shop_id', form);
+  const accounts = watchedShopId
+    ? [...allAccounts.filter(a => a.shop_id === watchedShopId), ...allAccounts.filter(a => !a.shop_id)]
+    : allAccounts;
 
   const rows = expenses?.rows || [];
   const totals = { total: 0, approved: 0, pending: 0, rejected: 0 };
@@ -124,6 +135,7 @@ export default function ExpensesPage() {
         category_id: editRecord.category_id || editRecord.category?.id,
         shop_id: editRecord.shop_id,
         machine_id: editRecord.machine_id || undefined,
+        account_id: editRecord.account_id || undefined,
         expense_date: editRecord.expense_date ? dayjs(editRecord.expense_date) : dayjs(),
       });
       if (editRecord.shop_id) setSelectedShop(editRecord.shop_id);
@@ -313,17 +325,24 @@ export default function ExpensesPage() {
               <Option value="bentabet">Bentabet</Option>
             </Select>
           </Form.Item>
-          <Form.Item name="payment_source" label={<span className="text-xs font-semibold text-slate-600">Payment Source</span>} rules={[{ required: true }]} initialValue="cash">
-            <Select>
-              <Option value="cash">Cash (from float/collection)</Option>
-              <Option value="selcom">Selcom Account</Option>
-            </Select>
-          </Form.Item>
           <Form.Item name="shop_id" label={<span className="text-xs font-semibold text-slate-600">Shop</span>} rules={[{ required: true }]}>
             <Select placeholder="Select shop" showSearch optionFilterProp="children"
-              onChange={(v) => { setSelectedShop(v); form.setFieldValue('machine_id', undefined); }}>
+              onChange={(v) => { setSelectedShop(v); form.setFieldValue('machine_id', undefined); form.setFieldValue('account_id', undefined); }}>
               {filteredShops.map(s => (
                 <Option key={s.id} value={s.id}>{s.name}</Option>
+              ))}
+            </Select>
+          </Form.Item>
+          <Form.Item name="account_id" label={<span className="text-xs font-semibold text-slate-600">Pay From (Account)</span>} rules={[{ required: true }]}>
+            <Select placeholder="Select account to pay from" showSearch optionFilterProp="children"
+              optionLabelProp="label">
+              {accounts.map(a => (
+                <Option key={a.id} value={a.id} label={a.name}>
+                  <div className="flex items-center justify-between">
+                    <span>{a.name}</span>
+                    <span className="text-xs text-slate-500">{fmt(a.current_balance)}</span>
+                  </div>
+                </Option>
               ))}
             </Select>
           </Form.Item>

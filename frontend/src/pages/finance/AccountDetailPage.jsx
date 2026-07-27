@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, Table, Tag, Button, Space, Typography, App, DatePicker, Select, Spin, Divider } from 'antd';
-import { ArrowLeft, ArrowUpRight, ArrowDownRight, Landmark, Building2, Smartphone, Smartphone as SelcomIcon } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, ArrowDownRight, Landmark, Building2, Smartphone } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { accountsAPI } from '../../services/api';
 import dayjs from 'dayjs';
@@ -30,7 +30,7 @@ export default function AccountDetailPage() {
   const account = accountData;
   const txRows = txData?.rows || [];
 
-  const TYPE_ICONS = { cash: Landmark, bank: Building2, mobile_money: Smartphone, selcom: SelcomIcon };
+  const TYPE_ICONS = { cash: Landmark, bank: Building2, mobile_money: Smartphone };
   const Icon = TYPE_ICONS[account?.account_type] || Landmark;
 
   const txCols = [
@@ -83,6 +83,55 @@ export default function AccountDetailPage() {
           <div><Tag color={account.is_active ? 'green' : 'default'}>{account.is_active ? 'Active' : 'Inactive'}</Tag></div>
         </Card>
       </div>
+
+      {/* Bank / Float Details */}
+      {account.account_type === 'bank' && (account.bank_name || account.account_number || account.till_number) && (
+        <Card size="small" title={<span className="text-xs font-bold text-slate-700">Bank Details</span>} className="mb-6 border border-slate-100">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {account.bank_name && (
+              <div>
+                <Text type="secondary" className="text-xs">Bank Name</Text>
+                <div className="text-sm font-medium text-slate-700">{account.bank_name}</div>
+              </div>
+            )}
+            {account.account_number && (
+              <div>
+                <Text type="secondary" className="text-xs">Account Number</Text>
+                <div className="text-sm font-medium text-slate-700">{account.account_number}</div>
+              </div>
+            )}
+            {account.till_number && (
+              <div>
+                <Text type="secondary" className="text-xs">Till Number</Text>
+                <div className="text-sm font-medium text-slate-700">{account.till_number}</div>
+              </div>
+            )}
+            {account.currency && (
+              <div>
+                <Text type="secondary" className="text-xs">Currency</Text>
+                <div className="text-sm font-medium text-slate-700">{account.currency}</div>
+              </div>
+            )}
+            {account.swift_code && (
+              <div>
+                <Text type="secondary" className="text-xs">SWIFT Code</Text>
+                <div className="text-sm font-medium text-slate-700">{account.swift_code}</div>
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
+
+      {account.account_type === 'cash' && account.float_minimum > 0 && (
+        <Card size="small" className="mb-6 border border-slate-100">
+          <div className="flex items-center justify-between">
+            <Text type="secondary" className="text-xs">Float Minimum Threshold</Text>
+            <span className={`text-sm font-bold ${account.current_balance >= account.float_minimum ? 'text-emerald-600' : 'text-red-600'}`}>
+              {fmt(account.float_minimum)}
+            </span>
+          </div>
+        </Card>
+      )}
 
       {account.description && (
         <div className="mb-4 text-sm text-slate-500 italic">"{account.description}"</div>
