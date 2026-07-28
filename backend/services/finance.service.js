@@ -43,10 +43,11 @@ const approveExpense = async (expenseId, action, reason, userId) => {
         account = await Account.findByPk(expense.account_id);
       }
 
+      const paymentSource = expense.payment_source || 'cash';
+      const bizType = expense.business_type || 'meteora';
+
       // Priority 2: Legacy fallback — find account by business_type + payment_source
       if (!account) {
-        const paymentSource = expense.payment_source || 'cash';
-        const bizType = expense.business_type || 'meteora';
 
         if (bizType === 'bentabet') {
           if (paymentSource === 'selcom') {

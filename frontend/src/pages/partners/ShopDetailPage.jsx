@@ -467,7 +467,7 @@ export default function ShopDetailPage() {
                 <div>
                   <span className="text-[10px] uppercase tracking-wider text-slate-400">Cash at Hand</span>
                   <p className="font-bold text-emerald-600 m-0">
-                    {currentDisp ? fmt(currentDisp.cash_at_hand_tzs) : '—'}
+                    {fmt(grossFromCollections)}
                   </p>
                 </div>
               </div>
