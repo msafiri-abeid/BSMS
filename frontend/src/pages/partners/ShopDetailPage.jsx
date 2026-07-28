@@ -133,9 +133,7 @@ export default function ShopDetailPage() {
     }),
     enabled: isSlot,
   });
-  const floatBalance = floatAccount?.current_balance || 0;
   const floatMinimum = floatAccount?.float_minimum || 400000;
-  const floatHealthy = floatBalance >= floatMinimum;
 
   const { data: allShops } = useQuery({
     queryKey: ['shops-list-for-transfer'],
@@ -144,11 +142,13 @@ export default function ShopDetailPage() {
   });
 
   const { data: accountTxns } = useQuery({
-    queryKey: ['shop-account-txns', id, floatAccount?.id],
-    queryFn: () => accountsAPI.transactions(floatAccount.id, { limit: 50 }).then(r => r.data.data),
+    queryKey: ['shop-account-txns', id, floatAccount?.id, selectedDay],
+    queryFn: () => accountsAPI.transactions(floatAccount.id, { limit: 50, date_to: selectedDay }).then(r => r.data.data),
     enabled: isSlot && !!floatAccount?.id,
   });
   const txnRows = accountTxns?.rows || [];
+  const floatBalance = txnRows.length > 0 ? txnRows[0].balance_after : 0;
+  const floatHealthy = floatBalance >= floatMinimum;
 
   const cashDispMutation = useMutation({
     mutationFn: (data) => financeAPI.submitShopCash(data),
