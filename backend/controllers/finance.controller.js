@@ -131,85 +131,29 @@ const createPayroll = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-const { ShopCashDisposition, Shop } = require('../models');
+// ── ACCOUNT DEPOSIT / WITHDRAW / STATEMENT ────────────────────
 
-const listShopCashDispositions = async (req, res, next) => {
-  try {
-    const { shop_id, date_from, date_to } = req.query;
-    const where = {};
-    if (shop_id) where.shop_id = shop_id;
-    if (date_from) where.date = { ...where.date, [require('sequelize').Op.gte]: date_from };
-    if (date_to) where.date = { ...where.date, [require('sequelize').Op.lte]: date_to };
-    const data = await ShopCashDisposition.findAll({
-      where,
-      include: [{ model: Shop, as: 'shop', attributes: ['id', 'name'] }],
-      order: [['date', 'DESC']],
-    });
-    res.json({ success: true, data });
-  } catch (err) { next(err); }
-};
-
-const submitShopCashDisposition = async (req, res, next) => {
-  try {
-    const { shop_id, date, selcom_tzs, cash_allocation, bank_deposit_amount, notes } = req.body;
-    if (!shop_id || !date) return res.status(400).json({ success: false, message: 'shop_id and date required' });
-
-    // Calculate total gross from approved collections for this shop/date
-    const grossResult = await require('../models').Collection.findAll({
-      attributes: [[require('sequelize').fn('COALESCE', require('sequelize').fn('SUM', require('sequelize').col('gross_tzs')), 0), 'total']],
-      where: { shop_id, collection_date: date, status: 'approved' },
-      raw: true,
-    });
-    const totalGross = parseInt(grossResult[0]?.total || 0);
-    const selcom = parseInt(selcom_tzs) || 0;
-    const cashAtHand = totalGross - selcom;
-    const selcom_receipt_url = req.files?.selcom_receipt?.[0]?.path || req.body.selcom_receipt_url || null;
-    const bank_deposit_receipt_url = req.files?.bank_deposit_receipt?.[0]?.path || req.body.bank_deposit_receipt_url || null;
-
-    const [disp, created] = await ShopCashDisposition.upsert({
-      shop_id, date,
-      total_gross_tzs: totalGross,
-      selcom_tzs: selcom,
-      cash_at_hand_tzs: cashAtHand,
-      selcom_receipt_url,
-      cash_allocation: cash_allocation || null,
-      bank_deposit_receipt_url: cash_allocation === 'deposit' ? bank_deposit_receipt_url : null,
-      bank_deposit_amount: cash_allocation === 'deposit' ? (parseInt(bank_deposit_amount) || cashAtHand) : null,
-      status: 'pending',
-      submitted_by: req.user.id,
-      notes: notes || '',
-    });
-
-    res.status(created ? 201 : 200).json({ success: true, data: disp });
-  } catch (err) { next(err); }
-};
-
-const approveShopCashDisposition = async (req, res, next) => {
-  try {
-    const disp = await financeService.approveShopCashDisposition(req.params.id, req.body.action, req.body.reason, req.user.id);
-    res.json({ success: true, data: disp });
-  } catch (err) { next(err); }
-};
-
-const submitFloatTransfer = async (req, res, next) => {
+const recordDeposit = async (req, res, next) => {
   try {
     const receipt_url = req.file?.path || null;
-    const result = await financeService.submitFloatTransfer({ ...req.body, receipt_url }, req.user.id);
-    res.status(201).json({ success: true, data: result });
-  } catch (err) { next(err); }
-};
-
-const approveFloatTransfer = async (req, res, next) => {
-  try {
-    const result = await financeService.approveFloatTransfer(req.params.id, req.body.action, req.body.reason, req.user.id);
+    const result = await financeService.recordDeposit(req.params.id, { ...req.body, receipt_url }, req.user.id);
     res.json({ success: true, data: result });
   } catch (err) { next(err); }
 };
 
-const listFloatTransfers = async (req, res, next) => {
+const recordWithdraw = async (req, res, next) => {
   try {
-    const data = await financeService.listFloatTransfers(req.query);
-    res.json({ success: true, data });
+    const receipt_url = req.file?.path || null;
+    const result = await financeService.recordWithdraw(req.params.id, { ...req.body, receipt_url }, req.user.id);
+    res.json({ success: true, data: result });
+  } catch (err) { next(err); }
+};
+
+const downloadAccountStatement = async (req, res, next) => {
+  try {
+    const buffer = await financeService.generateAccountStatement(req.params.id, req.query);
+    res.set({ 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'Content-Disposition': 'attachment; filename="account-statement.xlsx"' });
+    res.send(buffer);
   } catch (err) { next(err); }
 };
 
@@ -307,6 +251,5 @@ module.exports = {
   listAccounts, createAccount, getAccount, updateAccount, deleteAccount,
   listTransactions, transferAccounts,
   balanceSheet, trialBalance, cashFlow, accountReport,
-  listShopCashDispositions, submitShopCashDisposition, approveShopCashDisposition,
-  submitFloatTransfer, approveFloatTransfer, listFloatTransfers,
+  recordDeposit, recordWithdraw, downloadAccountStatement,
 };

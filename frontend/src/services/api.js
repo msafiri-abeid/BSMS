@@ -165,12 +165,7 @@ export const financeAPI = {
   pendingExpenses: () => api.get('/finance/expenses/pending'),
   approveExpense: (id, d) => api.put(`/finance/expenses/${id}/approve`, d),
   listCategories: () => api.get('/finance/expenses/categories'),
-  listShopCash: (p) => api.get('/finance/shop-cash', { params: p }),
-  submitShopCash: (d) => api.post('/finance/shop-cash', d, { headers: { 'Content-Type': 'multipart/form-data' } }),
-  approveShopCash: (id, d) => api.put(`/finance/shop-cash/${id}/approve`, d),
-  listFloatTransfers: (p) => api.get('/finance/float-transfers', { params: p }),
-  submitFloatTransfer: (d) => api.post('/finance/float-transfers', d, { headers: { 'Content-Type': 'multipart/form-data' } }),
-  approveFloatTransfer: (id, d) => api.put(`/finance/float-transfers/${id}/approve`, d),
+
   listInvoices: (p) => api.get('/finance/invoices', { params: p }),
   createInvoice: (d) => api.post('/finance/invoices', d),
   recordPayment: (id, d) => api.post(`/finance/invoices/${id}/payment`, d),
@@ -221,6 +216,9 @@ export const accountsAPI = {
   update: (id, d) => api.put(`/finance/accounts/${id}`, d),
   delete: (id) => api.delete(`/finance/accounts/${id}`),
   transactions: (id, p) => api.get(`/finance/accounts/${id}/transactions`, { params: p }),
+  deposit: (id, formData) => api.post(`/finance/accounts/${id}/deposit`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  withdraw: (id, formData) => api.post(`/finance/accounts/${id}/withdraw`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  statement: (id, p) => api.get(`/finance/accounts/${id}/statement`, { params: p, responseType: 'blob' }),
   transfer: (d) => api.post('/finance/accounts/transfer', d),
 };
 

@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Table, Tag, Button, Space, Typography, App, DatePicker, Select, Spin, Divider } from 'antd';
-import { ArrowLeft, ArrowUpRight, ArrowDownRight, Landmark, Building2, Smartphone } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
+import { Card, Table, Tag, Button, Space, Typography, App, DatePicker, Select, Spin, Divider, Modal, InputNumber, Input, Upload } from 'antd';
+import { ArrowLeft, ArrowUpRight, ArrowDownRight, Landmark, Building2, Download, Upload as UploadIcon, Plus, Minus, ArrowLeftRight } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { accountsAPI } from '../../services/api';
 import dayjs from 'dayjs';
 
-const { Text, Title } = Typography;
+const { Text } = Typography;
 const { Option } = Select;
 
 const fmt = (n) => `TZS ${(n || 0).toLocaleString()}`;
@@ -15,7 +15,10 @@ export default function AccountDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { message } = App.useApp();
+  const qc = useQueryClient();
   const [txFilters, setTxFilters] = useState({ limit: 50, offset: 0 });
+  const [modal, setModal] = useState(null);
+  const [form, setForm] = useState({ amount: 0, description: '', receipt: null, to_account_id: null, date_from: null, date_to: null });
 
   const { data: accountData, isLoading } = useQuery({
     queryKey: ['account', id],
@@ -27,10 +30,68 @@ export default function AccountDetailPage() {
     queryFn: () => accountsAPI.transactions(id, txFilters).then(r => r.data.data),
   });
 
+  const { data: allAccounts } = useQuery({
+    queryKey: ['accounts-list-for-transfer'],
+    queryFn: () => accountsAPI.list({ is_active: 'true', limit: 200 }).then(r => r.data.data?.rows || r.data.data || []),
+    enabled: modal === 'transfer',
+  });
+
+  const depositMutation = useMutation({
+    mutationFn: (fd) => accountsAPI.deposit(id, fd),
+    onSuccess: () => { message.success('Deposit recorded'); qc.invalidateQueries({ queryKey: ['account', id] }); qc.invalidateQueries({ queryKey: ['account-transactions', id] }); setModal(null); },
+    onError: (e) => message.error(e.response?.data?.message || 'Failed'),
+  });
+
+  const withdrawMutation = useMutation({
+    mutationFn: (fd) => accountsAPI.withdraw(id, fd),
+    onSuccess: () => { message.success('Withdrawal recorded'); qc.invalidateQueries({ queryKey: ['account', id] }); qc.invalidateQueries({ queryKey: ['account-transactions', id] }); setModal(null); },
+    onError: (e) => message.error(e.response?.data?.message || 'Failed'),
+  });
+
+  const transferMutation = useMutation({
+    mutationFn: (d) => accountsAPI.transfer({ ...d, from_account_id: Number(id) }),
+    onSuccess: () => { message.success('Transfer completed'); qc.invalidateQueries({ queryKey: ['account', id] }); qc.invalidateQueries({ queryKey: ['account-transactions', id] }); setModal(null); },
+    onError: (e) => message.error(e.response?.data?.message || 'Failed'),
+  });
+
   const account = accountData;
   const txRows = txData?.rows || [];
 
-  const TYPE_ICONS = { cash: Landmark, bank: Building2, mobile_money: Smartphone };
+  const handleSubmit = () => {
+    if (modal === 'deposit') {
+      const fd = new FormData();
+      fd.append('amount', form.amount || 0);
+      fd.append('description', form.description || '');
+      if (form.receipt?.originFileObj) fd.append('receipt', form.receipt.originFileObj);
+      depositMutation.mutate(fd);
+    } else if (modal === 'withdraw') {
+      const fd = new FormData();
+      fd.append('amount', form.amount || 0);
+      fd.append('description', form.description || '');
+      if (form.receipt?.originFileObj) fd.append('receipt', form.receipt.originFileObj);
+      withdrawMutation.mutate(fd);
+    } else if (modal === 'transfer') {
+      transferMutation.mutate({ to_account_id: form.to_account_id, amount: form.amount, description: form.description });
+    } else if (modal === 'statement') {
+      accountsAPI.statement(id, { date_from: form.date_from, date_to: form.date_to }).then(res => {
+        const url = window.URL.createObjectURL(new Blob([res.data]));
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `statement-${account?.name?.replace(/\s+/g, '-')}-${form.date_from || 'all'}-${form.date_to || 'all'}.xlsx`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+        setModal(null);
+        message.success('Statement downloaded');
+      }).catch(() => message.error('Failed to generate statement'));
+    }
+  };
+
+  const openModal = (type) => {
+    setForm({ amount: 0, description: '', receipt: null, to_account_id: null, date_from: null, date_to: null });
+    setModal(type);
+  };
+
+  const TYPE_ICONS = { cash: Landmark, bank: Building2, mobile_money: Landmark };
   const Icon = TYPE_ICONS[account?.account_type] || Landmark;
 
   const txCols = [
@@ -46,7 +107,7 @@ export default function AccountDetailPage() {
     ), width: 130 },
     { title: 'Balance Before', dataIndex: 'balance_before', render: v => <span className="text-xs">{fmt(v)}</span>, width: 120 },
     { title: 'Balance After', dataIndex: 'balance_after', render: v => <span className="font-semibold">{fmt(v)}</span>, width: 120 },
-    { title: 'Reference', key: 'reference', render: (_, r) => <Tag className="!text-[10px]">{r.reference_type?.replace('_', ' ')}</Tag>, width: 100 },
+    { title: 'Reference', key: 'reference', render: (_, r) => <Tag className="!text-[10px]">{r.reference_type?.replace(/_/g, ' ')}</Tag>, width: 100 },
     { title: 'Description', dataIndex: 'description', render: v => <span className="text-xs text-slate-500">{v || '—'}</span>, ellipsis: true },
     { title: 'Recorded By', dataIndex: ['recorder', 'name'], render: v => v || '—', width: 120 },
   ];
@@ -57,15 +118,27 @@ export default function AccountDetailPage() {
   return (
     <div>
       {/* Back + Header */}
-      <div className="flex items-center gap-3 mb-6">
-        <Button type="text" icon={<ArrowLeft size={16} />} onClick={() => navigate('/finance/accounts')} />
-        <div className="flex items-center gap-2">
-          <Icon size={20} className="text-brand-dark" />
-          <div>
-            <h4 className="text-base font-bold text-slate-800 m-0">{account.name}</h4>
-            <span className="text-xs text-slate-500 capitalize">{account.account_type?.replace('_', ' ')}{account.shop?.name ? ` • ${account.shop.name}` : ''}</span>
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <Button type="text" icon={<ArrowLeft size={16} />} onClick={() => navigate('/finance/accounts')} />
+          <div className="flex items-center gap-2">
+            <Icon size={20} className="text-brand-dark" />
+            <div>
+              <h4 className="text-base font-bold text-slate-800 m-0">{account.name}</h4>
+              <span className="text-xs text-slate-500 capitalize">{account.account_type?.replace('_', ' ')}{account.shop?.name ? ` • ${account.shop.name}` : ''}</span>
+            </div>
           </div>
         </div>
+        <Space>
+          <Button size="small" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => openModal('deposit')}
+            className="!bg-emerald-600 hover:!bg-emerald-700 text-white border-none flex items-center gap-1">Deposit</Button>
+          <Button size="small" icon={<Minus className="w-3.5 h-3.5" />} onClick={() => openModal('withdraw')}
+            className="!bg-rose-600 hover:!bg-rose-700 text-white border-none flex items-center gap-1">Withdraw</Button>
+          <Button size="small" icon={<ArrowLeftRight className="w-3.5 h-3.5" />} onClick={() => openModal('transfer')}
+            className="!bg-brand-dark hover:!bg-brand-light text-white border-none flex items-center gap-1">Transfer</Button>
+          <Button size="small" icon={<Download className="w-3.5 h-3.5" />} onClick={() => openModal('statement')}
+            className="!text-brand-dark !border-brand-dark/30 hover:!bg-brand-dark/5 flex items-center gap-1">Statement</Button>
+        </Space>
       </div>
 
       {/* Balance Card */}
@@ -163,6 +236,119 @@ export default function AccountDetailPage() {
         pagination={{ pageSize: 50, total: txData?.count || 0, showSizeChanger: false,
           onChange: (p) => setTxFilters(f => ({ ...f, offset: (p - 1) * 50 })) }}
       />
+
+      {/* Deposit Modal */}
+      <Modal title={<span className="text-sm font-bold text-slate-700">Record Deposit — {account?.name}</span>}
+        open={modal === 'deposit'} onCancel={() => setModal(null)}
+        onOk={handleSubmit} confirmLoading={depositMutation.isPending}
+        okText="Deposit" okButtonProps={{ className: '!bg-emerald-600 rounded-lg' }}
+        cancelButtonProps={{ className: 'rounded-lg' }} width={480} className="top-8" destroyOnClose>
+        <div className="space-y-3 mt-4">
+          <div>
+            <span className="text-xs font-semibold text-slate-500 block mb-1">Amount (TZS)</span>
+            <InputNumber min={0} className="w-full rounded-lg h-9 w-full"
+              formatter={v => `TZS ${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+              parser={v => Number(v.replace(/[^0-9]/g, ''))}
+              value={form.amount} onChange={(v) => setForm(f => ({ ...f, amount: v || 0 }))} />
+          </div>
+          <div>
+            <span className="text-xs font-semibold text-slate-500 block mb-1">Receipt</span>
+            <Upload beforeUpload={() => false} maxCount={1} accept="image/*,application/pdf"
+              fileList={form.receipt ? [form.receipt] : []}
+              onChange={(info) => setForm(f => ({ ...f, receipt: info.fileList?.[0] || null }))}>
+              <Button icon={<UploadIcon size={14} />}>Attach Receipt</Button>
+            </Upload>
+          </div>
+          <div>
+            <span className="text-xs font-semibold text-slate-500 block mb-1">Description</span>
+            <Input.TextArea rows={2} className="rounded-lg" value={form.description}
+              onChange={(e) => setForm(f => ({ ...f, description: e.target.value }))} />
+          </div>
+        </div>
+      </Modal>
+
+      {/* Withdraw Modal */}
+      <Modal title={<span className="text-sm font-bold text-slate-700">Record Withdrawal — {account?.name}</span>}
+        open={modal === 'withdraw'} onCancel={() => setModal(null)}
+        onOk={handleSubmit} confirmLoading={withdrawMutation.isPending}
+        okText="Withdraw" okButtonProps={{ className: '!bg-rose-600 rounded-lg' }}
+        cancelButtonProps={{ className: 'rounded-lg' }} width={480} className="top-8" destroyOnClose>
+        <div className="space-y-3 mt-4">
+          <div>
+            <span className="text-xs font-semibold text-slate-500 block mb-1">Amount (TZS)</span>
+            <InputNumber min={0} className="w-full rounded-lg h-9 w-full"
+              formatter={v => `TZS ${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+              parser={v => Number(v.replace(/[^0-9]/g, ''))}
+              value={form.amount} onChange={(v) => setForm(f => ({ ...f, amount: v || 0 }))} />
+          </div>
+          <div>
+            <span className="text-xs font-semibold text-slate-500 block mb-1">Receipt</span>
+            <Upload beforeUpload={() => false} maxCount={1} accept="image/*,application/pdf"
+              fileList={form.receipt ? [form.receipt] : []}
+              onChange={(info) => setForm(f => ({ ...f, receipt: info.fileList?.[0] || null }))}>
+              <Button icon={<UploadIcon size={14} />}>Attach Receipt</Button>
+            </Upload>
+          </div>
+          <div>
+            <span className="text-xs font-semibold text-slate-500 block mb-1">Description</span>
+            <Input.TextArea rows={2} className="rounded-lg" value={form.description}
+              onChange={(e) => setForm(f => ({ ...f, description: e.target.value }))} />
+          </div>
+        </div>
+      </Modal>
+
+      {/* Transfer Modal */}
+      <Modal title={<span className="text-sm font-bold text-slate-700">Transfer from {account?.name}</span>}
+        open={modal === 'transfer'} onCancel={() => setModal(null)}
+        onOk={handleSubmit} confirmLoading={transferMutation.isPending}
+        okText="Transfer" okButtonProps={{ className: '!bg-brand-dark rounded-lg' }}
+        cancelButtonProps={{ className: 'rounded-lg' }} width={480} className="top-8" destroyOnClose>
+        <div className="space-y-3 mt-4">
+          <div>
+            <span className="text-xs font-semibold text-slate-500 block mb-1">Destination Account</span>
+            <Select placeholder="Select account" className="w-full" showSearch optionFilterProp="children"
+              value={form.to_account_id}
+              onChange={(v) => setForm(f => ({ ...f, to_account_id: v }))}>
+              {(allAccounts || []).filter(a => a.id !== Number(id)).map(a => (
+                <Option key={a.id} value={a.id}>{a.name}{a.shop?.name ? ` (${a.shop.name})` : ''}</Option>
+              ))}
+            </Select>
+          </div>
+          <div>
+            <span className="text-xs font-semibold text-slate-500 block mb-1">Amount (TZS)</span>
+            <InputNumber min={0} max={account?.current_balance} className="w-full rounded-lg h-9 w-full"
+              formatter={v => `TZS ${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+              parser={v => Number(v.replace(/[^0-9]/g, ''))}
+              value={form.amount} onChange={(v) => setForm(f => ({ ...f, amount: v || 0 }))} />
+          </div>
+          <div>
+            <span className="text-xs font-semibold text-slate-500 block mb-1">Description</span>
+            <Input.TextArea rows={2} className="rounded-lg" value={form.description}
+              onChange={(e) => setForm(f => ({ ...f, description: e.target.value }))} />
+          </div>
+        </div>
+      </Modal>
+
+      {/* Statement Modal */}
+      <Modal title={<span className="text-sm font-bold text-slate-700">Download Statement — {account?.name}</span>}
+        open={modal === 'statement'} onCancel={() => setModal(null)}
+        onOk={handleSubmit}
+        okText="Download" okButtonProps={{ className: '!bg-brand-dark rounded-lg' }}
+        cancelButtonProps={{ className: 'rounded-lg' }} width={400} className="top-8" destroyOnClose>
+        <div className="space-y-3 mt-4">
+          <div>
+            <span className="text-xs font-semibold text-slate-500 block mb-1">From</span>
+            <DatePicker className="w-full rounded-lg" value={form.date_from ? dayjs(form.date_from) : null}
+              onChange={(d) => setForm(f => ({ ...f, date_from: d ? d.format('YYYY-MM-DD') : null }))} />
+          </div>
+          <div>
+            <span className="text-xs font-semibold text-slate-500 block mb-1">To</span>
+            <DatePicker className="w-full rounded-lg" value={form.date_to ? dayjs(form.date_to) : null}
+              onChange={(d) => setForm(f => ({ ...f, date_to: d ? d.format('YYYY-MM-DD') : null }))} />
+          </div>
+          <p className="text-[10px] text-slate-400 m-0">Leave blank for full statement (all time)</p>
+        </div>
+      </Modal>
     </div>
   );
 }

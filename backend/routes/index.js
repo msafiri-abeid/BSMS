@@ -101,9 +101,6 @@ router.post('/finance/expenses', authenticate, checkPermission('finance', 'creat
 router.put('/finance/expenses/:id', authenticate, checkPermission('finance', 'update'), uploadReceipt.single('receipt'), financeC.updateExpense);
 router.delete('/finance/expenses/:id', authenticate, checkPermission('finance', 'delete'), financeC.removeExpense);
 router.get('/finance/expenses/categories', authenticate, financeC.listCategories);
-router.get('/finance/shop-cash', authenticate, checkPermission('finance', 'read'), financeC.listShopCashDispositions);
-router.post('/finance/shop-cash', authenticate, checkPermission('finance', 'create'), uploadReceipt.fields([{ name: 'selcom_receipt', maxCount: 1 }, { name: 'bank_deposit_receipt', maxCount: 1 }]), financeC.submitShopCashDisposition);
-router.put('/finance/shop-cash/:id/approve', authenticate, checkPermission('finance', 'approve'), financeC.approveShopCashDisposition);
 router.get('/finance/expenses/pending', authenticate, checkPermission('finance', 'approve'), financeC.getPendingExpenses);
 router.put('/finance/expenses/:id/approve', authenticate, checkPermission('finance', 'approve'), financeC.approveExpense);
 router.get('/finance/invoices', authenticate, checkPermission('finance', 'read'), financeC.listInvoices);
@@ -121,16 +118,14 @@ router.get('/finance/accounts/:id', authenticate, checkPermission('accounts', 'r
 router.put('/finance/accounts/:id', authenticate, checkPermission('accounts', 'update'), financeC.updateAccount);
 router.delete('/finance/accounts/:id', authenticate, checkPermission('accounts', 'delete'), financeC.deleteAccount);
 router.get('/finance/accounts/:id/transactions', authenticate, checkPermission('accounts', 'read'), financeC.listTransactions);
+router.post('/finance/accounts/:id/deposit', authenticate, checkPermission('accounts', 'create'), uploadReceipt.single('receipt'), financeC.recordDeposit);
+router.post('/finance/accounts/:id/withdraw', authenticate, checkPermission('accounts', 'create'), uploadReceipt.single('receipt'), financeC.recordWithdraw);
+router.get('/finance/accounts/:id/statement', authenticate, checkPermission('accounts', 'read'), financeC.downloadAccountStatement);
 router.post('/finance/accounts/transfer', authenticate, checkPermission('accounts', 'create'), financeC.transferAccounts);
 router.get('/finance/reports/balance-sheet', authenticate, checkPermission('accounts', 'read'), financeC.balanceSheet);
 router.get('/finance/reports/trial-balance', authenticate, checkPermission('accounts', 'read'), financeC.trialBalance);
 router.get('/finance/reports/cash-flow', authenticate, checkPermission('accounts', 'read'), financeC.cashFlow);
 router.get('/finance/reports/account-report/:id', authenticate, checkPermission('accounts', 'read'), financeC.accountReport);
-
-// ── FLOAT TRANSFERS ──────────────────────────────────────────
-router.get('/finance/float-transfers', authenticate, checkPermission('accounts', 'read'), financeC.listFloatTransfers);
-router.post('/finance/float-transfers', authenticate, checkPermission('accounts', 'create'), uploadReceipt.single('receipt'), financeC.submitFloatTransfer);
-router.put('/finance/float-transfers/:id/approve', authenticate, checkPermission('accounts', 'approve'), financeC.approveFloatTransfer);
 
 // ── TICKETS ───────────────────────────────────────────────────
 router.get('/tickets', authenticate, ticketC.list);

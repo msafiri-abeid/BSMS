@@ -2,7 +2,7 @@
 const PDFDocument = require('pdfkit');
 const ExcelJS = require('exceljs');
 const { Op } = require('sequelize');
-const { Expense, Invoice, Payment, CreditNote, Payroll, ExpenseCategory, Partner, Shop, Machine, Setting, User, Account, AccountTransaction, AccountTransfer, ShopCashDisposition, FloatTransfer } = require('../models');
+const { Expense, Invoice, Payment, CreditNote, Payroll, ExpenseCategory, Partner, Shop, Machine, Setting, User, Account, AccountTransaction, AccountTransfer } = require('../models');
 
 const getSetting = async (key, def) => {
   const row = await Setting.findOne({ where: { key } });
@@ -642,219 +642,125 @@ const generateAccountReport = async (accountId, query) => {
   };
 };
 
-// ── SHOP CASH DISPOSITION APPROVAL ────────────────────────────
+// ── ACCOUNT DEPOSIT / WITHDRAW / STATEMENT ────────────────────
 
-const approveShopCashDisposition = async (dispositionId, action, reason, userId) => {
-  const disp = await ShopCashDisposition.findByPk(dispositionId, {
-    include: [{ model: Shop, as: 'shop', attributes: ['id', 'name', 'business_type'] }],
-  });
-  if (!disp || disp.status !== 'pending') throw new Error('Disposition not found or already processed');
+const recordDeposit = async (accountId, data, userId) => {
+  const { amount, transaction_date, description, receipt_url, charges } = data;
+  const account = await Account.findByPk(accountId);
+  if (!account) throw new Error('Account not found');
 
-  if (action === 'reject') {
-    await disp.update({ status: 'rejected', approved_by: userId, approved_at: new Date(), rejection_reason: reason || '' });
-    return disp;
-  }
+  const netAmount = amount - (parseInt(charges) || 0);
+  const balanceBefore = account.current_balance;
+  const balanceAfter = balanceBefore + netAmount;
+  const txnDate = transaction_date || new Date().toISOString().split('T')[0];
 
-  // Approve — create account transactions
-  const today = new Date().toISOString().split('T')[0];
-  const shopId = disp.shop_id;
-
-  try {
-    // 1. Credit selcom_tzs to Bentabet Revenue Account
-    const selcomAccount = await Account.findOne({ where: { name: 'Bentabet Revenue Account', is_active: true } });
-    if (selcomAccount && disp.selcom_tzs > 0) {
-      const selcomBalBefore = selcomAccount.current_balance;
-      const selcomBalAfter = selcomBalBefore + disp.selcom_tzs;
-      await AccountTransaction.create({
-        account_id: selcomAccount.id,
-        type: 'in',
-        amount: disp.selcom_tzs,
-        balance_before: selcomBalBefore,
-        balance_after: selcomBalAfter,
-        reference_type: 'cash_disposition',
-        reference_id: disp.id,
-        payment_method: 'mobile_money',
-        description: `Selcom revenue - ${disp.shop?.name || `Shop #${shopId}`} (${disp.date})`,
-        recorded_by: userId,
-        transaction_date: disp.date,
-      });
-      await selcomAccount.update({ current_balance: selcomBalAfter });
-    }
-
-    // 2. Handle cash_at_hand based on allocation
-    if (disp.cash_at_hand_tzs > 0) {
-      if (disp.cash_allocation === 'deposit') {
-        // Deposit to Bentabet Bank Account
-        const bankAccount = await Account.findOne({ where: { name: 'Bentabet Bank Account', is_active: true } });
-        if (bankAccount) {
-          const depositAmount = disp.bank_deposit_amount || disp.cash_at_hand_tzs;
-          const charges = disp.bank_charges || 0;
-          const netDeposit = depositAmount - charges;
-          const bankBalBefore = bankAccount.current_balance;
-          const bankBalAfter = bankBalBefore + netDeposit;
-          await AccountTransaction.create({
-            account_id: bankAccount.id,
-            type: 'in',
-            amount: netDeposit,
-            balance_before: bankBalBefore,
-            balance_after: bankBalAfter,
-            reference_type: 'cash_disposition',
-            reference_id: disp.id,
-            payment_method: 'cash',
-            description: `Bank deposit - ${disp.shop?.name || `Shop #${shopId}`} (${disp.date})${charges > 0 ? ` [charges: ${charges}]` : ''}`,
-            recorded_by: userId,
-            transaction_date: disp.date,
-          });
-          await bankAccount.update({ current_balance: bankBalAfter });
-        }
-      } else {
-        // Add to shop cash float
-        const cashAccount = await Account.findOne({ where: { shop_id: shopId, account_type: 'cash', business_type: 'bentabet', is_active: true } });
-        if (cashAccount) {
-          const cashBalBefore = cashAccount.current_balance;
-          const cashBalAfter = cashBalBefore + disp.cash_at_hand_tzs;
-          await AccountTransaction.create({
-            account_id: cashAccount.id,
-            type: 'in',
-            amount: disp.cash_at_hand_tzs,
-            balance_before: cashBalBefore,
-            balance_after: cashBalAfter,
-            reference_type: 'cash_disposition',
-            reference_id: disp.id,
-            payment_method: 'cash',
-            description: `Cash float addition - ${disp.shop?.name || `Shop #${shopId}`} (${disp.date})`,
-            recorded_by: userId,
-            transaction_date: disp.date,
-          });
-          await cashAccount.update({ current_balance: cashBalAfter });
-        }
-      }
-    }
-  } catch (err) {
-    console.warn('[ACCOUNTING] Failed to auto-record cash disposition transactions:', err.message);
-  }
-
-  await disp.update({ status: 'approved', approved_by: userId, approved_at: new Date() });
-  return disp;
-};
-
-// ── FLOAT TRANSFERS ──────────────────────────────────────────
-
-const submitFloatTransfer = async (data, userId) => {
-  const { from_shop_id, to_shop_id, from_account_id, to_account_id, amount, charges, type, description, receipt_url } = data;
-  if (!from_account_id || !to_account_id) throw new Error('Source and destination accounts are required');
-  if (!amount || amount <= 0) throw new Error('Amount must be positive');
-  if (from_account_id === to_account_id) throw new Error('Cannot transfer to the same account');
-
-  const fromAccount = await Account.findByPk(from_account_id);
-  if (!fromAccount) throw new Error('Source account not found');
-  if (fromAccount.current_balance < amount) throw new Error('Insufficient balance in source account');
-
-  return FloatTransfer.create({
-    from_shop_id: from_shop_id || null,
-    to_shop_id: to_shop_id || null,
-    from_account_id,
-    to_account_id,
-    amount,
-    charges: charges || 0,
-    type,
-    description: description || '',
-    receipt_url: receipt_url || null,
-    submitted_by: userId,
-    status: 'pending',
-  });
-};
-
-const approveFloatTransfer = async (transferId, action, reason, userId) => {
-  const transfer = await FloatTransfer.findByPk(transferId, {
-    include: [
-      { model: Shop, as: 'fromShop', attributes: ['id', 'name'] },
-      { model: Shop, as: 'toShop', attributes: ['id', 'name'] },
-      { model: Account, as: 'fromAccount', attributes: ['id', 'name', 'current_balance'] },
-      { model: Account, as: 'toAccount', attributes: ['id', 'name', 'current_balance'] },
-    ],
-  });
-  if (!transfer || transfer.status !== 'pending') throw new Error('Transfer not found or already processed');
-
-  if (action === 'reject') {
-    await transfer.update({ status: 'rejected', approved_by: userId, approved_at: new Date(), rejection_reason: reason || '' });
-    return transfer;
-  }
-
-  const today = new Date().toISOString().split('T')[0];
-  const fromAccount = await Account.findByPk(transfer.from_account_id);
-  const toAccount = await Account.findByPk(transfer.to_account_id);
-
-  // Debit source
-  const fromBalBefore = fromAccount.current_balance;
-  const fromBalAfter = fromBalBefore - transfer.amount;
   await AccountTransaction.create({
-    account_id: transfer.from_account_id,
-    type: 'out',
-    amount: transfer.amount,
-    balance_before: fromBalBefore,
-    balance_after: fromBalAfter,
-    reference_type: 'transfer',
-    reference_id: transfer.id,
-    payment_method: 'internal',
-    description: transfer.description || `Float transfer out → ${toAccount.name}`,
-    recorded_by: userId,
-    transaction_date: today,
-  });
-  await fromAccount.update({ current_balance: fromBalAfter });
-
-  // Credit destination (net of charges)
-  const charges = transfer.charges || 0;
-  const netAmount = transfer.amount - charges;
-  const toBalBefore = toAccount.current_balance;
-  const toBalAfter = toBalBefore + netAmount;
-  await AccountTransaction.create({
-    account_id: transfer.to_account_id,
+    account_id: accountId,
     type: 'in',
     amount: netAmount,
-    balance_before: toBalBefore,
-    balance_after: toBalAfter,
-    reference_type: 'transfer',
-    reference_id: transfer.id,
-    payment_method: 'internal',
-    description: transfer.description || `Float transfer in ← ${fromAccount.name}${charges > 0 ? ` [charges: ${charges}]` : ''}`,
+    balance_before: balanceBefore,
+    balance_after: balanceAfter,
+    reference_type: 'adjustment',
+    payment_method: 'cash',
+    description: description || `Deposit to ${account.name}${charges > 0 ? ` (charges: ${charges})` : ''}`,
     recorded_by: userId,
-    transaction_date: today,
+    transaction_date: txnDate,
   });
-  await toAccount.update({ current_balance: toBalAfter });
+  await account.update({ current_balance: balanceAfter });
 
-  await transfer.update({ status: 'approved', approved_by: userId, approved_at: new Date() });
-  return transfer;
+  return Account.findByPk(accountId, {
+    include: [{ model: Shop, as: 'shop', attributes: ['id', 'name'] }],
+  });
 };
 
-const listFloatTransfers = async (query) => {
-  const { shop_id, status, type, date_from, date_to, limit = 50, offset = 0 } = query;
-  const where = {};
-  if (shop_id) {
-    const { [Op.or]: orCond } = { [Op.or]: [{ from_shop_id: shop_id }, { to_shop_id: shop_id }] };
-    Object.assign(where, { [Op.or]: [{ from_shop_id: shop_id }, { to_shop_id: shop_id }] });
-  }
-  if (status) where.status = status;
-  if (type) where.type = type;
-  if (date_from || date_to) {
-    where.createdAt = {};
-    if (date_from) where.createdAt[Op.gte] = new Date(date_from);
-    if (date_to) where.createdAt[Op.lte] = new Date(date_to + 'T23:59:59');
-  }
-  return FloatTransfer.findAndCountAll({
-    where,
-    limit: +limit,
-    offset: +offset,
-    include: [
-      { model: Shop, as: 'fromShop', attributes: ['id', 'name'] },
-      { model: Shop, as: 'toShop', attributes: ['id', 'name'] },
-      { model: Account, as: 'fromAccount', attributes: ['id', 'name'] },
-      { model: Account, as: 'toAccount', attributes: ['id', 'name'] },
-      { model: User, as: 'submitter', attributes: ['id', 'name'] },
-      { model: User, as: 'approver', attributes: ['id', 'name'] },
-    ],
-    order: [['createdAt', 'DESC']],
+const recordWithdraw = async (accountId, data, userId) => {
+  const { amount, transaction_date, description, receipt_url } = data;
+  const account = await Account.findByPk(accountId);
+  if (!account) throw new Error('Account not found');
+
+  const balanceBefore = account.current_balance;
+  const balanceAfter = balanceBefore - amount;
+  const txnDate = transaction_date || new Date().toISOString().split('T')[0];
+
+  await AccountTransaction.create({
+    account_id: accountId,
+    type: 'out',
+    amount,
+    balance_before: balanceBefore,
+    balance_after: balanceAfter,
+    reference_type: 'adjustment',
+    payment_method: 'cash',
+    description: description || `Withdrawal from ${account.name}`,
+    recorded_by: userId,
+    transaction_date: txnDate,
   });
+  await account.update({ current_balance: balanceAfter });
+
+  return Account.findByPk(accountId, {
+    include: [{ model: Shop, as: 'shop', attributes: ['id', 'name'] }],
+  });
+};
+
+const generateAccountStatement = async (accountId, query) => {
+  const { date_from, date_to } = query;
+  const account = await Account.findByPk(accountId, {
+    include: [{ model: Shop, as: 'shop', attributes: ['id', 'name'] }],
+  });
+  if (!account) throw new Error('Account not found');
+
+  const from = date_from || '2020-01-01';
+  const to = date_to || new Date().toISOString().split('T')[0];
+
+  const transactions = await AccountTransaction.findAll({
+    where: {
+      account_id: accountId,
+      transaction_date: { [Op.between]: [from, to] },
+    },
+    include: [{ model: User, as: 'recorder', attributes: ['name'] }],
+    order: [['transaction_date', 'ASC'], ['id', 'ASC']],
+  });
+
+  const beforeTxns = await AccountTransaction.findAll({
+    where: {
+      account_id: accountId,
+      transaction_date: { [Op.lt]: from },
+    },
+    attributes: [[require('sequelize').fn('COALESCE', require('sequelize').fn('SUM', require('sequelize').literal("CASE WHEN type = 'in' THEN amount ELSE -amount END")), 0), 'balance']],
+    raw: true,
+  });
+  const openingBalance = Number(beforeTxns[0]?.balance || 0) + (account.opening_balance || 0);
+
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('Statement');
+  ws.columns = [
+    { header: 'Date', key: 'date', width: 14 },
+    { header: 'Type', key: 'type', width: 10 },
+    { header: 'Amount', key: 'amount', width: 18 },
+    { header: 'Balance Before', key: 'balance_before', width: 18 },
+    { header: 'Balance After', key: 'balance_after', width: 18 },
+    { header: 'Reference', key: 'reference', width: 16 },
+    { header: 'Description', key: 'description', width: 40 },
+    { header: 'Recorded By', key: 'recorded_by', width: 20 },
+  ];
+
+  ws.addRow({ date: from, type: 'OPEN', amount: '', balance_before: '', balance_after: openingBalance, reference: '', description: 'Opening Balance', recorded_by: '' });
+  ws.getRow(2).font = { bold: true };
+
+  transactions.forEach(tx => {
+    ws.addRow({
+      date: tx.transaction_date,
+      type: tx.type === 'in' ? 'IN' : 'OUT',
+      amount: tx.amount,
+      balance_before: tx.balance_before,
+      balance_after: tx.balance_after,
+      reference: tx.reference_type?.replace(/_/g, ' ') || '',
+      description: tx.description || '',
+      recorded_by: tx.recorder?.name || '',
+    });
+  });
+
+  ws.getRow(1).font = { bold: true };
+  return wb.xlsx.writeBuffer();
 };
 
 const updateExpense = async (id, data, userId) => {
@@ -888,6 +794,5 @@ module.exports = {
   listAccounts, createAccount, getAccount, updateAccount, deleteAccount,
   listAccountTransactions, transferBetweenAccounts,
   generateBalanceSheet, generateTrialBalance, generateCashFlow, generateAccountReport,
-  approveShopCashDisposition,
-  submitFloatTransfer, approveFloatTransfer, listFloatTransfers,
+  recordDeposit, recordWithdraw, generateAccountStatement,
 };

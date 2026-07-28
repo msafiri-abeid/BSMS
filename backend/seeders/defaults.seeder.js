@@ -250,18 +250,9 @@ module.exports = async () => {
   }
   // Tag any existing accounts without business_type (migration safety)
   await Account.update({ business_type: 'meteora' }, { where: { business_type: null, account_type: { [Op.in]: ['cash', 'bank'] } } });
-  // Seed per-shop Selcom + cash accounts for Slot shops
+  // Seed per-shop cash float accounts for Slot shops
   const slotShops = await Shop.findAll({ where: { business_type: 'slot', status: 'active' } });
   for (const shop of slotShops) {
-    // Per-shop Selcom account (now type 'bank' with Selcom Microfinance Bank details)
-    const [selcomAcc, selcomCreated] = await Account.findOrCreate({
-      where: { shop_id: shop.id, account_type: 'selcom' },
-      defaults: { name: `Selcom - ${shop.name}`, account_type: 'bank', business_type: 'bentabet', opening_balance: 0, current_balance: 0, is_active: true, shop_id: shop.id, created_by: adminUser?.id || 1, description: `Selcom merchant account for ${shop.name}`, ...selcomBankDetails }
-    });
-    if (!selcomCreated) {
-      // Existing account — update type and bank details
-      await Account.update({ account_type: 'bank', ...selcomBankDetails }, { where: { id: selcomAcc.id } });
-    }
     // Per-shop Cash float account
     await Account.findOrCreate({
       where: { shop_id: shop.id, account_type: 'cash' },
@@ -270,6 +261,6 @@ module.exports = async () => {
     // Tag existing per-shop accounts that may have been created without business_type
     await Account.update({ business_type: 'bentabet' }, { where: { shop_id: shop.id, business_type: null } });
   }
-  console.log(`[SEED] Default accounts seeded (${slotShops.length} Slot shop accounts created)`);
+  console.log(`[SEED] Default accounts seeded (${slotShops.length} Slot shop cash accounts)`);
   console.log('[SEED] Defaults seeded');
 };

@@ -647,45 +647,7 @@ const AccountTransfer = sequelize.define('AccountTransfer', {
   recorded_by: { type: DataTypes.INTEGER, allowNull: false },
 }, { tableName: 'account_transfers' });
 
-// ─── SHOP CASH DISPOSITION ────────────────────────────────────
-const ShopCashDisposition = sequelize.define('ShopCashDisposition', {
-  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
-  shop_id: { type: DataTypes.INTEGER, allowNull: false },
-  date: { type: DataTypes.DATEONLY, allowNull: false },
-  total_gross_tzs: { type: DataTypes.INTEGER, defaultValue: 0 },
-  selcom_tzs: { type: DataTypes.INTEGER, defaultValue: 0 },
-  cash_at_hand_tzs: { type: DataTypes.INTEGER, defaultValue: 0 },
-  selcom_receipt_url: { type: DataTypes.TEXT },
-  cash_allocation: { type: DataTypes.ENUM('float', 'deposit') },
-  bank_deposit_receipt_url: { type: DataTypes.TEXT },
-  bank_deposit_amount: { type: DataTypes.INTEGER },
-  bank_charges: { type: DataTypes.INTEGER, defaultValue: 0 },
-  status: { type: DataTypes.ENUM('pending', 'approved', 'rejected'), defaultValue: 'pending' },
-  submitted_by: { type: DataTypes.INTEGER, allowNull: false },
-  approved_by: { type: DataTypes.INTEGER },
-  approved_at: { type: DataTypes.DATE },
-  rejection_reason: { type: DataTypes.TEXT },
-  notes: { type: DataTypes.TEXT },
-}, { tableName: 'shop_cash_dispositions', indexes: [{ name: 'uq_cash_disposition_shop_date', unique: true, fields: ['shop_id', 'date'] }] });
 
-// ─── FLOAT TRANSFERS ─────────────────────────────────────────
-const FloatTransfer = sequelize.define('FloatTransfer', {
-  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
-  from_shop_id: { type: DataTypes.INTEGER },
-  to_shop_id: { type: DataTypes.INTEGER },
-  from_account_id: { type: DataTypes.INTEGER, allowNull: false },
-  to_account_id: { type: DataTypes.INTEGER, allowNull: false },
-  amount: { type: DataTypes.INTEGER, allowNull: false },
-  charges: { type: DataTypes.INTEGER, defaultValue: 0 },
-  type: { type: DataTypes.ENUM('float_in', 'float_out', 'deposit_to_bank'), allowNull: false },
-  status: { type: DataTypes.ENUM('pending', 'approved', 'rejected'), defaultValue: 'pending' },
-  receipt_url: { type: DataTypes.TEXT },
-  description: { type: DataTypes.TEXT },
-  submitted_by: { type: DataTypes.INTEGER, allowNull: false },
-  approved_by: { type: DataTypes.INTEGER },
-  approved_at: { type: DataTypes.DATE },
-  rejection_reason: { type: DataTypes.TEXT },
-}, { tableName: 'float_transfers' });
 
 // ─── ASSOCIATIONS ─────────────────────────────────────────────
 Role.hasMany(Permission, { foreignKey: 'role_id', as: 'permissions' });
@@ -850,27 +812,13 @@ AccountTransfer.belongsTo(Account, { foreignKey: 'to_account_id', as: 'toAccount
 AccountTransfer.belongsTo(User, { foreignKey: 'approved_by', as: 'approver' });
 AccountTransfer.belongsTo(User, { foreignKey: 'recorded_by', as: 'recorder' });
 
-// ShopCashDisposition associations
-ShopCashDisposition.belongsTo(Shop, { foreignKey: 'shop_id', as: 'shop' });
-ShopCashDisposition.belongsTo(User, { foreignKey: 'submitted_by', as: 'submitter' });
-ShopCashDisposition.belongsTo(User, { foreignKey: 'approved_by', as: 'approver' });
-
 // Notification associations
 Notification.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 Notification.belongsTo(User, { foreignKey: 'actor_id', as: 'actor' });
-Shop.hasMany(ShopCashDisposition, { foreignKey: 'shop_id', as: 'cashDispositions' });
 
 // Expense → Account association
 Expense.belongsTo(Account, { foreignKey: 'account_id', as: 'payAccount' });
 Account.hasMany(Expense, { foreignKey: 'account_id', as: 'expenses' });
-
-// FloatTransfer associations
-FloatTransfer.belongsTo(Shop, { foreignKey: 'from_shop_id', as: 'fromShop' });
-FloatTransfer.belongsTo(Shop, { foreignKey: 'to_shop_id', as: 'toShop' });
-FloatTransfer.belongsTo(Account, { foreignKey: 'from_account_id', as: 'fromAccount' });
-FloatTransfer.belongsTo(Account, { foreignKey: 'to_account_id', as: 'toAccount' });
-FloatTransfer.belongsTo(User, { foreignKey: 'submitted_by', as: 'submitter' });
-FloatTransfer.belongsTo(User, { foreignKey: 'approved_by', as: 'approver' });
 
 module.exports = {
   sequelize,
@@ -885,5 +833,4 @@ module.exports = {
   Department, Position, Employee, Attendance,
   SmsLog, Notification,
   Account, AccountTransaction, AccountTransfer,
-  ShopCashDisposition, FloatTransfer,
 };
