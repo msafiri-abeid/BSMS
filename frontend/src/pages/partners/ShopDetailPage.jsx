@@ -258,30 +258,6 @@ export default function ShopDetailPage() {
             )}
           </div>
 
-          {/* Daily Summary Card */}
-          <div className="p-4 bg-white border-b border-slate-100">
-            <div className="flex items-center gap-2 mb-3">
-              <Landmark size={13} className="text-brand-dark" />
-              <h6 className="text-[10px] font-bold uppercase tracking-wider text-slate-400 m-0">
-                Daily Summary — {dayjs(selectedDay).format('DD MMM YYYY')}
-              </h6>
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div className="rounded-lg bg-slate-50 p-2.5 border border-slate-100">
-                <span className="text-[10px] uppercase tracking-wider text-slate-500">Gross Revenue</span>
-                <p className="text-sm font-bold text-slate-800 m-0">{fmt(grossFromCollections)}</p>
-              </div>
-              <div className="rounded-lg bg-blue-50 p-2.5 border border-blue-100">
-                <span className="text-[10px] uppercase tracking-wider text-blue-600">Collections</span>
-                <p className="text-sm font-bold text-blue-700 m-0">{collectionRows.length}</p>
-              </div>
-              <div className="rounded-lg bg-emerald-50 p-2.5 border border-emerald-100">
-                <span className="text-[10px] uppercase tracking-wider text-emerald-600">Cash at Hand</span>
-                <p className="text-sm font-bold text-emerald-700 m-0">{fmt(grossFromCollections)}</p>
-              </div>
-            </div>
-          </div>
-
           {/* Transaction History Ledger */}
           <div className="p-4 bg-white">
             <h6 className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-1.5 m-0">

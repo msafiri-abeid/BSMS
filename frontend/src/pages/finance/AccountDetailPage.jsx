@@ -131,11 +131,11 @@ export default function AccountDetailPage() {
         </div>
         <Space>
           <Button size="small" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => openModal('deposit')}
-            className="!bg-emerald-600 hover:!bg-emerald-700 text-white border-none flex items-center gap-1">Deposit</Button>
+            className="!bg-emerald-600 hover:!bg-emerald-700 text-white hover:!text-white border-none flex items-center gap-1">Deposit</Button>
           <Button size="small" icon={<Minus className="w-3.5 h-3.5" />} onClick={() => openModal('withdraw')}
-            className="!bg-rose-600 hover:!bg-rose-700 text-white border-none flex items-center gap-1">Withdraw</Button>
+            className="!bg-rose-600 hover:!bg-rose-700 text-white hover:!text-white border-none flex items-center gap-1">Withdraw</Button>
           <Button size="small" icon={<ArrowLeftRight className="w-3.5 h-3.5" />} onClick={() => openModal('transfer')}
-            className="!bg-brand-dark hover:!bg-brand-light text-white border-none flex items-center gap-1">Transfer</Button>
+            className="!bg-brand-dark hover:!bg-brand-light text-white hover:!text-white border-none flex items-center gap-1">Transfer</Button>
           <Button size="small" icon={<Download className="w-3.5 h-3.5" />} onClick={() => openModal('statement')}
             className="!text-brand-dark !border-brand-dark/30 hover:!bg-brand-dark/5 flex items-center gap-1">Statement</Button>
         </Space>
