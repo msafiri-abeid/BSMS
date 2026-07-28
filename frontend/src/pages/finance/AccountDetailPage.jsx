@@ -18,7 +18,7 @@ export default function AccountDetailPage() {
   const qc = useQueryClient();
   const [txFilters, setTxFilters] = useState({ limit: 50, offset: 0 });
   const [modal, setModal] = useState(null);
-  const [form, setForm] = useState({ amount: 0, description: '', receipt: null, to_account_id: null, date_from: null, date_to: null });
+  const [form, setForm] = useState({ amount: 0, description: '', receipt: null, to_account_id: null, date_from: null, date_to: null, transaction_date: dayjs().format('YYYY-MM-DD') });
 
   const { data: accountData, isLoading } = useQuery({
     queryKey: ['account', id],
@@ -61,12 +61,14 @@ export default function AccountDetailPage() {
     if (modal === 'deposit') {
       const fd = new FormData();
       fd.append('amount', form.amount || 0);
+      fd.append('transaction_date', form.transaction_date || dayjs().format('YYYY-MM-DD'));
       fd.append('description', form.description || '');
       if (form.receipt?.originFileObj) fd.append('receipt', form.receipt.originFileObj);
       depositMutation.mutate(fd);
     } else if (modal === 'withdraw') {
       const fd = new FormData();
       fd.append('amount', form.amount || 0);
+      fd.append('transaction_date', form.transaction_date || dayjs().format('YYYY-MM-DD'));
       fd.append('description', form.description || '');
       if (form.receipt?.originFileObj) fd.append('receipt', form.receipt.originFileObj);
       withdrawMutation.mutate(fd);
@@ -87,7 +89,7 @@ export default function AccountDetailPage() {
   };
 
   const openModal = (type) => {
-    setForm({ amount: 0, description: '', receipt: null, to_account_id: null, date_from: null, date_to: null });
+    setForm({ amount: 0, description: '', receipt: null, to_account_id: null, date_from: null, date_to: null, transaction_date: dayjs().format('YYYY-MM-DD') });
     setModal(type);
   };
 
@@ -245,6 +247,11 @@ export default function AccountDetailPage() {
         cancelButtonProps={{ className: 'rounded-lg' }} width={480} className="top-8" destroyOnClose>
         <div className="space-y-3 mt-4">
           <div>
+            <span className="text-xs font-semibold text-slate-500 block mb-1">Date</span>
+            <DatePicker className="w-full rounded-lg" value={dayjs(form.transaction_date)}
+              onChange={(d) => setForm(f => ({ ...f, transaction_date: d ? d.format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD') }))} />
+          </div>
+          <div>
             <span className="text-xs font-semibold text-slate-500 block mb-1">Amount (TZS)</span>
             <InputNumber min={0} className="w-full rounded-lg h-9 w-full"
               formatter={v => `TZS ${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
@@ -274,6 +281,11 @@ export default function AccountDetailPage() {
         okText="Withdraw" okButtonProps={{ className: '!bg-rose-600 rounded-lg' }}
         cancelButtonProps={{ className: 'rounded-lg' }} width={480} className="top-8" destroyOnClose>
         <div className="space-y-3 mt-4">
+          <div>
+            <span className="text-xs font-semibold text-slate-500 block mb-1">Date</span>
+            <DatePicker className="w-full rounded-lg" value={dayjs(form.transaction_date)}
+              onChange={(d) => setForm(f => ({ ...f, transaction_date: d ? d.format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD') }))} />
+          </div>
           <div>
             <span className="text-xs font-semibold text-slate-500 block mb-1">Amount (TZS)</span>
             <InputNumber min={0} className="w-full rounded-lg h-9 w-full"

@@ -128,7 +128,7 @@ export default function ShopDetailPage() {
 
   const { data: accountTxns } = useQuery({
     queryKey: ['shop-account-txns', id, floatAccount?.id, selectedDay],
-    queryFn: () => accountsAPI.transactions(floatAccount.id, { limit: 50, date_to: selectedDay }).then(r => r.data.data),
+    queryFn: () => accountsAPI.transactions(floatAccount.id, { limit: 50, date_from: selectedDay, date_to: selectedDay }).then(r => r.data.data),
     enabled: isSlot && !!floatAccount?.id,
   });
   const txnRows = accountTxns?.rows || [];
@@ -262,7 +262,7 @@ export default function ShopDetailPage() {
           <div className="p-4 bg-white">
             <h6 className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-1.5 m-0">
               <BarChart3 size={12} className="text-brand-dark" /> Transaction History
-              {floatAccount && <span className="font-normal normal-case text-slate-400">— {floatAccount.name} ({fmt(floatBalance)})</span>}
+              {floatAccount && <span className="font-normal normal-case text-slate-400">— {floatAccount.name}</span>}
             </h6>
             {txnRows.length > 0 ? (
               <Table dataSource={txnRows} rowKey="id" size="small" pagination={{ pageSize: 8, showSizeChanger: false, size: 'small' }}
