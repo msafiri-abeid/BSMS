@@ -362,7 +362,7 @@ const transferBetweenAccounts = async (data, userId) => {
   if (!fromAccount || !toAccount) throw new Error('Account not found');
   if (fromAccount.current_balance < amount) throw new Error('Insufficient balance in source account');
 
-  const today = new Date().toISOString().split('T')[0];
+  const txnDate = data.transaction_date || new Date().toISOString().split('T')[0];
 
   // Debit from source (money out)
   const fromBalanceBefore = fromAccount.current_balance;
@@ -377,7 +377,7 @@ const transferBetweenAccounts = async (data, userId) => {
     payment_method: 'internal',
     description: description || `Transfer to ${toAccount.name}`,
     recorded_by: userId,
-    transaction_date: today,
+    transaction_date: txnDate,
   });
   await fromAccount.update({ current_balance: fromBalanceAfter });
 
@@ -394,7 +394,7 @@ const transferBetweenAccounts = async (data, userId) => {
     payment_method: 'internal',
     description: description || `Transfer from ${fromAccount.name}`,
     recorded_by: userId,
-    transaction_date: today,
+    transaction_date: txnDate,
   });
   await toAccount.update({ current_balance: toBalanceAfter });
 

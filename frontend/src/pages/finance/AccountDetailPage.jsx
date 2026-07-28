@@ -73,7 +73,7 @@ export default function AccountDetailPage() {
       if (form.receipt?.originFileObj) fd.append('receipt', form.receipt.originFileObj);
       withdrawMutation.mutate(fd);
     } else if (modal === 'transfer') {
-      transferMutation.mutate({ to_account_id: form.to_account_id, amount: form.amount, description: form.description });
+      transferMutation.mutate({ to_account_id: form.to_account_id, amount: form.amount, description: form.description, transaction_date: form.transaction_date });
     } else if (modal === 'statement') {
       accountsAPI.statement(id, { date_from: form.date_from, date_to: form.date_to }).then(res => {
         const url = window.URL.createObjectURL(new Blob([res.data]));
@@ -316,6 +316,11 @@ export default function AccountDetailPage() {
         okText="Transfer" okButtonProps={{ className: '!bg-brand-dark rounded-lg' }}
         cancelButtonProps={{ className: 'rounded-lg' }} width={480} className="top-8" destroyOnClose>
         <div className="space-y-3 mt-4">
+          <div>
+            <span className="text-xs font-semibold text-slate-500 block mb-1">Date</span>
+            <DatePicker className="w-full rounded-lg" value={dayjs(form.transaction_date)}
+              onChange={(d) => setForm(f => ({ ...f, transaction_date: d ? d.format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD') }))} />
+          </div>
           <div>
             <span className="text-xs font-semibold text-slate-500 block mb-1">Destination Account</span>
             <Select placeholder="Select account" className="w-full" showSearch optionFilterProp="children"
