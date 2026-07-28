@@ -104,7 +104,7 @@ export default function ShopDetailPage() {
 
   const { data: collectionsData } = useQuery({
     queryKey: ['shop-novomatic-collections', id, selectedDay],
-    queryFn: () => collectionsAPI.list({ shop_id: id, manufacturer: 'Novomatic', date: selectedDay, limit: 100 }).then(r => r.data.data),
+    queryFn: () => collectionsAPI.list({ shop_id: id, manufacturer: 'Novomatic', date: selectedDay, status: 'approved', limit: 100 }).then(r => r.data.data),
     enabled: isSlot,
   });
   const collectionRows = (collectionsData?.rows || []).map(c => ({

@@ -130,6 +130,7 @@ module.exports = async () => {
       for (const act of ['read', 'create']) {
         await Permission.findOrCreate({ where: { role_id: role.id, module: 'tickets', action: act } });
       }
+      await Permission.findOrCreate({ where: { role_id: role.id, module: 'accounts', action: 'read' } });
     }
 
     // Supervisor: approve novomatic collections + read machines
@@ -143,6 +144,7 @@ module.exports = async () => {
       await Permission.findOrCreate({ where: { role_id: role.id, module: 'finance', action: 'read' } });
       await Permission.findOrCreate({ where: { role_id: role.id, module: 'finance', action: 'create' } });
       await Permission.findOrCreate({ where: { role_id: role.id, module: 'finance', action: 'update' } });
+      await Permission.findOrCreate({ where: { role_id: role.id, module: 'accounts', action: 'read' } });
     }
 
     // HR: staff full CRUD + finance (submit expenses + payroll) + reports read + tickets submit+view
@@ -157,6 +159,7 @@ module.exports = async () => {
       for (const act of ['read', 'create']) {
         await Permission.findOrCreate({ where: { role_id: role.id, module: 'tickets', action: act } });
       }
+      await Permission.findOrCreate({ where: { role_id: role.id, module: 'accounts', action: 'read' } });
     }
   }
   console.log('[SEED] Permissions ensured');
