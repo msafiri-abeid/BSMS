@@ -16,6 +16,7 @@ const MFG_COLORS = { Meteora: 'blue', Novomatic: 'purple' };
 const fmt = (n) => `TZS ${(n || 0).toLocaleString()}`;
 
 const PRESETS = [
+  { label: 'Yesterday', value: 'yesterday' },
   { label: 'This Week', value: 'this_week' },
   { label: 'This Month', value: 'this_month' },
   { label: 'Last Month', value: 'last_month' },
@@ -29,7 +30,10 @@ const PRESETS = [
 
 const getDateRange = (preset) => {
   const today = dayjs().endOf('day');
+  const yesterday = dayjs().subtract(1, 'day');
   switch (preset) {
+    case 'yesterday':
+      return { date_from: yesterday.format('YYYY-MM-DD'), date_to: yesterday.format('YYYY-MM-DD') };
     case 'this_week':
       return { date_from: dayjs().startOf('week').add(1, 'day').format('YYYY-MM-DD'), date_to: today.format('YYYY-MM-DD') };
     case 'this_month':
@@ -58,7 +62,7 @@ export default function ShopDetailPage() {
   const location = useLocation();
   const { message } = App.useApp();
   const qc = useQueryClient();
-  const [preset, setPreset] = useState('last_30');
+  const [preset, setPreset] = useState('yesterday');
   const [customRange, setCustomRange] = useState(null);
   const [viewDetail, setViewDetail] = useState(null);
   const [depositOpen, setDepositOpen] = useState(false);
