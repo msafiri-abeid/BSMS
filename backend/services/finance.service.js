@@ -81,7 +81,7 @@ const approveExpense = async (expenseId, action, reason, userId) => {
           payment_method: paymentSource === 'selcom' ? 'mobile_money' : 'cash',
           description: `Expense (${bizType}): ${expense.category?.name || 'General'} - ${expense.description?.substring(0, 100)}`,
           recorded_by: userId,
-          transaction_date: new Date().toISOString().split('T')[0],
+          transaction_date: expense.expense_date || new Date().toISOString().split('T')[0],
         });
         await account.update({ current_balance: balance_after });
       }

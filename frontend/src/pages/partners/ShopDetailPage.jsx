@@ -117,6 +117,13 @@ export default function ShopDetailPage() {
   });
   const floatMinimum = floatAccount?.float_minimum || 400000;
 
+  const { data: floatTxns } = useQuery({
+    queryKey: ['shop-float-txns', floatAccount?.id, selectedDay],
+    queryFn: () => accountsAPI.transactions(floatAccount.id, { limit: 1, date_to: selectedDay }).then(r => r.data.data),
+    enabled: isSlot && !!floatAccount?.id,
+  });
+  const floatBalanceAtDate = floatTxns?.rows?.length ? floatTxns.rows[0].balance_after : 0;
+
   const { data: bankAccounts } = useQuery({
     queryKey: ['shop-bank-accounts', id],
     queryFn: () => accountsAPI.list({ account_type: 'bank', is_active: 'true', business_type: 'bentabet', limit: 100 }).then(r => {
@@ -149,6 +156,7 @@ export default function ShopDetailPage() {
       message.success('Deposit recorded');
       qc.invalidateQueries({ queryKey: ['shop-transactions', id] });
       qc.invalidateQueries({ queryKey: ['shop-float-account', id] });
+      qc.invalidateQueries({ queryKey: ['shop-float-txns', floatAccount?.id] });
       qc.invalidateQueries({ queryKey: ['shop-bank-accounts', id] });
       setDepositOpen(false);
       setDepositForm({ account_id: null, amount: 0, charges: 0, receipt: null, notes: '', deposit_date: selectedDay });
@@ -242,9 +250,9 @@ export default function ShopDetailPage() {
           <KpiCard title="Office Share" value={perfSummary?.office || 0} formatter={fmt} icon={PiggyBank} bgColor="bg-amber-50" iconColor="text-amber-600" />
         )}
         {isSlot && floatAccount && (
-          <KpiCard title="Float Available" value={floatAccount.current_balance} formatter={fmt} icon={Wallet}
-            bgColor={floatAccount.current_balance >= floatMinimum ? 'bg-emerald-50' : 'bg-rose-50'}
-            iconColor={floatAccount.current_balance >= floatMinimum ? 'text-emerald-600' : 'text-rose-600'} />
+          <KpiCard title="Float Available" value={floatBalanceAtDate} formatter={fmt} icon={Wallet}
+            bgColor={floatBalanceAtDate >= floatMinimum ? 'bg-emerald-50' : 'bg-rose-50'}
+            iconColor={floatBalanceAtDate >= floatMinimum ? 'text-emerald-600' : 'text-rose-600'} />
         )}
       </div>
 
