@@ -165,20 +165,19 @@ export default function ShopDetailPage() {
   }, [floatAccount, bankAccounts]);
 
   const { data: shopTxns } = useQuery({
-    queryKey: ['shop-transactions', id, date_to],
-    queryFn: () => accountsAPI.shopTransactions({ shop_id: id, limit: 100, date_to }).then(r => r.data.data),
+    queryKey: ['shop-transactions', id, date_from, date_to],
+    queryFn: () => accountsAPI.shopTransactions({ shop_id: id, limit: 200, date_from, date_to }).then(r => r.data.data),
     enabled: isSlot,
   });
   const txnRows = shopTxns?.rows || [];
-  const txnTableRows = txnRows;
 
   const depositMutation = useMutation({
     mutationFn: (data) => accountsAPI.deposit(depositForm.account_id, data),
     onSuccess: () => {
       message.success('Deposit recorded');
       qc.invalidateQueries({ queryKey: ['shop-transactions', id] });
-      qc.invalidateQueries({ queryKey: ['shop-float-account', id] });
       qc.invalidateQueries({ queryKey: ['shop-float-txns', floatAccount?.id] });
+      qc.invalidateQueries({ queryKey: ['shop-float-account', id] });
       qc.invalidateQueries({ queryKey: ['shop-bank-accounts', id] });
       setDepositOpen(false);
       setDepositForm({ account_id: null, amount: 0, charges: 0, receipt: null, notes: '', deposit_date: dayjs().format('YYYY-MM-DD') });
@@ -336,7 +335,7 @@ export default function ShopDetailPage() {
               <BarChart3 size={12} className="text-brand-dark" /> Transaction History — All Accounts
             </h6>
             {txnRows.length > 0 ? (
-              <Table dataSource={txnTableRows} rowKey="id" size="small" pagination={{ pageSize: 8, showSizeChanger: false, size: 'small' }}
+              <Table dataSource={txnRows} rowKey="id" size="small" pagination={{ pageSize: 8, showSizeChanger: false, size: 'small' }}
                 columns={[
                   { title: 'Date', dataIndex: 'transaction_date', render: (v) => dayjs(v).format('DD MMM'), width: 80 },
                   { title: 'Type', dataIndex: 'type', render: (v) => (
