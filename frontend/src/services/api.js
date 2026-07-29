@@ -105,6 +105,7 @@ export const partnersAPI = {
 export const shopsAPI = {
   list: (p) => api.get('/shops', { params: p }),
   get: (id) => api.get(`/shops/${id}`),
+  stats: (id, p) => api.get(`/shops/${id}/stats`, { params: p }),
   create: (d) => api.post('/shops', d),
   update: (id, d) => api.put(`/shops/${id}`, d),
   delete: (id) => api.delete(`/shops/${id}`),

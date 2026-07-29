@@ -49,6 +49,7 @@ router.post('/shops', authenticate, checkPermission('shops', 'create'), uploadDo
 router.put('/shops/:id', authenticate, checkPermission('shops', 'update'), uploadDocuments, partnerC.updateShop);
 router.delete('/shops/:id', authenticate, checkPermission('shops', 'delete'), partnerC.deleteShop);
 router.get('/shops/:id', authenticate, checkPermission('shops', 'read'), partnerC.getShop);
+router.get('/shops/:id/stats', authenticate, checkPermission('shops', 'read'), partnerC.getShopStats);
 router.get('/regions', authenticate, partnerC.listRegions);
 router.get('/districts', authenticate, partnerC.listDistricts);
 router.get('/wards', authenticate, partnerC.listWards);

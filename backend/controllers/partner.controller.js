@@ -110,3 +110,11 @@ exports.listStreets = async (req, res, next) => {
     res.json({ success: true, data: streets });
   } catch (err) { next(err); }
 };
+
+exports.getShopStats = async (req, res, next) => {
+  try {
+    const stats = await partnerService.getShopStats(req.params.id, req.query);
+    if (!stats) return res.status(404).json({ success: false, message: 'Shop not found' });
+    res.json({ success: true, data: stats });
+  } catch (err) { next(err); }
+};

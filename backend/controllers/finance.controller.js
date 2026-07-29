@@ -1,5 +1,6 @@
 // controllers/finance.controller.js
 const financeService = require('../services/finance.service');
+const { Op } = require('sequelize');
 const { Expense, Invoice, Payroll, CreditNote, Payment, ExpenseCategory, Collection, Machine, User } = require('../models');
 
 const submitExpense = async (req, res, next) => {
@@ -57,7 +58,7 @@ const listCategories = async (req, res, next) => {
 
 const listExpenses = async (req, res, next) => {
   try {
-    const { status, category_id, shop_id, machine_id, business_type, date, limit = 50, offset = 0 } = req.query;
+    const { status, category_id, shop_id, machine_id, business_type, date, date_from, date_to, limit = 50, offset = 0 } = req.query;
     const where = {};
     if (status) where.status = status;
     if (category_id) where.category_id = category_id;
@@ -65,6 +66,11 @@ const listExpenses = async (req, res, next) => {
     if (machine_id) where.machine_id = machine_id;
     if (business_type) where.business_type = business_type;
     if (date) where.expense_date = date;
+    if (date_from || date_to) {
+      where.expense_date = {};
+      if (date_from) where.expense_date[Op.gte] = date_from;
+      if (date_to) where.expense_date[Op.lte] = date_to;
+    }
     const data = await Expense.findAndCountAll({
       where, limit: +limit, offset: +offset,
       include: [

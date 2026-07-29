@@ -1,18 +1,55 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Table, Tag, Button, Spin, Space, DatePicker, InputNumber, Input, Modal, App, Image, Radio, Upload, Select } from 'antd';
-import { ArrowLeft, Store, Cpu, TrendingUp, DollarSign, PiggyBank, MapPin, FileText, BarChart3, History, ExternalLink, Receipt, Wallet, Landmark, Plus, Eye, Camera, Upload as UploadIcon, Download, Building2, CalendarDays } from 'lucide-react';
+import { ArrowLeft, Store, Cpu, TrendingUp, DollarSign, PiggyBank, MapPin, FileText, BarChart3, History, ExternalLink, Receipt, Wallet, Landmark, Plus, Eye, Camera, Upload as UploadIcon, Download, Building2, CalendarDays, FilterX } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import { shopsAPI, financeAPI, collectionsAPI, accountsAPI } from '../../services/api';
 import KpiCard from '../../components/KpiCard';
 import { useAuthStore } from '../../store/authStore';
 import dayjs from 'dayjs';
 
+const { RangePicker } = DatePicker;
 const { Option } = Select;
 const STATUS_COLORS = { active: 'green', inactive: 'red', suspended: 'orange' };
 const MFG_COLORS = { Meteora: 'blue', Novomatic: 'purple' };
 const fmt = (n) => `TZS ${(n || 0).toLocaleString()}`;
+
+const PRESETS = [
+  { label: 'This Week', value: 'this_week' },
+  { label: 'This Month', value: 'this_month' },
+  { label: 'Last Month', value: 'last_month' },
+  { label: 'Last 7 Days', value: 'last_7' },
+  { label: 'Last 30 Days', value: 'last_30' },
+  { label: 'Last 60 Days', value: 'last_60' },
+  { label: 'Last 90 Days', value: 'last_90' },
+  { label: 'Last Year', value: 'last_year' },
+  { label: 'Custom Range', value: 'custom' },
+];
+
+const getDateRange = (preset) => {
+  const today = dayjs().endOf('day');
+  switch (preset) {
+    case 'this_week':
+      return { date_from: dayjs().startOf('week').add(1, 'day').format('YYYY-MM-DD'), date_to: today.format('YYYY-MM-DD') };
+    case 'this_month':
+      return { date_from: dayjs().startOf('month').format('YYYY-MM-DD'), date_to: today.format('YYYY-MM-DD') };
+    case 'last_month':
+      return { date_from: dayjs().subtract(1, 'month').startOf('month').format('YYYY-MM-DD'), date_to: dayjs().subtract(1, 'month').endOf('month').format('YYYY-MM-DD') };
+    case 'last_7':
+      return { date_from: dayjs().subtract(7, 'day').format('YYYY-MM-DD'), date_to: today.format('YYYY-MM-DD') };
+    case 'last_30':
+      return { date_from: dayjs().subtract(30, 'day').format('YYYY-MM-DD'), date_to: today.format('YYYY-MM-DD') };
+    case 'last_60':
+      return { date_from: dayjs().subtract(60, 'day').format('YYYY-MM-DD'), date_to: today.format('YYYY-MM-DD') };
+    case 'last_90':
+      return { date_from: dayjs().subtract(90, 'day').format('YYYY-MM-DD'), date_to: today.format('YYYY-MM-DD') };
+    case 'last_year':
+      return { date_from: dayjs().subtract(1, 'year').format('YYYY-MM-DD'), date_to: today.format('YYYY-MM-DD') };
+    default:
+      return { date_from: dayjs().subtract(30, 'day').format('YYYY-MM-DD'), date_to: today.format('YYYY-MM-DD') };
+  }
+};
 
 
 export default function ShopDetailPage() {
@@ -21,20 +58,33 @@ export default function ShopDetailPage() {
   const location = useLocation();
   const { message } = App.useApp();
   const qc = useQueryClient();
-  const [selectedDay, setSelectedDay] = useState(dayjs().subtract(1, 'day').format('YYYY-MM-DD'));
+  const [preset, setPreset] = useState('last_30');
+  const [customRange, setCustomRange] = useState(null);
   const [viewDetail, setViewDetail] = useState(null);
   const [depositOpen, setDepositOpen] = useState(false);
   const [depositForm, setDepositForm] = useState({
-    account_id: null, amount: 0, charges: 0, receipt: null, notes: '', deposit_date: dayjs().subtract(1, 'day').format('YYYY-MM-DD'),
+    account_id: null, amount: 0, charges: 0, receipt: null, notes: '', deposit_date: dayjs().format('YYYY-MM-DD'),
   });
 
   const roleName = useAuthStore((s) => s.user?.role?.name);
-  const user = useAuthStore((s) => s.user);
   const canManageCash = ['Admin', 'General Manager', 'Operations Manager', 'Supervisor'].includes(roleName) || roleName === 'Cashier';
+
+  const { date_from, date_to } = useMemo(() => {
+    if (preset === 'custom' && customRange) {
+      return { date_from: customRange[0].format('YYYY-MM-DD'), date_to: customRange[1].format('YYYY-MM-DD') };
+    }
+    return getDateRange(preset);
+  }, [preset, customRange]);
 
   const { data: shop, isLoading } = useQuery({
     queryKey: ['shop', id],
     queryFn: () => shopsAPI.get(id).then((r) => r.data.data),
+  });
+
+  const { data: statsData, isLoading: statsLoading } = useQuery({
+    queryKey: ['shop-stats', id, date_from, date_to],
+    queryFn: () => shopsAPI.stats(id, { date_from, date_to }).then((r) => r.data.data),
+    enabled: !!shop,
   });
 
   const shopType = shop?.business_type;
@@ -45,54 +95,23 @@ export default function ShopDetailPage() {
   const meteoraMachines = machines.filter(m => m.manufacturer === 'Meteora');
   const displayMachines = isSlot ? novomaticMachines : meteoraMachines;
 
-  const perfSummary = useMemo(() => {
-    if (machines.length === 0) return null;
-    return machines.reduce((acc, m) => {
-      (m.performance || []).forEach((r) => {
-        if (!r.collected_at) return;
-        const dayKey = dayjs(r.collected_at).format('YYYY-MM-DD');
-        if (dayKey !== selectedDay) return;
-        acc.gross += r.gross_tzs || 0;
-        acc.net += r.net_tzs || 0;
-        acc.office += r.office_tzs || 0;
-        acc.owner += r.owner_tzs || 0;
-      });
-      return acc;
-    }, { gross: 0, net: 0, office: 0, owner: 0 });
-  }, [machines, selectedDay]);
-
-  const dailyMap = {};
-  machines.forEach(m => {
-    (m.performance || []).forEach(p => {
-      if (!p.collected_at) return;
-      const dayKey = dayjs(p.collected_at).format('YYYY-MM-DD');
-      if (!dailyMap[dayKey]) dailyMap[dayKey] = 0;
-      dailyMap[dayKey] += p.gross_tzs || 0;
-    });
-  });
-  const chartData = Object.entries(dailyMap)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .slice(-30)
-    .map(([day, gross]) => ({
-      day: dayjs(day).format('DD MMM'),
-      gross,
-      isSelected: day === selectedDay,
-    }));
+  const kpis = statsData?.kpis || {};
+  const chartData = statsData?.chartData || [];
 
   const latestPerf = (m) => (m.performance && m.performance[0]) || null;
   const backPath = location.pathname.startsWith('/shops/slot/') ? '/shops/slot' : '/shops/meteora';
 
-  const { data: expenses } = useQuery({
-    queryKey: ['shop-expenses', id, selectedDay],
-    queryFn: () => financeAPI.listExpenses({ shop_id: id, limit: 50, date: selectedDay, status: 'approved' }).then(r => r.data.data),
+  const { data: expensesData } = useQuery({
+    queryKey: ['shop-expenses', id, date_from, date_to],
+    queryFn: () => financeAPI.listExpenses({ shop_id: id, limit: 50, date_from, date_to, status: 'approved' }).then(r => r.data.data),
     enabled: isSlot,
   });
-  const expensesList = expenses?.rows || [];
+  const expensesList = expensesData?.rows || [];
   const totalExpenses = isSlot && expensesList.length > 0 ? expensesList.reduce((s, e) => s + (e.amount || 0), 0) : 0;
 
   const { data: collectionsData } = useQuery({
-    queryKey: ['shop-novomatic-collections', id, selectedDay],
-    queryFn: () => collectionsAPI.list({ shop_id: id, manufacturer: 'Novomatic', date: selectedDay, status: 'approved', limit: 100 }).then(r => r.data.data),
+    queryKey: ['shop-novomatic-collections', id, date_from, date_to],
+    queryFn: () => collectionsAPI.list({ shop_id: id, manufacturer: 'Novomatic', date_from, date_to, status: 'approved', limit: 100 }).then(r => r.data.data),
     enabled: isSlot,
   });
   const collectionRows = (collectionsData?.rows || []).map(c => ({
@@ -118,8 +137,8 @@ export default function ShopDetailPage() {
   const floatMinimum = floatAccount?.float_minimum || 400000;
 
   const { data: floatTxns } = useQuery({
-    queryKey: ['shop-float-txns', floatAccount?.id, selectedDay],
-    queryFn: () => accountsAPI.transactions(floatAccount.id, { limit: 1, date_to: selectedDay }).then(r => r.data.data),
+    queryKey: ['shop-float-txns', floatAccount?.id, date_to],
+    queryFn: () => accountsAPI.transactions(floatAccount.id, { limit: 1, date_to }).then(r => r.data.data),
     enabled: isSlot && !!floatAccount?.id,
   });
   const floatBalanceAtDate = floatTxns?.rows?.length ? floatTxns.rows[0].balance_after : 0;
@@ -143,12 +162,12 @@ export default function ShopDetailPage() {
   }, [floatAccount, bankAccounts]);
 
   const { data: shopTxns } = useQuery({
-    queryKey: ['shop-transactions', id, selectedDay],
-    queryFn: () => accountsAPI.shopTransactions({ shop_id: id, limit: 100, date_to: selectedDay }).then(r => r.data.data),
+    queryKey: ['shop-transactions', id, date_to],
+    queryFn: () => accountsAPI.shopTransactions({ shop_id: id, limit: 100, date_to }).then(r => r.data.data),
     enabled: isSlot,
   });
   const txnRows = shopTxns?.rows || [];
-  const txnTableRows = txnRows.filter(r => r.transaction_date === selectedDay);
+  const txnTableRows = txnRows;
 
   const depositMutation = useMutation({
     mutationFn: (data) => accountsAPI.deposit(depositForm.account_id, data),
@@ -159,7 +178,7 @@ export default function ShopDetailPage() {
       qc.invalidateQueries({ queryKey: ['shop-float-txns', floatAccount?.id] });
       qc.invalidateQueries({ queryKey: ['shop-bank-accounts', id] });
       setDepositOpen(false);
-      setDepositForm({ account_id: null, amount: 0, charges: 0, receipt: null, notes: '', deposit_date: selectedDay });
+      setDepositForm({ account_id: null, amount: 0, charges: 0, receipt: null, notes: '', deposit_date: dayjs().format('YYYY-MM-DD') });
     },
     onError: (e) => message.error(e.response?.data?.message || 'Failed to record deposit'),
   });
@@ -211,6 +230,14 @@ export default function ShopDetailPage() {
     )},
   ];
 
+  const periodLabel = useMemo(() => {
+    const presetLabel = PRESETS.find(p => p.value === preset)?.label;
+    if (presetLabel === 'Custom Range' && customRange) {
+      return `${customRange[0].format('DD MMM')} - ${customRange[1].format('DD MMM YYYY')}`;
+    }
+    return presetLabel || `${date_from} to ${date_to}`;
+  }, [preset, customRange, date_from, date_to]);
+
   if (isLoading) return <Spin size="large" className="block mx-auto mt-20" />;
   if (!shop) {
     return (
@@ -226,7 +253,7 @@ export default function ShopDetailPage() {
   return (
     <div>
       {/* Top Bar */}
-      <div className="flex items-center justify-between mb-4 pb-4 border-b border-slate-200/60">
+      <div className="flex items-center justify-between mb-4 pb-4 border-b border-slate-200/60 flex-wrap gap-2">
         <div className="flex items-center gap-3">
           <Button type="text" icon={<ArrowLeft size={18} />} onClick={() => navigate(backPath)}
             className="!text-slate-500 hover:!text-brand-dark flex items-center justify-center" />
@@ -234,27 +261,52 @@ export default function ShopDetailPage() {
           <Tag color={STATUS_COLORS[shop.status]} className="!text-[10px] uppercase !m-0">{shop.status}</Tag>
           <Tag color={isSlot ? 'purple' : 'blue'} className="!text-[10px] !m-0">{isSlot ? 'Slot Shop' : 'Meteora Shop'}</Tag>
         </div>
-        <DatePicker size="small" className="w-full sm:w-36" value={dayjs(selectedDay)}
-          onChange={(d) => setSelectedDay(d ? d.format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD'))}
-          disabledDate={(d) => d.isAfter(dayjs())} />
+        <div className="flex items-center gap-2">
+          <Select size="small" className="w-36" value={preset} onChange={(v) => { setPreset(v); if (v !== 'custom') setCustomRange(null); }}
+            options={PRESETS.map(p => ({ label: p.label, value: p.value }))} />
+          {preset === 'custom' && (
+            <RangePicker size="small" className="w-52" value={customRange}
+              onChange={(dates) => setCustomRange(dates)}
+              disabledDate={(d) => d.isAfter(dayjs())} />
+          )}
+        </div>
       </div>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 mb-6">
         <KpiCard title="Total Machines" value={displayMachines.length} icon={Cpu} bgColor="bg-indigo-50" iconColor="text-indigo-600" />
-        <KpiCard title="Gross Revenue" value={isSlot ? grossFromCollections : (perfSummary?.gross || 0)} formatter={fmt} icon={TrendingUp} bgColor="bg-emerald-50" iconColor="text-emerald-600" />
-        <KpiCard title="Net Revenue" value={isSlot ? grossFromCollections - totalExpenses : (perfSummary?.net || 0)} formatter={fmt} icon={DollarSign} bgColor="bg-blue-50" iconColor="text-blue-600" />
+        <KpiCard title="Gross Revenue" value={kpis.totalGross || 0} formatter={fmt} icon={TrendingUp}
+          bgColor="bg-emerald-50" iconColor="text-emerald-600" subtitle={periodLabel} />
+        <KpiCard title="Net Revenue" value={isSlot ? (kpis.totalGross || 0) - totalExpenses : (kpis.totalNet || 0)} formatter={fmt} icon={DollarSign}
+          bgColor="bg-blue-50" iconColor="text-blue-600" subtitle={periodLabel} />
         {isSlot ? (
-          <KpiCard title="Total Expenses" value={totalExpenses} formatter={fmt} icon={Receipt} bgColor="bg-rose-50" iconColor="text-rose-600" />
+          <KpiCard title="Total Expenses" value={totalExpenses} formatter={fmt} icon={Receipt}
+            bgColor="bg-rose-50" iconColor="text-rose-600" subtitle={periodLabel} />
         ) : (
-          <KpiCard title="Office Share" value={perfSummary?.office || 0} formatter={fmt} icon={PiggyBank} bgColor="bg-amber-50" iconColor="text-amber-600" />
+          <KpiCard title="Office Share" value={kpis.totalOffice || 0} formatter={fmt} icon={PiggyBank}
+            bgColor="bg-amber-50" iconColor="text-amber-600" subtitle={periodLabel} />
         )}
         {isSlot && floatAccount && (
           <KpiCard title="Float Available" value={floatBalanceAtDate} formatter={fmt} icon={Wallet}
             bgColor={floatBalanceAtDate >= floatMinimum ? 'bg-emerald-50' : 'bg-rose-50'}
             iconColor={floatBalanceAtDate >= floatMinimum ? 'text-emerald-600' : 'text-rose-600'} />
         )}
+        {!isSlot && (
+          <KpiCard title="Owner Share" value={kpis.totalOwner || 0} formatter={fmt} icon={PiggyBank}
+            bgColor="bg-amber-50" iconColor="text-amber-600" subtitle={periodLabel} />
+        )}
       </div>
+
+      {/* KPI subtitles row — only visible when KPIs exist */}
+      {kpis.collectionCount > 0 && (
+        <div className="text-[10px] text-slate-400 mb-4 -mt-3 flex items-center gap-4">
+          <span>{kpis.collectionCount} collection{kpis.collectionCount !== 1 ? 's' : ''}</span>
+          {kpis.expenseCount > 0 && <span>{kpis.expenseCount} expense{kpis.expenseCount !== 1 ? 's' : ''}</span>}
+          {kpis.netRevenue !== undefined && kpis.totalExpenses > 0 && (
+            <span>Expenses: {fmt(kpis.totalExpenses)}</span>
+          )}
+        </div>
+      )}
 
       {/* Shop Transactions — unified (Deposit + Account Ledger) */}
       {isSlot && (
@@ -263,10 +315,10 @@ export default function ShopDetailPage() {
             <h5 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2 m-0">
               <Wallet size={14} className="text-brand-dark" /> Shop Transactions
             </h5>
-              {canManageCash && (
+            {canManageCash && (
               <Button size="small" icon={<Plus className="w-3.5 h-3.5" />}
                 onClick={() => {
-                  setDepositForm({ account_id: floatAccount?.id || null, amount: 0, charges: 0, receipt: null, notes: '', deposit_date: selectedDay });
+                  setDepositForm({ account_id: floatAccount?.id || null, amount: 0, charges: 0, receipt: null, notes: '', deposit_date: dayjs().format('YYYY-MM-DD') });
                   setDepositOpen(true);
                 }}
                 className="!bg-brand-dark hover:!bg-brand-light hover:!text-white text-white border-none flex items-center gap-1">
@@ -407,25 +459,26 @@ export default function ShopDetailPage() {
         </div>
       </div>
 
-      {/* Daily Revenue Trend */}
+      {/* Revenue Trend Chart */}
       {chartData.length > 0 && (
         <div className="rounded-lg border border-slate-100 p-4 bg-white mb-6">
           <h5 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-4 flex items-center gap-2">
-            <BarChart3 size={14} className="text-brand-dark" /> Daily Revenue Trend — {dayjs(selectedDay).format('DD MMM YYYY')}
+            <BarChart3 size={14} className="text-brand-dark" /> Revenue Trend — {periodLabel}
           </h5>
           <div className="h-56">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData} margin={{ top: 4, right: 8, bottom: 0, left: -16 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="day" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} interval={Math.ceil(chartData.length / 15)} />
-                <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={(v) => v >= 1000000 ? `${(v/1000000).toFixed(1)}M` : v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} />
-                <RechartsTooltip formatter={(v) => [`${(v || 0).toLocaleString()} TZS`, 'Gross']} contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e2e8f0' }} />
-                <Bar dataKey="gross" fill="#021559" radius={[2, 2, 0, 0]} maxBarSize={24}
-                  shape={(props) => {
-                    const { fill, x, y, width, height } = props;
-                    const isSelected = chartData[props.index]?.isSelected;
-                    return <rect x={x} y={y} width={width} height={height} fill={isSelected ? '#e11d48' : fill} rx={2} />;
-                  }} />
+                <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false}
+                  tickFormatter={(v) => dayjs(v).format('DD MMM')}
+                  interval={Math.ceil(chartData.length / 15)} />
+                <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false}
+                  tickFormatter={(v) => v >= 1000000 ? `${(v/1000000).toFixed(1)}M` : v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} />
+                <RechartsTooltip
+                  labelFormatter={(v) => dayjs(v).format('DD MMM YYYY')}
+                  formatter={(v, name) => [`${(v || 0).toLocaleString()} TZS`, name === 'gross' ? 'Gross' : name === 'net' ? 'Net' : name === 'office' ? 'Office' : 'Owner']}
+                  contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e2e8f0' }} />
+                <Bar dataKey="gross" fill="#021559" radius={[2, 2, 0, 0]} maxBarSize={24} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -435,7 +488,7 @@ export default function ShopDetailPage() {
       {chartData.length === 0 && (
         <div className="rounded-lg border border-slate-100 p-6 bg-white mb-6 text-center">
           <BarChart3 className="w-10 h-10 mx-auto mb-2 text-slate-300" />
-          <p className="text-sm text-slate-400">No collection data yet for revenue trend</p>
+          <p className="text-sm text-slate-400">No collection data for {periodLabel}</p>
         </div>
       )}
 
@@ -446,7 +499,7 @@ export default function ShopDetailPage() {
           <div className="rounded-lg border border-slate-100 p-4 bg-white mb-6">
             <div className="flex items-center justify-between mb-3">
               <h5 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2 m-0">
-                <History size={14} className="text-brand-dark" /> Collection History — {dayjs(selectedDay).format('DD MMM YYYY')}
+                <History size={14} className="text-brand-dark" /> Collection History — {periodLabel}
               </h5>
             </div>
             <Table dataSource={collectionRows} columns={novomaticCols} rowKey="id" size="middle" pagination={{ pageSize: 10, showSizeChanger: false }}
@@ -472,7 +525,7 @@ export default function ShopDetailPage() {
           {collectionRows.length > 0 && (
             <div className="rounded-lg border border-slate-100 p-4 bg-white mb-6">
               <h5 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-4 flex items-center gap-2">
-                <Cpu size={14} className="text-brand-dark" /> Machine Leaderboard — {dayjs(selectedDay).format('DD MMM YYYY')}
+                <Cpu size={14} className="text-brand-dark" /> Machine Leaderboard — {periodLabel}
               </h5>
               <Table dataSource={(() => {
                 const map = {};
@@ -505,11 +558,12 @@ export default function ShopDetailPage() {
               <h5 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2 m-0">
                 <Receipt size={14} className="text-brand-dark" /> Expenses ({expensesList.length})
                 <span className="font-normal normal-case text-slate-400">| Total {fmt(totalExpenses)}</span>
+                <span className="font-normal normal-case text-slate-400 text-[10px]">— {periodLabel}</span>
               </h5>
             </div>
             {expensesList.length > 0 ? (
               <Table dataSource={expensesList} columns={[
-                { title: 'Date', dataIndex: 'created_at', render: (v) => dayjs(v).format('DD MMM YYYY'), width: 120 },
+                { title: 'Date', dataIndex: 'expense_date', render: (v) => dayjs(v).format('DD MMM YYYY'), width: 120 },
                 { title: 'Category', key: 'category', render: (_, r) => r.category?.name || '—', width: 120 },
                 { title: 'Amount', dataIndex: 'amount', render: (v) => <span className="font-semibold">{fmt(v)}</span>, width: 130 },
                 { title: 'Status', dataIndex: 'status', render: (v) => <Tag color={v === 'approved' ? 'green' : v === 'rejected' ? 'red' : 'orange'} className="!text-[10px] uppercase">{v}</Tag>, width: 90 },
@@ -519,7 +573,7 @@ export default function ShopDetailPage() {
             ) : (
               <div className="p-8 text-center bg-white">
                 <Receipt className="w-8 h-8 mx-auto mb-2 text-slate-300" />
-                <p className="text-sm text-slate-400">No expenses recorded for {dayjs(selectedDay).format('DD MMM YYYY')}</p>
+                <p className="text-sm text-slate-400">No expenses recorded for {periodLabel}</p>
               </div>
             )}
           </div>
@@ -566,11 +620,12 @@ export default function ShopDetailPage() {
           )}
         </div>
       )}
+
       {/* Record Deposit Modal */}
       <Modal
         title={<span className="text-sm font-bold text-slate-700">Record Deposit — {dayjs(depositForm.deposit_date).format('DD MMM YYYY')}</span>}
         open={depositOpen}
-        onCancel={() => { setDepositOpen(false); setDepositForm({ account_id: null, amount: 0, charges: 0, receipt: null, notes: '', deposit_date: selectedDay }); }}
+        onCancel={() => { setDepositOpen(false); setDepositForm({ account_id: null, amount: 0, charges: 0, receipt: null, notes: '', deposit_date: dayjs().format('YYYY-MM-DD') }); }}
         onOk={handleSubmitDeposit}
         confirmLoading={depositMutation.isPending}
         okText="Record Deposit"
