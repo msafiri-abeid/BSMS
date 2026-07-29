@@ -210,6 +210,15 @@ const listTransactions = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+const listShopTransactions = async (req, res, next) => {
+  try {
+    const { shop_id } = req.query;
+    if (!shop_id) return res.status(400).json({ success: false, message: 'shop_id is required' });
+    const data = await financeService.listShopTransactions(shop_id, req.query);
+    res.json({ success: true, data });
+  } catch (err) { next(err); }
+};
+
 const transferAccounts = async (req, res, next) => {
   try {
     const result = await financeService.transferBetweenAccounts(req.body, req.user.id);
@@ -249,7 +258,7 @@ module.exports = {
   submitExpense, updateExpense, removeExpense, getPendingExpenses, approveExpense, listExpenses, listCategories,
   createInvoice, listInvoices, downloadInvoicePDF, recordPayment, listPayroll, createPayroll, exportCollections,
   listAccounts, createAccount, getAccount, updateAccount, deleteAccount,
-  listTransactions, transferAccounts,
+  listTransactions, listShopTransactions, transferAccounts,
   balanceSheet, trialBalance, cashFlow, accountReport,
   recordDeposit, recordWithdraw, downloadAccountStatement,
 };

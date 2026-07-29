@@ -220,6 +220,7 @@ export const accountsAPI = {
   withdraw: (id, formData) => api.post(`/finance/accounts/${id}/withdraw`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
   statement: (id, p) => api.get(`/finance/accounts/${id}/statement`, { params: p, responseType: 'blob' }),
   transfer: (d) => api.post('/finance/accounts/transfer', d),
+  shopTransactions: (p) => api.get('/finance/transactions', { params: p }),
 };
 
 export const reportsAPI = {

@@ -135,19 +135,20 @@ export default function ShopDetailPage() {
     return opts;
   }, [floatAccount, bankAccounts]);
 
-  const { data: accountTxns } = useQuery({
-    queryKey: ['shop-account-txns', id, floatAccount?.id, selectedDay],
-    queryFn: () => accountsAPI.transactions(floatAccount.id, { limit: 50, date_to: selectedDay }).then(r => r.data.data),
-    enabled: isSlot && !!floatAccount?.id,
+  const { data: shopTxns } = useQuery({
+    queryKey: ['shop-transactions', id, selectedDay],
+    queryFn: () => accountsAPI.shopTransactions({ shop_id: id, limit: 100, date_to: selectedDay }).then(r => r.data.data),
+    enabled: isSlot,
   });
-  const txnRows = accountTxns?.rows || [];
+  const txnRows = shopTxns?.rows || [];
   const txnTableRows = txnRows.filter(r => r.transaction_date === selectedDay);
 
   const depositMutation = useMutation({
     mutationFn: (data) => accountsAPI.deposit(depositForm.account_id, data),
     onSuccess: () => {
       message.success('Deposit recorded');
-      qc.invalidateQueries({ queryKey: ['shop-account-txns', id] });
+      qc.invalidateQueries({ queryKey: ['shop-transactions', id] });
+      qc.invalidateQueries({ queryKey: ['shop-float-account', id] });
       qc.invalidateQueries({ queryKey: ['shop-bank-accounts', id] });
       setDepositOpen(false);
       setDepositForm({ account_id: null, amount: 0, charges: 0, receipt: null, notes: '', deposit_date: selectedDay });
@@ -269,8 +270,7 @@ export default function ShopDetailPage() {
           {/* Transaction History Ledger */}
           <div className="p-4 bg-white">
             <h6 className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-1.5 m-0">
-              <BarChart3 size={12} className="text-brand-dark" /> Transaction History
-              {floatAccount && <span className="font-normal normal-case text-slate-400">— {floatAccount.name}</span>}
+              <BarChart3 size={12} className="text-brand-dark" /> Transaction History — All Accounts
             </h6>
             {txnRows.length > 0 ? (
               <Table dataSource={txnTableRows} rowKey="id" size="small" pagination={{ pageSize: 8, showSizeChanger: false, size: 'small' }}
@@ -279,6 +279,9 @@ export default function ShopDetailPage() {
                   { title: 'Type', dataIndex: 'type', render: (v) => (
                     <Tag color={v === 'in' ? 'green' : 'red'} className="!text-[10px] uppercase">{v === 'in' ? 'IN' : 'OUT'}</Tag>
                   ), width: 60 },
+                  { title: 'Account', key: 'account', render: (_, r) => (
+                    <span className="text-[10px] text-slate-600">{r.account?.name || r.account?.account_type || '—'}</span>
+                  ), width: 120 },
                   { title: 'Reference', dataIndex: 'reference_type', render: (v) => (
                     <span className="text-[10px] text-slate-500 capitalize">{v?.replace(/_/g, ' ') || '—'}</span>
                   ), width: 110 },

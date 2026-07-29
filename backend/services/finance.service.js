@@ -347,6 +347,27 @@ const listAccountTransactions = async (accountId, query) => {
     offset: +offset,
     include: [
       { model: User, as: 'recorder', attributes: ['name'] },
+      { model: Account, as: 'account', attributes: ['id', 'name', 'account_type'] },
+    ],
+    order: [['transaction_date', 'DESC'], ['id', 'DESC']],
+  });
+};
+
+const listShopTransactions = async (shopId, query) => {
+  const { date_from, date_to, limit = 50, offset = 0 } = query;
+  const accounts = await Account.findAll({ where: { shop_id: shopId }, attributes: ['id'] });
+  const accountIds = accounts.map(a => a.id);
+  if (accountIds.length === 0) return { rows: [], count: 0 };
+  const where = { account_id: { [Op.in]: accountIds } };
+  if (date_from) where.transaction_date = { ...where.transaction_date, [Op.gte]: date_from };
+  if (date_to) where.transaction_date = { ...where.transaction_date, [Op.lte]: date_to };
+  return AccountTransaction.findAndCountAll({
+    where,
+    limit: +limit,
+    offset: +offset,
+    include: [
+      { model: User, as: 'recorder', attributes: ['name'] },
+      { model: Account, as: 'account', attributes: ['id', 'name', 'account_type', 'business_type'] },
     ],
     order: [['transaction_date', 'DESC'], ['id', 'DESC']],
   });
@@ -793,7 +814,7 @@ module.exports = {
   submitExpense, approveExpense, updateExpense, removeExpense,
   createInvoice, recordPayment, generateInvoicePDF, createPayrollRun, exportCollectionsExcel,
   listAccounts, createAccount, getAccount, updateAccount, deleteAccount,
-  listAccountTransactions, transferBetweenAccounts,
+  listAccountTransactions, listShopTransactions, transferBetweenAccounts,
   generateBalanceSheet, generateTrialBalance, generateCashFlow, generateAccountReport,
   recordDeposit, recordWithdraw, generateAccountStatement,
 };
