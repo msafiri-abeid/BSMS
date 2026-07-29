@@ -15,21 +15,11 @@ const STATUS_COLORS = { active: 'green', inactive: 'red', suspended: 'orange' };
 const MFG_COLORS = { Meteora: 'blue', Novomatic: 'purple' };
 const fmt = (n) => `TZS ${(n || 0).toLocaleString()}`;
 
-const PRESETS = [
-  { label: 'This Week', value: 'this_week' },
-  { label: 'This Month', value: 'this_month' },
-  { label: 'Last Month', value: 'last_month' },
-  { label: 'Last 7 Days', value: 'last_7' },
-  { label: 'Last 30 Days', value: 'last_30' },
-  { label: 'Last 60 Days', value: 'last_60' },
-  { label: 'Last 90 Days', value: 'last_90' },
-  { label: 'Last Year', value: 'last_year' },
-  { label: 'Custom Range', value: 'custom' },
-];
-
 const getDateRange = (preset) => {
   const today = dayjs().endOf('day');
   switch (preset) {
+    case 'yesterday':
+      return { date_from: dayjs().subtract(1, 'day').format('YYYY-MM-DD'), date_to: dayjs().subtract(1, 'day').format('YYYY-MM-DD') };
     case 'this_week':
       return { date_from: dayjs().startOf('week').add(1, 'day').format('YYYY-MM-DD'), date_to: today.format('YYYY-MM-DD') };
     case 'this_month':
@@ -58,8 +48,8 @@ export default function ShopDetailPage() {
   const location = useLocation();
   const { message } = App.useApp();
   const qc = useQueryClient();
-  const [preset, setPreset] = useState('custom');
-  const [customRange, setCustomRange] = useState([dayjs().subtract(1, 'day'), dayjs().subtract(1, 'day')]);
+  const [preset, setPreset] = useState('yesterday');
+  const [customRange, setCustomRange] = useState(null);
   const [viewDetail, setViewDetail] = useState(null);
   const [depositOpen, setDepositOpen] = useState(false);
   const [depositForm, setDepositForm] = useState({
@@ -68,6 +58,19 @@ export default function ShopDetailPage() {
 
   const roleName = useAuthStore((s) => s.user?.role?.name);
   const canManageCash = ['Admin', 'General Manager', 'Operations Manager', 'Supervisor'].includes(roleName) || roleName === 'Cashier';
+
+  const presetOptions = useMemo(() => [
+    { label: dayjs().subtract(1, 'day').format('DD MMM YYYY'), value: 'yesterday' },
+    { label: 'This Week', value: 'this_week' },
+    { label: 'This Month', value: 'this_month' },
+    { label: 'Last Month', value: 'last_month' },
+    { label: 'Last 7 Days', value: 'last_7' },
+    { label: 'Last 30 Days', value: 'last_30' },
+    { label: 'Last 60 Days', value: 'last_60' },
+    { label: 'Last 90 Days', value: 'last_90' },
+    { label: 'Last Year', value: 'last_year' },
+    { label: 'Custom Range', value: 'custom' },
+  ], []);
 
   const { date_from, date_to } = useMemo(() => {
     if (preset === 'custom' && customRange) {
@@ -231,7 +234,7 @@ export default function ShopDetailPage() {
   ];
 
   const periodLabel = useMemo(() => {
-    const presetLabel = PRESETS.find(p => p.value === preset)?.label;
+    const presetLabel = presetOptions.find(p => p.value === preset)?.label;
     if (presetLabel === 'Custom Range' && customRange) {
       return `${customRange[0].format('DD MMM')} - ${customRange[1].format('DD MMM YYYY')}`;
     }
@@ -263,7 +266,7 @@ export default function ShopDetailPage() {
         </div>
         <div className="flex items-center gap-2">
           <Select size="small" className="w-36" value={preset} onChange={(v) => { setPreset(v); if (v !== 'custom') setCustomRange(null); }}
-            options={PRESETS.map(p => ({ label: p.label, value: p.value }))} />
+            options={presetOptions} />
           {preset === 'custom' && (
             <RangePicker size="small" className="w-52" value={customRange}
               onChange={(dates) => setCustomRange(dates)}
