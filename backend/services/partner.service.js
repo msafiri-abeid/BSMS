@@ -184,12 +184,12 @@ exports.listStreets = async (ward_id) => {
 
 exports.getShopStats = async (id, { date_from, date_to }) => {
   const dateWhere = {};
-  if (date_from) dateWhere.collected_at = { [Op.gte]: new Date(date_from) };
-  if (date_to) dateWhere.collected_at = { ...dateWhere.collected_at, [Op.lte]: new Date(date_to + 'T23:59:59.999Z') };
+  if (date_from) dateWhere.collection_date = { [Op.gte]: date_from };
+  if (date_to) dateWhere.collection_date = { ...dateWhere.collection_date, [Op.lte]: date_to };
 
   const expenseDateWhere = {};
-  if (date_from) expenseDateWhere.expense_date = { [Op.gte]: new Date(date_from) };
-  if (date_to) expenseDateWhere.expense_date = { ...expenseDateWhere.expense_date, [Op.lte]: new Date(date_to + 'T23:59:59.999Z') };
+  if (date_from) expenseDateWhere.expense_date = { [Op.gte]: date_from };
+  if (date_to) expenseDateWhere.expense_date = { ...expenseDateWhere.expense_date, [Op.lte]: date_to };
 
   const shop = await Shop.findByPk(id, { attributes: ['id', 'business_type'], raw: true });
   if (!shop) return null;
@@ -223,15 +223,15 @@ exports.getShopStats = async (id, { date_from, date_to }) => {
     }),
     Collection.findAll({
       attributes: [
-        [fn('DATE_FORMAT', col('collected_at'), '%Y-%m-%d'), 'date'],
+        [fn('DATE_FORMAT', col('collection_date'), '%Y-%m-%d'), 'date'],
         [fn('SUM', col('gross_tzs')), 'gross'],
         [fn('SUM', col('net_tzs')), 'net'],
         [fn('SUM', col('office_tzs')), 'office'],
         [fn('SUM', col('owner_tzs')), 'owner'],
       ],
       where: collWhere,
-      group: [fn('DATE_FORMAT', col('collected_at'), '%Y-%m-%d')],
-      order: [[fn('DATE_FORMAT', col('collected_at'), '%Y-%m-%d'), 'ASC']],
+      group: [fn('DATE_FORMAT', col('collection_date'), '%Y-%m-%d')],
+      order: [[fn('DATE_FORMAT', col('collection_date'), '%Y-%m-%d'), 'ASC']],
       raw: true,
     }),
   ]);
