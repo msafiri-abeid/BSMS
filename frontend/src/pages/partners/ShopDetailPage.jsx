@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Table, Tag, Button, Spin, Space, DatePicker, InputNumber, Input, Modal, App, Image, Radio, Upload, Select } from 'antd';
-import { ArrowLeft, Store, Cpu, TrendingUp, DollarSign, PiggyBank, MapPin, FileText, BarChart3, History, ExternalLink, Receipt, Wallet, Landmark, Plus, Eye, Camera, Upload as UploadIcon, Download, Building2 } from 'lucide-react';
+import { ArrowLeft, Store, Cpu, TrendingUp, DollarSign, PiggyBank, MapPin, FileText, BarChart3, History, ExternalLink, Receipt, Wallet, Landmark, Plus, Eye, Camera, Upload as UploadIcon, Download, Building2, CalendarDays } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import { shopsAPI, financeAPI, collectionsAPI, accountsAPI } from '../../services/api';
 import KpiCard from '../../components/KpiCard';
@@ -25,7 +25,7 @@ export default function ShopDetailPage() {
   const [viewDetail, setViewDetail] = useState(null);
   const [depositOpen, setDepositOpen] = useState(false);
   const [depositForm, setDepositForm] = useState({
-    account_id: null, amount: 0, charges: 0, receipt: null, notes: '',
+    account_id: null, amount: 0, charges: 0, receipt: null, notes: '', deposit_date: dayjs().subtract(1, 'day').format('YYYY-MM-DD'),
   });
 
   const roleName = useAuthStore((s) => s.user?.role?.name);
@@ -126,6 +126,15 @@ export default function ShopDetailPage() {
     enabled: isSlot && depositOpen,
   });
 
+  const depositAccountOptions = useMemo(() => {
+    const opts = [];
+    if (floatAccount) opts.push({ ...floatAccount, _label: `Float — ${floatAccount.name}` });
+    (bankAccounts || []).forEach(a => {
+      if (!opts.find(o => o.id === a.id)) opts.push({ ...a, _label: `${a.name}${a.bank_name ? ` (${a.bank_name})` : ''}` });
+    });
+    return opts;
+  }, [floatAccount, bankAccounts]);
+
   const { data: accountTxns } = useQuery({
     queryKey: ['shop-account-txns', id, floatAccount?.id, selectedDay],
     queryFn: () => accountsAPI.transactions(floatAccount.id, { limit: 50, date_to: selectedDay }).then(r => r.data.data),
@@ -133,8 +142,6 @@ export default function ShopDetailPage() {
   });
   const txnRows = accountTxns?.rows || [];
   const txnTableRows = txnRows.filter(r => r.transaction_date === selectedDay);
-  const floatBalance = txnRows.length > 0 ? txnRows[0].balance_after : 0;
-  const floatHealthy = floatBalance >= floatMinimum;
 
   const depositMutation = useMutation({
     mutationFn: (data) => accountsAPI.deposit(depositForm.account_id, data),
@@ -143,7 +150,7 @@ export default function ShopDetailPage() {
       qc.invalidateQueries({ queryKey: ['shop-account-txns', id] });
       qc.invalidateQueries({ queryKey: ['shop-bank-accounts', id] });
       setDepositOpen(false);
-      setDepositForm({ account_id: null, amount: 0, charges: 0, receipt: null, notes: '' });
+      setDepositForm({ account_id: null, amount: 0, charges: 0, receipt: null, notes: '', deposit_date: selectedDay });
     },
     onError: (e) => message.error(e.response?.data?.message || 'Failed to record deposit'),
   });
@@ -152,8 +159,8 @@ export default function ShopDetailPage() {
     const fd = new FormData();
     fd.append('amount', depositForm.amount || 0);
     fd.append('charges', depositForm.charges || 0);
-    fd.append('transaction_date', selectedDay);
-    fd.append('description', depositForm.notes || `Bank deposit — ${dayjs(selectedDay).format('DD MMM YYYY')}`);
+    fd.append('transaction_date', depositForm.deposit_date);
+    fd.append('description', depositForm.notes || `Deposit to ${depositAccountOptions.find(a => a.id === depositForm.account_id)?.name || 'account'} — ${dayjs(depositForm.deposit_date).format('DD MMM YYYY')}`);
     if (depositForm.receipt?.originFileObj) {
       fd.append('receipt', depositForm.receipt.originFileObj);
     }
@@ -233,10 +240,10 @@ export default function ShopDetailPage() {
         ) : (
           <KpiCard title="Office Share" value={perfSummary?.office || 0} formatter={fmt} icon={PiggyBank} bgColor="bg-amber-50" iconColor="text-amber-600" />
         )}
-        {isSlot && (
-          <KpiCard title="Float Available" value={floatBalance} formatter={fmt} icon={Wallet}
-            bgColor={floatHealthy ? 'bg-emerald-50' : 'bg-rose-50'}
-            iconColor={floatHealthy ? 'text-emerald-600' : 'text-rose-600'} />
+        {isSlot && floatAccount && (
+          <KpiCard title="Float Available" value={floatAccount.current_balance} formatter={fmt} icon={Wallet}
+            bgColor={floatAccount.current_balance >= floatMinimum ? 'bg-emerald-50' : 'bg-rose-50'}
+            iconColor={floatAccount.current_balance >= floatMinimum ? 'text-emerald-600' : 'text-rose-600'} />
         )}
       </div>
 
@@ -247,10 +254,10 @@ export default function ShopDetailPage() {
             <h5 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2 m-0">
               <Wallet size={14} className="text-brand-dark" /> Shop Transactions
             </h5>
-            {canManageCash && (
+              {canManageCash && (
               <Button size="small" icon={<Plus className="w-3.5 h-3.5" />}
                 onClick={() => {
-                  setDepositForm({ account_id: null, amount: 0, charges: 0, receipt: null, notes: '' });
+                  setDepositForm({ account_id: floatAccount?.id || null, amount: 0, charges: 0, receipt: null, notes: '', deposit_date: selectedDay });
                   setDepositOpen(true);
                 }}
                 className="!bg-brand-dark hover:!bg-brand-light hover:!text-white text-white border-none flex items-center gap-1">
@@ -431,24 +438,6 @@ export default function ShopDetailPage() {
                 <History size={14} className="text-brand-dark" /> Collection History — {dayjs(selectedDay).format('DD MMM YYYY')}
               </h5>
             </div>
-            {collectionRows.length > 0 && (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3 p-3 rounded-lg bg-slate-50 border border-slate-100">
-                <div>
-                  <span className="text-[10px] uppercase tracking-wider text-slate-400">Total Gross</span>
-                  <p className="font-bold text-slate-800 m-0">{fmt(grossFromCollections)}</p>
-                </div>
-                <div>
-                  <span className="text-[10px] uppercase tracking-wider text-slate-400">Collections</span>
-                  <p className="font-bold text-slate-800 m-0">{collectionRows.length}</p>
-                </div>
-                <div>
-                  <span className="text-[10px] uppercase tracking-wider text-slate-400">Cash at Hand</span>
-                  <p className="font-bold text-emerald-600 m-0">
-                    {fmt(grossFromCollections)}
-                  </p>
-                </div>
-              </div>
-            )}
             <Table dataSource={collectionRows} columns={novomaticCols} rowKey="id" size="middle" pagination={{ pageSize: 10, showSizeChanger: false }}
               summary={() => {
                 return collectionRows.length > 0 ? (
@@ -568,9 +557,9 @@ export default function ShopDetailPage() {
       )}
       {/* Record Deposit Modal */}
       <Modal
-        title={<span className="text-sm font-bold text-slate-700">Record Bank Deposit — {dayjs(selectedDay).format('DD MMM YYYY')}</span>}
+        title={<span className="text-sm font-bold text-slate-700">Record Deposit — {dayjs(depositForm.deposit_date).format('DD MMM YYYY')}</span>}
         open={depositOpen}
-        onCancel={() => { setDepositOpen(false); setDepositForm({ account_id: null, amount: 0, charges: 0, receipt: null, notes: '' }); }}
+        onCancel={() => { setDepositOpen(false); setDepositForm({ account_id: null, amount: 0, charges: 0, receipt: null, notes: '', deposit_date: selectedDay }); }}
         onOk={handleSubmitDeposit}
         confirmLoading={depositMutation.isPending}
         okText="Record Deposit"
@@ -583,13 +572,21 @@ export default function ShopDetailPage() {
         <div className="space-y-3 mt-4">
           <div>
             <span className="text-xs font-semibold text-slate-500 block mb-1">
-              <Building2 size={12} className="inline mr-1" />Bank Account
+              <CalendarDays size={12} className="inline mr-1" />Deposit Date
             </span>
-            <Select placeholder="Select bank account" className="w-full" showSearch optionFilterProp="children"
+            <DatePicker size="small" className="w-full" value={dayjs(depositForm.deposit_date)}
+              onChange={(d) => setDepositForm(f => ({ ...f, deposit_date: d ? d.format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD') }))}
+              disabledDate={(d) => d.isAfter(dayjs())} />
+          </div>
+          <div>
+            <span className="text-xs font-semibold text-slate-500 block mb-1">
+              <Building2 size={12} className="inline mr-1" />Deposit To
+            </span>
+            <Select placeholder="Select account" className="w-full" showSearch optionFilterProp="children"
               value={depositForm.account_id}
               onChange={(v) => setDepositForm(f => ({ ...f, account_id: v }))}>
-              {(bankAccounts || []).map(a => (
-                <Option key={a.id} value={a.id}>{a.name}{a.bank_name ? ` (${a.bank_name})` : ''}</Option>
+              {depositAccountOptions.map(a => (
+                <Option key={a.id} value={a.id}>{a._label}</Option>
               ))}
             </Select>
           </div>

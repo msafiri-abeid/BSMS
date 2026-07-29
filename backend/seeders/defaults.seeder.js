@@ -130,7 +130,9 @@ module.exports = async () => {
       for (const act of ['read', 'create']) {
         await Permission.findOrCreate({ where: { role_id: role.id, module: 'tickets', action: act } });
       }
-      await Permission.findOrCreate({ where: { role_id: role.id, module: 'accounts', action: 'read' } });
+      for (const act of ['read', 'create']) {
+        await Permission.findOrCreate({ where: { role_id: role.id, module: 'accounts', action: act } });
+      }
     }
 
     // Supervisor: approve novomatic collections + read machines
