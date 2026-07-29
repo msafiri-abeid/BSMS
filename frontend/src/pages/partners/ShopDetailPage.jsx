@@ -128,10 +128,11 @@ export default function ShopDetailPage() {
 
   const { data: accountTxns } = useQuery({
     queryKey: ['shop-account-txns', id, floatAccount?.id, selectedDay],
-    queryFn: () => accountsAPI.transactions(floatAccount.id, { limit: 50, date_from: selectedDay, date_to: selectedDay }).then(r => r.data.data),
+    queryFn: () => accountsAPI.transactions(floatAccount.id, { limit: 50, date_to: selectedDay }).then(r => r.data.data),
     enabled: isSlot && !!floatAccount?.id,
   });
   const txnRows = accountTxns?.rows || [];
+  const txnTableRows = txnRows.filter(r => r.transaction_date === selectedDay);
   const floatBalance = txnRows.length > 0 ? txnRows[0].balance_after : 0;
   const floatHealthy = floatBalance >= floatMinimum;
 
@@ -265,7 +266,7 @@ export default function ShopDetailPage() {
               {floatAccount && <span className="font-normal normal-case text-slate-400">— {floatAccount.name}</span>}
             </h6>
             {txnRows.length > 0 ? (
-              <Table dataSource={txnRows} rowKey="id" size="small" pagination={{ pageSize: 8, showSizeChanger: false, size: 'small' }}
+              <Table dataSource={txnTableRows} rowKey="id" size="small" pagination={{ pageSize: 8, showSizeChanger: false, size: 'small' }}
                 columns={[
                   { title: 'Date', dataIndex: 'transaction_date', render: (v) => dayjs(v).format('DD MMM'), width: 80 },
                   { title: 'Type', dataIndex: 'type', render: (v) => (
