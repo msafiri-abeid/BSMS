@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Table, Tag, Button, Space, DatePicker, Select, Input, InputNumber, Typography, Empty, Modal, App, Image, List, Segmented, Upload } from 'antd';
-import { Download, Plus, Eye, Edit3, Trash2, Camera, Search, X, CheckCircle, XCircle, FileDown, TrendingUp, ShieldCheck, ClipboardList, Calendar } from 'lucide-react';
+import { Download, Plus, Eye, Edit3, Trash2, Camera, Search, X, CheckCircle, XCircle, FileDown, TrendingUp, ShieldCheck, ClipboardList, Calendar, RefreshCw } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { collectionsAPI, financeAPI, shopsAPI, usersAPI } from '../../services/api';
 import { useAuthStore } from '../../store/authStore';
@@ -194,6 +194,19 @@ export default function CollectionsPage() {
     onError: (e) => message.error(e.response?.data?.message || 'Dispute failed'),
   });
 
+  const [statusModal, setStatusModal] = useState(null);
+  const [changeStatus, setChangeStatus] = useState('pending');
+  const statusChangeMutation = useMutation({
+    mutationFn: ({ id, status }) => collectionsAPI.update(id, { status }),
+    onSuccess: () => {
+      message.success('Status updated');
+      qc.invalidateQueries({ queryKey: ['collections'] });
+      qc.invalidateQueries({ queryKey: ['machine-stats'] });
+      setStatusModal(null);
+    },
+    onError: (e) => message.error(e.response?.data?.message || 'Status update failed'),
+  });
+
   const handleExport = async () => {
     const res = await financeAPI.exportCollections();
     const url = URL.createObjectURL(new Blob([res.data]));
@@ -230,6 +243,7 @@ export default function CollectionsPage() {
   const handleAction = (key, r) => {
     if (key === 'view') setViewRecord(r);
     if (key === 'edit') setEditRecord(r);
+    if (key === 'status') { setChangeStatus(r.status); setStatusModal(r); }
     if (key === 'delete') {
       Modal.confirm({
         title: 'Delete Collection',
@@ -251,6 +265,10 @@ export default function CollectionsPage() {
     if (canDeleteRow) {
       items.push({ type: 'divider' });
       items.push({ key: 'delete', icon: <Trash2 className="w-4 h-4" />, label: 'Delete', danger: true });
+    }
+    if (roleName === 'Admin') {
+      items.push({ type: 'divider' });
+      items.push({ key: 'status', icon: <RefreshCw className="w-4 h-4" />, label: 'Change Status' });
     }
     return items;
   };
@@ -292,10 +310,10 @@ export default function CollectionsPage() {
         { title: 'Amount', dataIndex: 'gross_tzs', render: v => <span className="font-semibold text-slate-700">{fmt(v)}</span>, width: 110 },
         {
           title: 'Status', dataIndex: 'status',
-          render: v => <Tag color={v === 'approved' ? 'green' : v === 'disputed' ? 'red' : 'orange'} className="!text-[10px] !px-2 uppercase">{v}</Tag>,
+          render: v => <Tag color={v === 'approved' ? 'green' : v === 'disputed' ? 'red' : v === 'supervisor_approved' ? 'blue' : 'orange'} className="!text-[10px] !px-2 uppercase">{v === 'supervisor_approved' ? 'Supervisor Approved' : v}</Tag>,
           width: 90,
         },
-        { title: 'Approved By', dataIndex: ['approver', 'name'], render: v => v || '—', width: 130 },
+        { title: 'Approved By', dataIndex: ['approver', 'name'], render: (v, r) => (r.status === 'approved' ? (v || '—') : r.status === 'supervisor_approved' ? (r.supervisorApprover?.name || '—') : '—'), width: 130 },
         {
           title: 'Actions', key: 'actions', width: 55, align: 'center',
           render: (_, r) => <ActionMenu record={r} actionItems={actionItems} onAction={handleAction} />,
@@ -321,10 +339,10 @@ export default function CollectionsPage() {
         : <span className="text-xs text-slate-300">—</span>, width: 100 },
       {
         title: 'Status', dataIndex: 'status',
-        render: v => <Tag color={v === 'approved' ? 'green' : v === 'disputed' ? 'red' : 'orange'} className="!text-[10px] !px-2 uppercase">{v}</Tag>,
+        render: v => <Tag color={v === 'approved' ? 'green' : v === 'disputed' ? 'red' : v === 'supervisor_approved' ? 'blue' : 'orange'} className="!text-[10px] !px-2 uppercase">{v === 'supervisor_approved' ? 'Supervisor Approved' : v}</Tag>,
         width: 90,
       },
-      { title: 'Approved By', dataIndex: ['approver', 'name'], render: v => v || '—', width: 130 },
+      { title: 'Approved By', dataIndex: ['approver', 'name'], render: (v, r) => (r.status === 'approved' ? (v || '—') : r.status === 'supervisor_approved' ? (r.supervisorApprover?.name || '—') : '—'), width: 130 },
       {
         title: 'Actions', key: 'actions', width: 55, align: 'center',
         render: (_, r) => <ActionMenu record={r} actionItems={actionItems} onAction={handleAction} />,
@@ -541,6 +559,9 @@ export default function CollectionsPage() {
                   ...(canApprove && r.status === 'pending' ? [
                     { key: 'approve', label: 'Approve', type: 'primary', icon: <CheckCircle className="w-3.5 h-3.5" />, onClick: () => reviewMutation.mutate({ id: r.id, status: 'approved' }), loading: reviewMutation.isPending },
                   ] : []),
+                  ...(roleName === 'Admin' ? [
+                    { key: 'status', label: 'Change Status', icon: <RefreshCw className="w-3.5 h-3.5" />, onClick: () => { setChangeStatus(r.status); setStatusModal(r); } },
+                  ] : []),
                 ]}
               />
             )}
@@ -616,7 +637,7 @@ export default function CollectionsPage() {
                   <div><span className="text-xs font-semibold text-slate-500 block">Difference</span><span className="font-mono">{viewRecord.difference?.toLocaleString()}</span></div>
                 </>
               )}
-              <div><span className="text-xs font-semibold text-slate-500 block">Status</span><Tag color={viewRecord.status === 'approved' ? 'green' : 'orange'}>{viewRecord.status}</Tag></div>
+              <div><span className="text-xs font-semibold text-slate-500 block">Status</span><Tag color={viewRecord.status === 'approved' ? 'green' : viewRecord.status === 'disputed' ? 'red' : viewRecord.status === 'supervisor_approved' ? 'blue' : 'orange'} className="!text-[10px] uppercase">{viewRecord.status === 'supervisor_approved' ? 'Supervisor Approved' : viewRecord.status}</Tag></div>
             </div>
             <div className="border-t border-slate-100 pt-3">
               <Text className="text-xs font-semibold uppercase tracking-wider text-slate-500 block mb-2">Financial Breakdown</Text>
@@ -664,13 +685,14 @@ export default function CollectionsPage() {
       >
         {editRecord && (
           <div className="space-y-4 mt-4">
-            {/* Status */}
-            {canApprove ? (
+            {/* Status — editable for pending records or by Admin (revert/override) */}
+            {canApprove && (editRecord?.status === 'pending' || roleName === 'Admin') ? (
               <div>
                 <Text className="text-xs font-semibold text-slate-500 block mb-1">Status</Text>
                 <Select value={editStatus} className="w-full" onChange={setEditStatus}>
                   <Option value="pending">Pending</Option>
                   <Option value="approved">Approved</Option>
+                  <Option value="supervisor_approved">Supervisor Approved</Option>
                   <Option value="disputed">Disputed</Option>
                 </Select>
               </div>
@@ -801,6 +823,32 @@ export default function CollectionsPage() {
           <Text className="text-xs font-semibold text-slate-600 block mb-1">Reason (required)</Text>
           <Input.TextArea rows={3} value={disputeReason} onChange={e => setDisputeReason(e.target.value)}
             placeholder="Why is this collection incorrect?" className="rounded-lg" />
+        </div>
+      </Modal>
+
+      {/* Change Status Modal (Admin only) */}
+      <Modal
+        title={<span className="text-sm font-bold text-slate-700">Change Collection Status</span>}
+        open={!!statusModal}
+        onCancel={() => setStatusModal(null)}
+        onOk={() => statusChangeMutation.mutate({ id: statusModal.id, status: changeStatus })}
+        okText="Save"
+        okButtonProps={{ className: '!bg-brand-dark rounded-lg' }}
+        confirmLoading={statusChangeMutation.isPending}
+        className="top-8"
+      >
+        <div className="mt-4">
+          <p className="text-sm text-slate-600 mb-3">
+            Change status for <strong>{statusModal?.machine?.slot_code}</strong>.
+            Use <strong>Pending</strong> to reopen an approved collection for corrections.
+          </p>
+          <Text className="text-xs font-semibold text-slate-600 block mb-1">Status</Text>
+          <Select value={changeStatus} onChange={setChangeStatus} className="w-full">
+            <Option value="pending">Pending</Option>
+            <Option value="approved">Approved</Option>
+            <Option value="supervisor_approved">Supervisor Approved</Option>
+            <Option value="disputed">Disputed</Option>
+          </Select>
         </div>
       </Modal>
     </div>

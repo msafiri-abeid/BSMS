@@ -89,12 +89,13 @@ const update = async (req, res, next) => {
     const allowed = ['Admin', 'General Manager', 'Operations Manager', 'Supervisor'];
     const roleName = req.user.role?.name;
 
+    const existing = await Collection.findByPk(req.params.id, {
+      attributes: ['id', 'collector_id', 'status'],
+    });
+    if (!existing) return res.status(404).json({ success: false, message: 'Collection not found' });
+
     // Cashier: only own pending/disputed collections, cannot approve
     if (roleName === 'Cashier') {
-      const existing = await Collection.findByPk(req.params.id, {
-        attributes: ['id', 'collector_id', 'status'],
-      });
-      if (!existing) return res.status(404).json({ success: false, message: 'Collection not found' });
       if (existing.collector_id !== req.user.id) {
         return res.status(403).json({ success: false, message: 'You can only edit your own collections' });
       }
@@ -117,6 +118,17 @@ const update = async (req, res, next) => {
       return res.status(403).json({ success: false, message: 'Permission denied' });
     }
 
+    // Only Admin may change the status of a collection that is already processed
+    // (e.g. revert an approved collection back to pending after a mistaken approval).
+    if (
+      roleName !== 'Admin' &&
+      roleName !== 'Cashier' &&
+      existing.status !== 'pending' &&
+      req.body.status && req.body.status !== existing.status
+    ) {
+      return res.status(403).json({ success: false, message: 'Only Admin can change the status of a processed collection' });
+    }
+
     if (req.file) {
       req.body.meter_image_url = req.file.path;
     }
@@ -124,6 +136,18 @@ const update = async (req, res, next) => {
     if (req.body.status === 'approved') {
       req.body.approved_by = req.user.id;
       req.body.approved_at = new Date();
+    } else if (req.body.status === 'supervisor_approved') {
+      req.body.supervisor_approved_by = req.user.id;
+      req.body.supervisor_approved_at = new Date();
+    } else if (req.body.status === 'pending') {
+      // Clear so the "Approved By" column never shows a name for pending records
+      req.body.approved_by = null;
+      req.body.approved_at = null;
+      req.body.supervisor_approved_by = null;
+      req.body.supervisor_approved_at = null;
+      req.body.disputed_by = null;
+      req.body.disputed_at = null;
+      req.body.dispute_reason = null;
     }
     const collection = await updateCollection(req.params.id, req.body);
     if (!collection) return res.status(404).json({ success: false, message: 'Collection not found' });

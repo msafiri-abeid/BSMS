@@ -104,6 +104,7 @@ router.delete('/finance/expenses/:id', authenticate, checkPermission('finance', 
 router.get('/finance/expenses/categories', authenticate, financeC.listCategories);
 router.get('/finance/expenses/pending', authenticate, checkPermission('finance', 'approve'), financeC.getPendingExpenses);
 router.put('/finance/expenses/:id/approve', authenticate, checkPermission('finance', 'approve'), financeC.approveExpense);
+router.put('/finance/expenses/:id/status', authenticate, checkPermission('finance', 'approve'), financeC.changeExpenseStatus);
 router.get('/finance/invoices', authenticate, checkPermission('finance', 'read'), financeC.listInvoices);
 router.post('/finance/invoices', authenticate, checkPermission('finance', 'create'), financeC.createInvoice);
 router.get('/finance/invoices/:id/pdf', authenticate, financeC.downloadInvoicePDF);

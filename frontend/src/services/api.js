@@ -165,6 +165,7 @@ export const financeAPI = {
   removeExpense: (id) => api.delete(`/finance/expenses/${id}`),
   pendingExpenses: () => api.get('/finance/expenses/pending'),
   approveExpense: (id, d) => api.put(`/finance/expenses/${id}/approve`, d),
+  changeExpenseStatus: (id, d) => api.put(`/finance/expenses/${id}/status`, d),
   listCategories: () => api.get('/finance/expenses/categories'),
 
   listInvoices: (p) => api.get('/finance/invoices', { params: p }),

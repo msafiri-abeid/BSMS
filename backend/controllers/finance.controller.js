@@ -34,6 +34,18 @@ const approveExpense = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+const changeExpenseStatus = async (req, res, next) => {
+  try {
+    if (req.user.role?.name !== 'Admin') {
+      return res.status(403).json({ success: false, message: 'Only Admin can change expense status' });
+    }
+    const { status, reason } = req.body;
+    if (!status) return res.status(400).json({ success: false, message: 'status is required' });
+    const expense = await financeService.changeExpenseStatus(req.params.id, status, req.user.id, reason);
+    res.json({ success: true, data: expense });
+  } catch (err) { next(err); }
+};
+
 const updateExpense = async (req, res, next) => {
   try {
     if (req.file) req.body.receipt_url = req.file.path;
@@ -71,6 +83,18 @@ const listExpenses = async (req, res, next) => {
       if (date_from) where.expense_date[Op.gte] = date_from;
       if (date_to) where.expense_date[Op.lte] = date_to;
     }
+
+    // Role-based scoping — who can see which expenses
+    const roleName = req.user?.role?.name;
+    const SEE_ALL = ['Admin', 'General Manager', 'Operations Manager', 'Finance', 'Director'];
+    if (roleName === 'Supervisor') {
+      // Supervisor oversees novomatic / slot shops (bentabet business line)
+      where.business_type = 'bentabet';
+    } else if (!SEE_ALL.includes(roleName)) {
+      // Cashier, Collector, HR and any other role see only their own submissions
+      where.submitted_by = req.user.id;
+    }
+
     const data = await Expense.findAndCountAll({
       where, limit: +limit, offset: +offset,
       include: [
@@ -261,7 +285,7 @@ const accountReport = async (req, res, next) => {
 };
 
 module.exports = {
-  submitExpense, updateExpense, removeExpense, getPendingExpenses, approveExpense, listExpenses, listCategories,
+  submitExpense, updateExpense, removeExpense, getPendingExpenses, approveExpense, changeExpenseStatus, listExpenses, listCategories,
   createInvoice, listInvoices, downloadInvoicePDF, recordPayment, listPayroll, createPayroll, exportCollections,
   listAccounts, createAccount, getAccount, updateAccount, deleteAccount,
   listTransactions, listShopTransactions, transferAccounts,

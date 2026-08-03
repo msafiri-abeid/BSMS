@@ -270,7 +270,7 @@ export default function MachineDetailPage() {
       title: 'Status', dataIndex: 'status', width: 90,
       render: v => <Tag color={v === 'approved' ? 'green' : v === 'disputed' ? 'red' : 'orange'} className="!text-[10px] !px-2 uppercase">{v}</Tag>,
     },
-    { title: 'Approved By', dataIndex: ['approver', 'name'], render: v => v || '—', width: 130 },
+    { title: 'Approved By', dataIndex: ['approver', 'name'], render: (v, r) => (r.status === 'approved' ? (v || '—') : r.status === 'supervisor_approved' ? (r.supervisorApprover?.name || '—') : '—'), width: 130 },
     {
       title: 'Actions', key: 'actions', width: 55, align: 'center',
       render: (_, r) => (
@@ -558,7 +558,7 @@ export default function MachineDetailPage() {
                 { title: 'Amount', dataIndex: 'amount', width: 110, render: v => <span className="font-semibold">{fmt(v)}</span> },
                 { title: 'Status', dataIndex: 'status', width: 90, render: v => <Tag color={v === 'approved' ? 'green' : v === 'rejected' ? 'red' : 'orange'} className="!text-[10px] uppercase">{v}</Tag> },
                 { title: 'Description', dataIndex: 'description', width: 220, ellipsis: true },
-                { title: 'Approved By', key: 'approver', width: 120, render: (_, r) => r.approver?.name || (r.status === 'pending' ? <span className="text-slate-300">—</span> : '—') },
+                { title: 'Approved By', key: 'approver', width: 120, render: (_, r) => (r.status === 'approved' ? (r.approver?.name || '—') : <span className="text-slate-300">—</span>) },
               ]}
               rowKey="id"
               size="small"

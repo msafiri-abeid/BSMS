@@ -290,6 +290,7 @@ GET|POST       /api/finance/expenses
 PUT|DELETE     /api/finance/expenses/:id
 GET            /api/finance/expenses/pending
 PUT            /api/finance/expenses/:id/approve
+PUT            /api/finance/expenses/:id/status   # Admin only — change expense status (pending/approved/rejected)
 GET|POST       /api/finance/invoices
 GET            /api/finance/invoices/:id/pdf
 POST           /api/finance/invoices/:id/payment

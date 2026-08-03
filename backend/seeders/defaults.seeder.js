@@ -55,6 +55,9 @@ module.exports = async () => {
           await Permission.findOrCreate({ where: { role_id: role.id, module: mod, action: act } });
         }
       }
+      // Collectors can submit and view only their own expenses
+      await Permission.findOrCreate({ where: { role_id: role.id, module: 'finance', action: 'read' } });
+      await Permission.findOrCreate({ where: { role_id: role.id, module: 'finance', action: 'create' } });
     }
 
     // Finance: finance module full + reports read + accounts CRUD + read collections, machines, shops, partners
@@ -80,6 +83,8 @@ module.exports = async () => {
         }
       }
       await Permission.findOrCreate({ where: { role_id: role.id, module: 'accounts', action: 'read' } });
+      // Operations Manager can view all expenses (no write on finance module)
+      await Permission.findOrCreate({ where: { role_id: role.id, module: 'finance', action: 'read' } });
     }
 
     // Director: read everything + accounts
@@ -163,6 +168,19 @@ module.exports = async () => {
       }
       await Permission.findOrCreate({ where: { role_id: role.id, module: 'accounts', action: 'read' } });
     }
+  }
+
+  // ─── ALWAYS: ensure expense-access permissions for existing roles ───
+  // The loop above skips roles that already have permissions, so add the
+  // expense-scoping grants here so they land on existing installs too.
+  const collectorRole = await Role.findOne({ where: { name: 'Collector' } });
+  if (collectorRole) {
+    await Permission.findOrCreate({ where: { role_id: collectorRole.id, module: 'finance', action: 'read' } });
+    await Permission.findOrCreate({ where: { role_id: collectorRole.id, module: 'finance', action: 'create' } });
+  }
+  const opsRole = await Role.findOne({ where: { name: 'Operations Manager' } });
+  if (opsRole) {
+    await Permission.findOrCreate({ where: { role_id: opsRole.id, module: 'finance', action: 'read' } });
   }
   console.log('[SEED] Permissions ensured');
 

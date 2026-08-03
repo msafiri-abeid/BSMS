@@ -569,7 +569,7 @@ export default function ShopDetailPage() {
                 { title: 'Category', key: 'category', render: (_, r) => r.category?.name || '—', width: 120 },
                 { title: 'Amount', dataIndex: 'amount', render: (v) => <span className="font-semibold">{fmt(v)}</span>, width: 130 },
                 { title: 'Status', dataIndex: 'status', render: (v) => <Tag color={v === 'approved' ? 'green' : v === 'rejected' ? 'red' : 'orange'} className="!text-[10px] uppercase">{v}</Tag>, width: 90 },
-                { title: 'Approved By', key: 'approver', render: (_, r) => r.approver?.name || '—', width: 120 },
+                { title: 'Approved By', key: 'approver', render: (_, r) => (r.status === 'approved' ? (r.approver?.name || '—') : '—'), width: 120 },
                 { title: 'Description', dataIndex: 'description', render: (v) => <span className="text-xs text-slate-600 line-clamp-1">{v}</span> },
               ]} rowKey="id" size="middle" pagination={{ pageSize: 5, showSizeChanger: false }} />
             ) : (

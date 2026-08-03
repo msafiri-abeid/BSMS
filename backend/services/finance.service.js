@@ -2,6 +2,7 @@
 const PDFDocument = require('pdfkit');
 const ExcelJS = require('exceljs');
 const { Op } = require('sequelize');
+const sequelize = require('../config/database');
 const { Expense, Invoice, Payment, CreditNote, Payroll, ExpenseCategory, Partner, Shop, Machine, Setting, User, Account, AccountTransaction, AccountTransfer } = require('../models');
 
 const getSetting = async (key, def) => {
@@ -22,13 +23,85 @@ const submitExpense = async (data, userId) => {
   return Expense.create({ ...data, business_type: bizType || data.business_type || 'meteora', expense_date, submitted_by: userId, status: 'pending' });
 };
 
+const resolveExpenseAccount = async (expense) => {
+  // Priority 1: Use expense.account_id if set (new flow)
+  if (expense.account_id) {
+    const acc = await Account.findByPk(expense.account_id);
+    if (acc) return acc;
+  }
+
+  const paymentSource = expense.payment_source || 'cash';
+  const bizType = expense.business_type || 'meteora';
+
+  // Priority 2: Legacy fallback — find account by business_type + payment_source
+  if (bizType === 'bentabet') {
+    if (paymentSource === 'selcom') {
+      return Account.findOne({ where: { name: 'Bentabet Revenue Account', is_active: true } });
+    }
+    return expense.shop_id
+      ? Account.findOne({ where: { shop_id: expense.shop_id, account_type: 'cash', business_type: 'bentabet', is_active: true } })
+      : null;
+  }
+
+  const accountType = paymentSource === 'selcom' ? 'bank' : 'cash';
+  const shopAccount = expense.shop_id
+    ? await Account.findOne({ where: { shop_id: expense.shop_id, account_type: accountType, is_active: true } })
+    : null;
+  return shopAccount || Account.findOne({ where: { name: accountType === 'bank' ? 'Main Bank Account' : 'Main Office Cash', is_active: true } });
+};
+
+const createExpenseTransactionRecord = async (expense, userId, t) => {
+  const account = await resolveExpenseAccount(expense);
+  if (!account) return null;
+
+  const opts = t ? { transaction: t } : {};
+  const amount = expense.amount;
+  const balance_before = account.current_balance;
+  const balance_after = balance_before - amount;
+  const paymentSource = expense.payment_source || 'cash';
+  const bizType = expense.business_type || 'meteora';
+
+  const tx = await AccountTransaction.create({
+    account_id: account.id,
+    type: 'out',
+    amount,
+    balance_before,
+    balance_after,
+    reference_type: 'expense',
+    reference_id: expense.id,
+    payment_method: paymentSource === 'selcom' ? 'mobile_money' : 'cash',
+    description: `Expense (${bizType}): ${expense.category?.name || 'General'} - ${expense.description?.substring(0, 100)}`,
+    recorded_by: userId,
+    transaction_date: expense.expense_date || new Date().toISOString().split('T')[0],
+  }, opts);
+  await account.update({ current_balance: balance_after }, opts);
+  return tx;
+};
+
+const reverseExpenseTransactions = async (expenseId, t) => {
+  const opts = t ? { transaction: t } : {};
+  const rows = await AccountTransaction.findAll({
+    where: { reference_type: 'expense', reference_id: expenseId },
+    ...opts,
+  });
+  for (const row of rows) {
+    const account = await Account.findByPk(row.account_id, opts);
+    if (account) {
+      const restored = (account.current_balance || 0) + (row.amount || 0);
+      await account.update({ current_balance: restored }, opts);
+    }
+    await row.destroy(opts);
+  }
+  return rows.length;
+};
+
 const approveExpense = async (expenseId, action, reason, userId) => {
   const expense = await Expense.findByPk(expenseId, { include: [{ model: ExpenseCategory, as: 'category' }] });
   if (!expense || expense.status !== 'pending') throw new Error('Expense not found or already processed');
   const updates = {
     status: action === 'approve' ? 'approved' : 'rejected',
-    approved_by: userId,
-    approved_at: new Date(),
+    approved_by: action === 'approve' ? userId : null,
+    approved_at: action === 'approve' ? new Date() : null,
   };
   if (action === 'reject') updates.rejection_reason = reason;
   await expense.update(updates);
@@ -36,61 +109,62 @@ const approveExpense = async (expenseId, action, reason, userId) => {
   // Auto-record account transaction for approved expenses
   if (action === 'approve') {
     try {
-      let account = null;
-
-      // Priority 1: Use expense.account_id if set (new flow)
-      if (expense.account_id) {
-        account = await Account.findByPk(expense.account_id);
-      }
-
-      const paymentSource = expense.payment_source || 'cash';
-      const bizType = expense.business_type || 'meteora';
-
-      // Priority 2: Legacy fallback — find account by business_type + payment_source
-      if (!account) {
-
-        if (bizType === 'bentabet') {
-          if (paymentSource === 'selcom') {
-            account = await Account.findOne({ where: { name: 'Bentabet Revenue Account', is_active: true } });
-          } else {
-            account = expense.shop_id
-              ? await Account.findOne({ where: { shop_id: expense.shop_id, account_type: 'cash', business_type: 'bentabet', is_active: true } })
-              : null;
-          }
-        } else {
-          const accountType = paymentSource === 'selcom' ? 'bank' : 'cash';
-          const shopAccount = expense.shop_id
-            ? await Account.findOne({ where: { shop_id: expense.shop_id, account_type: accountType, is_active: true } })
-            : null;
-          account = shopAccount || await Account.findOne({ where: { name: accountType === 'bank' ? 'Main Bank Account' : 'Main Office Cash', is_active: true } });
-        }
-      }
-
-      if (account) {
-        const amount = expense.amount;
-        const balance_before = account.current_balance;
-        const balance_after = balance_before - amount;
-        await AccountTransaction.create({
-          account_id: account.id,
-          type: 'out',
-          amount,
-          balance_before,
-          balance_after,
-          reference_type: 'expense',
-          reference_id: expense.id,
-          payment_method: paymentSource === 'selcom' ? 'mobile_money' : 'cash',
-          description: `Expense (${bizType}): ${expense.category?.name || 'General'} - ${expense.description?.substring(0, 100)}`,
-          recorded_by: userId,
-          transaction_date: expense.expense_date || new Date().toISOString().split('T')[0],
-        });
-        await account.update({ current_balance: balance_after });
-      }
+      await createExpenseTransactionRecord(expense, userId);
     } catch (err) {
       console.warn('[ACCOUNTING] Failed to auto-record expense transaction:', err.message);
     }
   }
 
   return expense;
+};
+
+const changeExpenseStatus = async (expenseId, status, userId, reason) => {
+  const VALID = ['pending', 'approved', 'rejected'];
+  if (!VALID.includes(status)) throw new Error(`Invalid status: ${status}`);
+  const expense = await Expense.findByPk(expenseId, { include: [{ model: ExpenseCategory, as: 'category' }] });
+  if (!expense) throw new Error('Expense not found');
+
+  return sequelize.transaction(async (t) => {
+    const updates = { status };
+    if (status === 'approved') {
+      updates.approved_by = userId;
+      updates.approved_at = new Date();
+      updates.rejection_reason = null;
+    } else {
+      updates.approved_by = null;
+      updates.approved_at = null;
+      updates.rejection_reason = status === 'rejected' ? (reason || null) : null;
+    }
+    await expense.update(updates, { transaction: t });
+
+    if (status === 'approved') {
+      // Ensure the debit exists exactly once (re-approval after revert is safe)
+      const existing = await AccountTransaction.count({
+        where: { reference_type: 'expense', reference_id: expense.id },
+        transaction: t,
+      });
+      if (existing === 0) {
+        try {
+          await createExpenseTransactionRecord(expense, userId, t);
+        } catch (err) {
+          console.warn('[ACCOUNTING] Failed to auto-record expense transaction:', err.message);
+        }
+      }
+    } else {
+      // Moving away from approved — reverse any debit so the books stay correct
+      await reverseExpenseTransactions(expense.id, t);
+    }
+
+    return Expense.findByPk(expense.id, {
+      include: [
+        { model: ExpenseCategory, as: 'category' },
+        { model: User, as: 'submitter', attributes: ['name'] },
+        { model: User, as: 'approver', attributes: ['name'] },
+        { model: Shop, as: 'shop', attributes: ['id', 'name'] },
+        { model: Machine, as: 'machine', attributes: ['id', 'slot_code'] },
+      ],
+    });
+  });
 };
 
 const createInvoice = async (data, userId) => {
@@ -849,7 +923,7 @@ const removeExpense = async (id) => {
 };
 
 module.exports = {
-  submitExpense, approveExpense, updateExpense, removeExpense,
+  submitExpense, approveExpense, changeExpenseStatus, updateExpense, removeExpense,
   createInvoice, recordPayment, generateInvoicePDF, createPayrollRun, exportCollectionsExcel,
   listAccounts, createAccount, getAccount, updateAccount, deleteAccount,
   listAccountTransactions, listShopTransactions, transferBetweenAccounts,

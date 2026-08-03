@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Table, Button, Modal, Form, Input, Select, InputNumber, Upload, Tag, Space, App, Typography, List, Empty, Segmented, DatePicker, Image } from 'antd';
-import { Plus, CheckCircle, XCircle, FileDown, Search, X, Store, Cpu, Smartphone, Wallet, Eye, Edit3, Trash2, Landmark, Camera } from 'lucide-react';
+import { Plus, CheckCircle, XCircle, FileDown, Search, X, Store, Cpu, Smartphone, Wallet, Eye, Edit3, Trash2, Landmark, Camera, RefreshCw } from 'lucide-react';
 import ActionMenu from '../../components/ActionMenu';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { financeAPI, shopsAPI, machinesAPI, accountsAPI } from '../../services/api';
@@ -17,6 +17,8 @@ const fmt = (n) => `TZS ${(n || 0).toLocaleString()}`;
 export default function ExpensesPage() {
   const [open, setOpen] = useState(false);
   const [rejectModal, setRejectModal] = useState(null);
+  const [statusModal, setStatusModal] = useState(null);
+  const [statusForm] = Form.useForm();
   const [viewRecord, setViewRecord] = useState(null);
   const [editRecord, setEditRecord] = useState(null);
   const [form] = Form.useForm();
@@ -92,6 +94,12 @@ export default function ExpensesPage() {
     onError: (e) => message.error(e.response?.data?.message || 'Error'),
   });
 
+  const statusMutation = useMutation({
+    mutationFn: ({ id, status, reason }) => financeAPI.changeExpenseStatus(id, { status, reason }),
+    onSuccess: () => { message.success('Status updated'); qc.invalidateQueries({ queryKey: ['expenses'] }); qc.invalidateQueries({ queryKey: ['pending-expenses'] }); qc.invalidateQueries({ queryKey: ['shop-expenses'] }); qc.invalidateQueries({ queryKey: ['machine-expenses'] }); setStatusModal(null); statusForm.resetFields(); },
+    onError: (e) => message.error(e.response?.data?.message || 'Error'),
+  });
+
   const updateMutation = useMutation({
     mutationFn: (fd) => financeAPI.updateExpense(editRecord.id, fd),
     onSuccess: () => { message.success('Expense updated'); qc.invalidateQueries({ queryKey: ['expenses'] }); qc.invalidateQueries({ queryKey: ['shop-expenses'] }); qc.invalidateQueries({ queryKey: ['machine-expenses'] }); closeExpenseModal(); },
@@ -117,6 +125,7 @@ export default function ExpensesPage() {
     if (key === 'view') setViewRecord(r);
     if (key === 'edit') openExpenseModal(r);
     if (key === 'delete') confirmDelete(r);
+    if (key === 'status') { statusForm.setFieldsValue({ status: r.status, reason: undefined }); setStatusModal(r); }
   };
 
   const openExpenseModal = (record) => {
@@ -142,6 +151,9 @@ export default function ExpensesPage() {
     if (r.status === 'pending') {
       items.push({ key: 'edit', label: 'Edit', icon: <Edit3 className="w-4 h-4" /> });
       items.push({ key: 'delete', label: 'Delete', icon: <Trash2 className="w-4 h-4" />, danger: true });
+    }
+    if (roleName === 'Admin') {
+      items.push({ key: 'status', label: 'Change Status', icon: <RefreshCw className="w-4 h-4" /> });
     }
     return items;
   };
@@ -203,7 +215,7 @@ export default function ExpensesPage() {
     { title: 'Amount', dataIndex: 'amount', render: v => <span className="font-semibold">{fmt(v)}</span>, width: 120 },
     { title: 'Business', dataIndex: 'business_type', render: v => <Tag color={v === 'bentabet' ? 'purple' : 'blue'} className="!text-[10px] uppercase">{v}</Tag>, width: 90 },
     { title: 'Submitted By', key: 'submitter', render: (_, r) => r.submitter?.name || r.submitted_by || '—', width: 130, responsive: ['md'] },
-    { title: 'Approved By', key: 'approver', render: (_, r) => r.approver?.name || '—', width: 130, responsive: ['md'] },
+    { title: 'Approved By', key: 'approver', render: (_, r) => (r.status === 'approved' ? (r.approver?.name || '—') : '—'), width: 130, responsive: ['md'] },
     { title: 'Status', dataIndex: 'status', render: v => <Tag color={STATUS_COLORS[v]} className="!text-[10px] uppercase">{v}</Tag>, width: 90 },
     {
       title: 'Actions', width: 55, align: 'center',
@@ -324,6 +336,9 @@ export default function ExpensesPage() {
                   ...(r.status === 'pending' && !canApprove ? [
                     { key: 'edit', label: 'Edit', icon: <Edit3 className="w-3.5 h-3.5" />, onClick: () => openExpenseModal(r) },
                   ] : []),
+                  ...(roleName === 'Admin' ? [
+                    { key: 'status', label: 'Change Status', icon: <RefreshCw className="w-3.5 h-3.5" />, onClick: () => { statusForm.setFieldsValue({ status: r.status, reason: undefined }); setStatusModal(r); } },
+                  ] : []),
                 ]}
               />
             )}
@@ -439,6 +454,27 @@ export default function ExpensesPage() {
         </Form>
       </Modal>
 
+      {/* Change Status Modal (Admin only) */}
+      <Modal title={<span className="text-sm font-bold text-slate-700">Change Expense Status</span>}
+        open={!!statusModal} onCancel={() => setStatusModal(null)}
+        onOk={() => statusForm.validateFields().then(v => statusMutation.mutate({ id: statusModal.id, status: v.status, reason: v.reason }))}
+        confirmLoading={statusMutation.isPending}
+        destroyOnClose
+        className="top-8">
+        <Form form={statusForm} layout="vertical" className="mt-4">
+          <Form.Item name="status" label={<span className="text-xs font-semibold text-slate-600">New Status</span>} rules={[{ required: true }]}>
+            <Select>
+              <Option value="pending">Pending</Option>
+              <Option value="approved">Approved</Option>
+              <Option value="rejected">Rejected</Option>
+            </Select>
+          </Form.Item>
+          <Form.Item name="reason" label={<span className="text-xs font-semibold text-slate-600">Reason <span className="text-slate-400 font-normal">(when rejecting)</span></span>}>
+            <Input.TextArea rows={3} />
+          </Form.Item>
+        </Form>
+      </Modal>
+
       {/* View Modal */}
       <Modal title={<span className="text-sm font-bold text-slate-700">Expense Details</span>}
         open={!!viewRecord} onCancel={() => setViewRecord(null)}
@@ -495,7 +531,7 @@ export default function ExpensesPage() {
             </div>
             <div className="flex justify-between border-b border-slate-100 pb-2">
               <span className="text-xs text-slate-500">Approved By</span>
-              <span className="text-sm font-medium text-slate-700">{viewRecord.approver?.name || '—'}</span>
+              <span className="text-sm font-medium text-slate-700">{viewRecord.status === 'approved' ? (viewRecord.approver?.name || '—') : '—'}</span>
             </div>
             <div className="flex justify-between border-b border-slate-100 pb-2">
               <span className="text-xs text-slate-500">Status</span>
