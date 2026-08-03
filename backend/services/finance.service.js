@@ -790,7 +790,31 @@ const updateExpense = async (id, data, userId) => {
   if (!expense) throw new Error('Expense not found');
   if (expense.status !== 'pending') throw new Error('Can only edit pending expenses');
   const bizType = await resolveBizTypeFromShop(data.shop_id);
-  await expense.update({ ...data, business_type: bizType || data.business_type || expense.business_type, submitted_by: userId });
+
+  const updateData = { ...data };
+  // Receipt semantics: no key = keep existing; empty/"null" = remove; path = replace
+  if ('receipt_url' in updateData) {
+    let rv = updateData.receipt_url;
+    if (Array.isArray(rv)) rv = rv[rv.length - 1];
+    if (rv === '' || rv === 'null' || rv === 'undefined') rv = null;
+    updateData.receipt_url = rv;
+  }
+
+  const oldReceipt = expense.receipt_url;
+  await expense.update({ ...updateData, business_type: bizType || updateData.business_type || expense.business_type, submitted_by: userId });
+
+  // Best-effort cleanup of replaced/removed local receipt file
+  if (oldReceipt && oldReceipt !== expense.receipt_url && oldReceipt.startsWith('/uploads/')) {
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const abs = path.join(__dirname, '..', oldReceipt.replace(/^\//, ''));
+      if (fs.existsSync(abs)) fs.unlinkSync(abs);
+    } catch (err) {
+      console.warn('[EXPENSE] Failed to delete old receipt file:', err.message);
+    }
+  }
+
   return Expense.findByPk(id, {
     include: [
       { model: ExpenseCategory, as: 'category' },
@@ -806,7 +830,21 @@ const removeExpense = async (id) => {
   const expense = await Expense.findByPk(id);
   if (!expense) throw new Error('Expense not found');
   if (expense.status !== 'pending') throw new Error('Can only delete pending expenses');
+  const receiptUrl = expense.receipt_url;
   await expense.destroy();
+
+  // Best-effort cleanup of the attached local receipt file
+  if (receiptUrl && receiptUrl.startsWith('/uploads/')) {
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const abs = path.join(__dirname, '..', receiptUrl.replace(/^\//, ''));
+      if (fs.existsSync(abs)) fs.unlinkSync(abs);
+    } catch (err) {
+      console.warn('[EXPENSE] Failed to delete receipt file:', err.message);
+    }
+  }
+
   return true;
 };
 

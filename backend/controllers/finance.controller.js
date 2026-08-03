@@ -36,8 +36,8 @@ const approveExpense = async (req, res, next) => {
 
 const updateExpense = async (req, res, next) => {
   try {
-    const receipt_url = req.file?.path;
-    const expense = await financeService.updateExpense(req.params.id, { ...req.body, receipt_url }, req.user.id);
+    if (req.file) req.body.receipt_url = req.file.path;
+    const expense = await financeService.updateExpense(req.params.id, req.body, req.user.id);
     res.json({ success: true, data: expense });
   } catch (err) { next(err); }
 };

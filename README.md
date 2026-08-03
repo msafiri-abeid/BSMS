@@ -287,6 +287,7 @@ Collections list response includes `debt_outstanding_tzs` and `debt_id` computed
 ### Finance
 ```
 GET|POST       /api/finance/expenses
+PUT|DELETE     /api/finance/expenses/:id
 GET            /api/finance/expenses/pending
 PUT            /api/finance/expenses/:id/approve
 GET|POST       /api/finance/invoices

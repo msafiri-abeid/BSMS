@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Table, Button, Modal, Form, Input, Select, InputNumber, Upload, Tag, Space, App, Typography, List, Empty, Segmented, DatePicker } from 'antd';
-import { Plus, CheckCircle, XCircle, Upload as UploadIcon, FileDown, Search, X, Store, Cpu, Smartphone, Wallet, Eye, Edit3, Trash2, Landmark } from 'lucide-react';
+import { Table, Button, Modal, Form, Input, Select, InputNumber, Upload, Tag, Space, App, Typography, List, Empty, Segmented, DatePicker, Image } from 'antd';
+import { Plus, CheckCircle, XCircle, FileDown, Search, X, Store, Cpu, Smartphone, Wallet, Eye, Edit3, Trash2, Landmark, Camera } from 'lucide-react';
 import ActionMenu from '../../components/ActionMenu';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { financeAPI, shopsAPI, machinesAPI, accountsAPI } from '../../services/api';
@@ -27,6 +27,8 @@ export default function ExpensesPage() {
   const [selectedShop, setSelectedShop] = useState(undefined);
   const [bizTypeFilter, setBizTypeFilter] = useState('');
   const [dateFilter, setDateFilter] = useState('');
+  const [receiptFileList, setReceiptFileList] = useState([]);
+  const [editRemoveReceipt, setEditRemoveReceipt] = useState(false);
   const { message, modal } = App.useApp();
   const qc = useQueryClient();
   const { hasPermission, user } = useAuthStore();
@@ -80,7 +82,7 @@ export default function ExpensesPage() {
 
   const submitMutation = useMutation({
     mutationFn: (fd) => financeAPI.submitExpense(fd),
-    onSuccess: () => { message.success('Expense submitted'); qc.invalidateQueries({ queryKey: ['expenses'] }); qc.invalidateQueries({ queryKey: ['shop-expenses'] }); qc.invalidateQueries({ queryKey: ['machine-expenses'] }); setOpen(false); form.resetFields(); },
+    onSuccess: () => { message.success('Expense submitted'); qc.invalidateQueries({ queryKey: ['expenses'] }); qc.invalidateQueries({ queryKey: ['shop-expenses'] }); qc.invalidateQueries({ queryKey: ['machine-expenses'] }); closeExpenseModal(); },
     onError: (e) => message.error(e.response?.data?.message || 'Error'),
   });
 
@@ -92,7 +94,7 @@ export default function ExpensesPage() {
 
   const updateMutation = useMutation({
     mutationFn: (fd) => financeAPI.updateExpense(editRecord.id, fd),
-    onSuccess: () => { message.success('Expense updated'); qc.invalidateQueries({ queryKey: ['expenses'] }); qc.invalidateQueries({ queryKey: ['shop-expenses'] }); qc.invalidateQueries({ queryKey: ['machine-expenses'] }); setOpen(false); setEditRecord(null); form.resetFields(); setSelectedShop(undefined); },
+    onSuccess: () => { message.success('Expense updated'); qc.invalidateQueries({ queryKey: ['expenses'] }); qc.invalidateQueries({ queryKey: ['shop-expenses'] }); qc.invalidateQueries({ queryKey: ['machine-expenses'] }); closeExpenseModal(); },
     onError: (e) => message.error(e.response?.data?.message || 'Error'),
   });
 
@@ -113,8 +115,24 @@ export default function ExpensesPage() {
 
   const handleAction = (key, r) => {
     if (key === 'view') setViewRecord(r);
-    if (key === 'edit') { setEditRecord(r); setOpen(true); }
+    if (key === 'edit') openExpenseModal(r);
     if (key === 'delete') confirmDelete(r);
+  };
+
+  const openExpenseModal = (record) => {
+    setEditRecord(record || null);
+    setReceiptFileList([]);
+    setEditRemoveReceipt(false);
+    setOpen(true);
+  };
+
+  const closeExpenseModal = () => {
+    setOpen(false);
+    setEditRecord(null);
+    setReceiptFileList([]);
+    setEditRemoveReceipt(false);
+    setSelectedShop(undefined);
+    form.resetFields();
   };
 
   const actionItems = (r) => {
@@ -143,22 +161,22 @@ export default function ExpensesPage() {
   }, [editRecord]);
 
   const onSubmit = (values) => {
+    const newReceipt = receiptFileList[0] || null;
+    const fd = new FormData();
+    Object.entries(values).forEach(([k, v]) => {
+      if (k === 'receipt' || k === 'receipt_url' || v === undefined || v === null) return;
+      if (k === 'expense_date' && v) { fd.append(k, dayjs(v).format('YYYY-MM-DD')); return; }
+      fd.append(k, v);
+    });
     if (editRecord) {
-      const fd = new FormData();
-      Object.entries(values).forEach(([k, v]) => {
-        if (v === undefined) return;
-        if (k === 'expense_date' && v) { fd.append(k, dayjs(v).format('YYYY-MM-DD')); return; }
-        fd.append(k, v);
-      });
+      if (newReceipt) {
+        fd.append('receipt', newReceipt);
+      } else if (editRemoveReceipt && editRecord.receipt_url) {
+        fd.append('receipt_url', '');
+      }
       updateMutation.mutate(fd);
     } else {
-      const fd = new FormData();
-      Object.entries(values).forEach(([k, v]) => {
-        if (k === 'receipt' || v === undefined) return;
-        if (k === 'expense_date' && v) { fd.append(k, dayjs(v).format('YYYY-MM-DD')); return; }
-        fd.append(k, v);
-      });
-      if (values.receipt?.file) fd.append('receipt', values.receipt.file);
+      if (newReceipt) fd.append('receipt', newReceipt);
       submitMutation.mutate(fd);
     }
   };
@@ -211,7 +229,7 @@ export default function ExpensesPage() {
           <h4 className="text-base font-bold text-slate-800 m-0">Expenses</h4>
           <span className="text-xs text-slate-500">{expenses?.count || 0} total</span>
         </div>
-        <Button type="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setOpen(true)}
+        <Button type="primary" icon={<Plus className="w-4 h-4" />} onClick={() => openExpenseModal(null)}
           className="!bg-brand-dark hover:!bg-brand-light border-none shadow-sm flex items-center gap-1.5 text-white">
           Submit Expense
         </Button>
@@ -304,7 +322,7 @@ export default function ExpensesPage() {
                     { key: 'approve', label: 'Approve', type: 'primary', icon: <CheckCircle className="w-3.5 h-3.5" />, onClick: () => approveMutation.mutate({ id: r.id, action: 'approve' }), loading: approveMutation.isPending },
                   ] : []),
                   ...(r.status === 'pending' && !canApprove ? [
-                    { key: 'edit', label: 'Edit', icon: <Edit3 className="w-3.5 h-3.5" />, onClick: () => { setEditRecord(r); setOpen(true); } },
+                    { key: 'edit', label: 'Edit', icon: <Edit3 className="w-3.5 h-3.5" />, onClick: () => openExpenseModal(r) },
                   ] : []),
                 ]}
               />
@@ -315,7 +333,7 @@ export default function ExpensesPage() {
 
       {/* Submit / Edit Modal */}
       <Modal title={<span className="text-sm font-bold text-slate-700">{editRecord ? 'Edit Expense' : 'Submit Expense'}</span>}
-        open={open} onCancel={() => { setOpen(false); setEditRecord(null); form.resetFields(); setSelectedShop(undefined); }}
+        open={open} onCancel={closeExpenseModal}
         onOk={() => form.submit()} confirmLoading={editRecord ? updateMutation.isPending : submitMutation.isPending}
         className="top-8">
         <Form form={form} layout="vertical" onFinish={onSubmit} className="mt-4">
@@ -372,13 +390,40 @@ export default function ExpensesPage() {
               formatter={v => `TZS ${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
               parser={v => Number(v.replace(/[^0-9]/g, ''))} />
           </Form.Item>
-          {!editRecord && (
-            <Form.Item name="receipt" label={<span className="text-xs font-semibold text-slate-600">Receipt</span>}>
-              <Upload beforeUpload={() => false} maxCount={1}>
-                <Button icon={<UploadIcon size={14} />}>Attach Receipt</Button>
-              </Upload>
-            </Form.Item>
-          )}
+          <Form.Item label={<span className="text-xs font-semibold text-slate-600">Receipt Image</span>}>
+            {editRecord?.receipt_url && !editRemoveReceipt && receiptFileList.length === 0 && (
+              <div className="flex items-center gap-2 mb-2">
+                <Image src={editRecord.receipt_url} className="max-h-16 rounded border border-slate-200" preview={{ mask: 'View' }} />
+                <Button size="small" icon={<Trash2 className="w-3 h-3" />}
+                  onClick={() => setEditRemoveReceipt(true)}
+                  className="flex items-center gap-1 !text-xs text-red-500 hover:!border-red-400">
+                  Remove
+                </Button>
+              </div>
+            )}
+            {editRecord?.receipt_url && editRemoveReceipt && receiptFileList.length === 0 && (
+              <div className="flex items-center gap-2 mb-2 text-xs text-slate-400">
+                <Camera className="w-4 h-4" /> Current receipt will be removed. Upload a new one below if needed.
+              </div>
+            )}
+            <Upload
+              fileList={receiptFileList}
+              beforeUpload={(file) => { setReceiptFileList([file]); return false; }}
+              onRemove={() => setReceiptFileList([])}
+              accept="image/*"
+              capture="environment"
+              maxCount={1}
+            >
+              <Button icon={<Camera size={14} />}>
+                {receiptFileList.length ? 'Replace Receipt' : 'Attach / Take Receipt Photo'}
+              </Button>
+            </Upload>
+            {receiptFileList[0] && (
+              <div className="mt-2 rounded-lg overflow-hidden border border-slate-200">
+                <img src={URL.createObjectURL(receiptFileList[0])} alt="Receipt preview" className="w-full max-h-48 object-contain bg-slate-50" />
+              </div>
+            )}
+          </Form.Item>
         </Form>
       </Modal>
 
