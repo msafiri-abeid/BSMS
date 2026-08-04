@@ -27,6 +27,20 @@ const yearStart = () => {
   return d;
 };
 
+const isoDate = (d) => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+const daysAgoISO = (n) => isoDate(new Date(Date.now() - n * 24 * 60 * 60 * 1000));
+const monthsAgoISO = (n) => {
+  const d = new Date();
+  d.setMonth(d.getMonth() - n);
+  return isoDate(d);
+};
+
 const getShopsByBusinessType = async (businessType) => {
   if (!businessType) return null;
   const shops = await Shop.findAll({ where: { business_type: businessType }, attributes: ['id'], raw: true });
@@ -100,23 +114,115 @@ const buildMachineScopeFilter = (scope) => {
   return where;
 };
 
-exports.adminDashboard = async (reqQuery) => {
-  const scope = {
-    business_type: reqQuery.business_type || null,
-    shop_id: reqQuery.shop_id || null,
-    date_from: reqQuery.date_from || null,
-    date_to: reqQuery.date_to || null,
+const parseSectionScope = (query, prefix, legacy = false) => {
+  const val = (k) => (query[k] !== undefined && query[k] !== null && query[k] !== '') ? query[k] : null;
+  return {
+    business_type: val(`${prefix}_business_type`) || (legacy ? val('business_type') : null),
+    shop_id: val(`${prefix}_shop_id`) || (legacy ? val('shop_id') : null),
+    date_from: val(`${prefix}_date_from`) || (legacy ? val('date_from') : null),
+    date_to: val(`${prefix}_date_to`) || (legacy ? val('date_to') : null),
   };
+};
+
+// Builds "AND shop_id IN (...) / = :shop_id" SQL fragment + replacements for raw chart queries
+const buildShopFilterSQL = async (scope) => {
+  let sql = '';
+  const replacements = {};
+  if (scope.business_type) {
+    const shopIds = await getShopsByBusinessType(scope.business_type);
+    if (shopIds?.length) {
+      const placeholders = shopIds.map((_, i) => `:shop_id_${i}`).join(',');
+      sql = ` AND shop_id IN (${placeholders})`;
+      shopIds.forEach((id, i) => { replacements[`shop_id_${i}`] = id; });
+    } else {
+      sql = ' AND 1=0';
+    }
+  }
+  if (scope.shop_id) {
+    sql = ' AND shop_id = :shop_id';
+    replacements.shop_id = scope.shop_id;
+  }
+  return { sql, replacements };
+};
+
+const granularitySelect = (granularity, column) => {
+  if (granularity === 'week') return `DATE_FORMAT(${column}, '%x-W%v')`;
+  if (granularity === 'month') return `DATE_FORMAT(${column}, '%Y-%m')`;
+  return `DATE(${column})`;
+};
+
+// Generic trend query: table = 'collections' | 'sales', dateCol = date/datetime column, statusExpr = raw WHERE fragment
+const getTrendData = async ({ scope, granularity = 'day', date_from, date_to, table, dateCol, amountCol = 'gross_tzs', statusExpr }) => {
+  const { sql: shopSql, replacements } = await buildShopFilterSQL(scope);
+  const periodCol = granularitySelect(granularity, dateCol);
+  const rows = await sequelize.query(`
+    SELECT ${periodCol} AS period, COALESCE(SUM(${amountCol}), 0) AS total
+    FROM ${table}
+    WHERE ${statusExpr} AND ${dateCol} >= :date_from AND ${dateCol} <= :date_to ${shopSql}
+    GROUP BY period
+    ORDER BY period ASC
+  `, {
+    type: sequelize.QueryTypes.SELECT,
+    replacements: { ...replacements, date_from: `${date_from} 00:00:00`, date_to: `${date_to} 23:59:59` },
+  });
+  return rows;
+};
+
+// Per-partner earnings over a period (external partners only — Bentabet shops have no partner_id)
+const getPartnerEarnings = async ({ date_from, date_to }) => {
+  const rows = await sequelize.query(`
+    SELECT p.id AS partner_id, p.label AS partner_label, p.name AS partner_name,
+      COUNT(DISTINCT c.shop_id) AS shop_count,
+      COUNT(c.id) AS collection_count,
+      COALESCE(SUM(c.gross_tzs), 0) AS gross_tzs,
+      COALESCE(SUM(c.office_tzs), 0) AS office_tzs,
+      COALESCE(SUM(c.owner_tzs), 0) AS owner_tzs
+    FROM collections c
+    INNER JOIN shops s ON s.id = c.shop_id AND s.partner_id IS NOT NULL
+    INNER JOIN partners p ON p.id = s.partner_id
+    WHERE c.status = 'approved'
+      AND c.collected_at >= :date_from AND c.collected_at <= :date_to
+    GROUP BY p.id, p.label, p.name
+    ORDER BY gross_tzs DESC
+    LIMIT 15
+  `, {
+    type: sequelize.QueryTypes.SELECT,
+    replacements: { date_from: `${date_from} 00:00:00`, date_to: `${date_to} 23:59:59` },
+  });
+  return rows;
+};
+
+exports.adminDashboard = async (reqQuery) => {
   const today = todayStart();
   const week = weekStart();
   const month = monthStart();
   const year = yearStart();
-  const collFilter = await buildScopeFilter(scope);
-  const salesFilter = await saleScopeFilter(scope);
 
-  // Build date-aware where clauses — when date range is active, respect it; otherwise default to today/week/month/year
-  const hasDateFilter = !!(scope.date_from || scope.date_to);
+  // Per-section scopes (legacy flat params keep working as the Operations scope fallback)
+  const opsScope = parseSectionScope(reqQuery, 'ops', true);
+  const revScope = parseSectionScope(reqQuery, 'rev', true);
+  const tokenShopId = reqQuery.token_shop_id || null;
+  const chartScope = {
+    business_type: reqQuery.chart_business_type || null,
+    shop_id: reqQuery.chart_shop_id || null,
+    date_from: reqQuery.chart_from || null,
+    date_to: reqQuery.chart_to || null,
+  };
+  const trendScope = {
+    business_type: reqQuery.trend_business_type || null,
+    shop_id: reqQuery.trend_shop_id || null,
+    date_from: reqQuery.trend_from || null,
+    date_to: reqQuery.trend_to || null,
+  };
+  const chartGranularity = reqQuery.chart_granularity || 'day';
+  const trendGranularity = reqQuery.trend_granularity || 'month';
+  const partnerFrom = reqQuery.partner_from || daysAgoISO(30);
+  const partnerTo = reqQuery.partner_to || isoDate(new Date());
 
+  const collFilter = await buildScopeFilter(opsScope);
+  const salesFilter = await saleScopeFilter(revScope);
+
+  // Operations KPIs — today/week defaults when no ops date range selected
   const collWhere = { ...collFilter, status: 'approved' };
   if (!collWhere.collected_at) collWhere.collected_at = { [Op.gte]: today };
 
@@ -124,19 +230,38 @@ exports.adminDashboard = async (reqQuery) => {
   if (!weekCollWhere.collected_at) weekCollWhere.collected_at = { [Op.gte]: week };
 
   const loginWhere = {};
-  if (scope.date_from || scope.date_to) {
+  if (opsScope.date_from || opsScope.date_to) {
     loginWhere.last_login = {};
-    if (scope.date_from) loginWhere.last_login[Op.gte] = new Date(scope.date_from);
-    if (scope.date_to) loginWhere.last_login[Op.lte] = new Date(scope.date_to + 'T23:59:59.999Z');
+    if (opsScope.date_from) loginWhere.last_login[Op.gte] = new Date(opsScope.date_from);
+    if (opsScope.date_to) loginWhere.last_login[Op.lte] = new Date(opsScope.date_to + 'T23:59:59.999Z');
   } else {
     loginWhere.last_login = { [Op.gte]: today };
   }
 
+  // Operations machine / shop counts scoped to business/shop
+  const machineWhere = { status: 'active' };
+  const shopCountWhere = { status: 'active' };
+  if (opsScope.business_type) {
+    shopCountWhere.business_type = opsScope.business_type;
+    const btShopIds = await getShopsByBusinessType(opsScope.business_type);
+    if (btShopIds?.length) {
+      machineWhere.current_shop_id = { [Op.in]: btShopIds };
+    } else {
+      machineWhere.id = -1;
+      shopCountWhere.id = -1;
+    }
+  }
+  if (opsScope.shop_id) {
+    machineWhere.current_shop_id = opsScope.shop_id;
+    shopCountWhere.id = opsScope.shop_id;
+  }
+
+  // Revenue & Expenses — month default when no rev date range selected
   const monthExpenseWhere = { status: 'approved' };
-  if (scope.date_from || scope.date_to) {
+  if (revScope.date_from || revScope.date_to) {
     monthExpenseWhere.created_at = {};
-    if (scope.date_from) monthExpenseWhere.created_at[Op.gte] = new Date(scope.date_from);
-    if (scope.date_to) monthExpenseWhere.created_at[Op.lte] = new Date(scope.date_to + 'T23:59:59.999Z');
+    if (revScope.date_from) monthExpenseWhere.created_at[Op.gte] = new Date(revScope.date_from);
+    if (revScope.date_to) monthExpenseWhere.created_at[Op.lte] = new Date(revScope.date_to + 'T23:59:59.999Z');
   } else {
     monthExpenseWhere.created_at = { [Op.gte]: month };
   }
@@ -144,36 +269,16 @@ exports.adminDashboard = async (reqQuery) => {
   const fySalesWhere = { ...salesFilter, status: 'completed' };
   if (!fySalesWhere.sale_date) fySalesWhere.sale_date = { [Op.gte]: year };
 
-  // Period revenue from collections — same window as expenses (month default or date range)
-  const periodRevenueWhere = { ...collFilter, status: 'approved' };
+  const periodRevenueWhere = await buildScopeFilter(revScope);
+  periodRevenueWhere.status = 'approved';
   if (!periodRevenueWhere.collected_at) periodRevenueWhere.collected_at = { [Op.gte]: month };
 
-  // Scope machine/shop/ticket/pending-expense counts to selected business_type
-  const machineWhere = { status: 'active' };
-  const shopCountWhere = { status: 'active' };
-  const ticketCountWhere = { status: ['open', 'in_progress', 'reopened'] };
-  const pendingExpCountWhere = { status: 'pending' };
+  // Token Management — Meteora only, debts optionally scoped to a shop
+  const tokenDebtWhere = { status: ['pending', 'partial'], type: 'token' };
+  if (tokenShopId) tokenDebtWhere.shop_id = tokenShopId;
 
-  if (scope.business_type) {
-    shopCountWhere.business_type = scope.business_type;
-    pendingExpCountWhere.business_type = scope.business_type === 'slot' ? 'bentabet' : 'meteora';
-    const btShopIds = await getShopsByBusinessType(scope.business_type);
-    if (btShopIds?.length) {
-      machineWhere.current_shop_id = { [Op.in]: btShopIds };
-      ticketCountWhere.shop_id = { [Op.in]: btShopIds };
-    } else {
-      machineWhere.id = -1;
-      ticketCountWhere.id = -1;
-      shopCountWhere.id = -1;
-      pendingExpCountWhere.id = -1;
-    }
-  }
-  if (scope.shop_id) {
-    machineWhere.current_shop_id = scope.shop_id;
-    shopCountWhere.id = scope.shop_id;
-    ticketCountWhere.shop_id = scope.shop_id;
-    pendingExpCountWhere.shop_id = scope.shop_id;
-  }
+  // Alerts & Risks — global, no business scope
+  const ticketCountWhere = { status: ['open', 'in_progress', 'reopened'] };
 
   const [
     totalMachines, activeShops, openTickets, pendingExpenses,
@@ -182,16 +287,17 @@ exports.adminDashboard = async (reqQuery) => {
     totalSales, totalPurchaseValue, invoiceDue, totalExpenses,
     stockAlertCount, fySales,
     periodGross, periodOffice, periodOwner,
+    totalEmployees, activeEmployees, totalPartners, totalShops,
   ] = await Promise.all([
     Machine.count({ where: machineWhere }),
     Shop.count({ where: shopCountWhere }),
     Ticket.count({ where: ticketCountWhere }),
-    Expense.count({ where: pendingExpCountWhere }),
+    Expense.count({ where: { status: 'pending' } }),
     Collection.sum('gross_tzs', { where: collWhere }),
     Collection.sum('gross_tzs', { where: weekCollWhere }),
     TokenInventory.sum('qty'),
-    MachineDebt.count({ where: { status: ['pending', 'partial'], type: 'token' } }),
-    MachineDebt.sum('amount', { where: { status: ['pending', 'partial'], type: 'token' } }),
+    MachineDebt.count({ where: tokenDebtWhere }),
+    MachineDebt.sum('amount', { where: tokenDebtWhere }),
     User.count({ where: loginWhere }),
     Sale.sum('net_amount_tzs', { where: { ...salesFilter, status: 'completed' } }),
     (async () => {
@@ -213,54 +319,40 @@ exports.adminDashboard = async (reqQuery) => {
     Collection.sum('gross_tzs', { where: periodRevenueWhere }),
     Collection.sum('office_tzs', { where: periodRevenueWhere }),
     Collection.sum('owner_tzs', { where: periodRevenueWhere }),
+    Employee.count(),
+    Employee.count({ where: { status: 'active' } }),
+    Partner.count(),
+    Shop.count(),
   ]);
 
   const netRevenue = (periodGross || 0) - (totalExpenses || 0);
 
-  let chartCollFilter = '';
-  let chartSalesFilter = '';
-  const replacements = {};
-  if (scope.business_type) {
-    const shopIds = await getShopsByBusinessType(scope.business_type);
-    if (shopIds?.length) {
-      const placeholders = shopIds.map((_, i) => `:shop_id_${i}`).join(',');
-      chartCollFilter = `AND shop_id IN (${placeholders})`;
-      chartSalesFilter = `AND shop_id IN (${placeholders})`;
-      shopIds.forEach((id, i) => { replacements[`shop_id_${i}`] = id; });
-    } else {
-      chartCollFilter = 'AND 1=0';
-      chartSalesFilter = 'AND 1=0';
-    }
-  }
-  if (scope.shop_id) {
-    chartCollFilter = 'AND shop_id = :shop_id';
-    chartSalesFilter = 'AND shop_id = :shop_id';
-    replacements.shop_id = scope.shop_id;
-  }
+  // Dynamic trends — charts (last 30d default) + revenue trend (last 6 months default)
+  const chartFrom = chartScope.date_from || daysAgoISO(30);
+  const chartTo = chartScope.date_to || isoDate(new Date());
+  const trendFrom = trendScope.date_from || monthsAgoISO(6);
+  const trendTo = trendScope.date_to || isoDate(new Date());
 
-  const last30DaysCollections = await sequelize.query(`
-    SELECT DATE(collected_at) as date, SUM(gross_tzs) as total
-    FROM collections
-    WHERE status = 'approved' AND collected_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
-    ${chartCollFilter}
-    GROUP BY DATE(collected_at)
-    ORDER BY date ASC
-  `, { 
-    type: sequelize.QueryTypes.SELECT,
-    replacements,
-  });
+  const [lastCollections, lastSales, revenueTrend, partnerEarnings, unresolvedTickets] = await Promise.all([
+    getTrendData({ scope: chartScope, granularity: chartGranularity, date_from: chartFrom, date_to: chartTo, table: 'collections', dateCol: 'collected_at', amountCol: 'gross_tzs', statusExpr: "status = 'approved'" }),
+    getTrendData({ scope: chartScope, granularity: chartGranularity, date_from: chartFrom, date_to: chartTo, table: 'sales', dateCol: 'sale_date', amountCol: 'net_amount_tzs', statusExpr: "status = 'completed'" }),
+    getTrendData({ scope: trendScope, granularity: trendGranularity, date_from: trendFrom, date_to: trendTo, table: 'collections', dateCol: 'collected_at', amountCol: 'gross_tzs', statusExpr: "status = 'approved'" }),
+    getPartnerEarnings({ date_from: partnerFrom, date_to: partnerTo }),
+    Ticket.findAll({
+      where: ticketCountWhere,
+      order: [[sequelize.literal("FIELD(priority, 'urgent', 'high', 'medium', 'low')"), 'ASC'], ['created_at', 'DESC']],
+      limit: 8,
+      attributes: ['id', 'ticket_number', 'ticket_type', 'priority', 'status', 'created_at', 'slot_code'],
+      include: [
+        { model: Machine, as: 'machine', attributes: ['slot_code'] },
+        { model: Shop, as: 'shop', attributes: ['name'] },
+      ],
+    }),
+  ]);
 
-  const last30DaysSales = await sequelize.query(`
-    SELECT DATE(sale_date) as date, SUM(net_amount_tzs) as total
-    FROM sales
-    WHERE status = 'completed' AND sale_date >= DATE_SUB(NOW(), INTERVAL 30 DAY)
-    ${chartSalesFilter}
-    GROUP BY DATE(sale_date)
-    ORDER BY date ASC
-  `, {
-    type: sequelize.QueryTypes.SELECT,
-    replacements,
-  });
+  // Top machines — respect ops date range when set, otherwise "this week"
+  const topMachinesWhere = { status: 'approved', ...collFilter };
+  if (!topMachinesWhere.collected_at) topMachinesWhere.collected_at = { [Op.gte]: week };
 
   const topMachines = await Collection.findAll({
     attributes: [
@@ -270,7 +362,7 @@ exports.adminDashboard = async (reqQuery) => {
       [sequelize.fn('SUM', sequelize.col('office_tzs')), 'office_tzs'],
       [sequelize.fn('SUM', sequelize.col('owner_tzs')), 'owner_tzs'],
     ],
-    where: { ...collFilter, status: 'approved', collected_at: { [Op.gte]: week } },
+    where: topMachinesWhere,
     group: ['machine_id', 'shop_id'],
     order: [[sequelize.fn('SUM', sequelize.col('gross_tzs')), 'DESC']],
     limit: 5,
@@ -279,11 +371,6 @@ exports.adminDashboard = async (reqQuery) => {
       { model: Shop, as: 'shop', attributes: ['name'] },
     ],
   });
-
-  const last6MonthsRevenue = await sequelize.query(`
-    SELECT DATE_FORMAT(collected_at, '%Y-%m') as month, SUM(gross_tzs) as revenue
-    FROM collections WHERE status = 'approved' ${chartCollFilter} GROUP BY month ORDER BY month DESC LIMIT 6
-  `, { type: sequelize.QueryTypes.SELECT, replacements });
 
   return {
     kpis: {
@@ -310,11 +397,19 @@ exports.adminDashboard = async (reqQuery) => {
       pendingDebtCount: pendingTokenDebts || 0,
       outstandingDebtAmount: outstandingTokenDebtAmount || 0,
     },
-    charts: {
-      collections: last30DaysCollections,
-      sales: last30DaysSales,
+    overview: {
+      totalEmployees: totalEmployees || 0,
+      activeEmployees: activeEmployees || 0,
+      totalPartners: totalPartners || 0,
+      totalShops: totalShops || 0,
     },
-    trend: last6MonthsRevenue.reverse(),
+    partnerEarnings,
+    unresolvedTickets,
+    charts: {
+      collections: lastCollections,
+      sales: lastSales,
+    },
+    trend: revenueTrend,
     topMachines,
   };
 };
