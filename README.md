@@ -326,10 +326,10 @@ POST           /api/settings/sms-test
 
 ### Dashboards
 ```
-GET /api/dashboard/admin       # ?shop_id=&date_from=&date_to=
-GET /api/dashboard/collector
-GET /api/dashboard/finance
-GET /api/dashboard/director
+GET /api/dashboard/admin       # ?date_from=&date_to=&chart_granularity=&trend_granularity=
+GET /api/dashboard/cashier
+GET /api/dashboard/sales
+GET /api/dashboard/technician
 ```
 
 ---

@@ -194,116 +194,67 @@ const getPartnerEarnings = async ({ date_from, date_to }) => {
 
 exports.adminDashboard = async (reqQuery) => {
   const today = todayStart();
-  const week = weekStart();
-  const month = monthStart();
   const year = yearStart();
 
-  // Per-section scopes (legacy flat params keep working as the Operations scope fallback)
-  const opsScope = parseSectionScope(reqQuery, 'ops', true);
-  const revScope = parseSectionScope(reqQuery, 'rev', true);
-  const tokenShopId = reqQuery.token_shop_id || null;
-  const chartScope = {
-    business_type: reqQuery.chart_business_type || null,
-    shop_id: reqQuery.chart_shop_id || null,
-    date_from: reqQuery.chart_from || null,
-    date_to: reqQuery.chart_to || null,
-  };
-  const trendScope = {
-    business_type: reqQuery.trend_business_type || null,
-    shop_id: reqQuery.trend_shop_id || null,
-    date_from: reqQuery.trend_from || null,
-    date_to: reqQuery.trend_to || null,
-  };
+  // Single global date filter drives every section; defaults to "this month" when absent
+  const dateFrom = reqQuery.date_from || isoDate(monthStart());
+  const dateTo = reqQuery.date_to || isoDate(new Date());
   const chartGranularity = reqQuery.chart_granularity || 'day';
   const trendGranularity = reqQuery.trend_granularity || 'month';
-  const partnerFrom = reqQuery.partner_from || daysAgoISO(30);
-  const partnerTo = reqQuery.partner_to || isoDate(new Date());
 
-  const collFilter = await buildScopeFilter(opsScope);
-  const salesFilter = await saleScopeFilter(revScope);
+  const baseScope = { date_from: dateFrom, date_to: dateTo };
+  const bentabetScope = { ...baseScope, business_type: 'slot' };
+  const meteoraScope = { ...baseScope, business_type: 'meteora' };
 
-  // Operations KPIs — today/week defaults when no ops date range selected
-  const collWhere = { ...collFilter, status: 'approved' };
-  if (!collWhere.collected_at) collWhere.collected_at = { [Op.gte]: today };
+  const bentabetCollFilter = await buildScopeFilter(bentabetScope);
+  const meteoraCollFilter = await buildScopeFilter(meteoraScope);
+  const globalCollFilter = await buildScopeFilter(baseScope);
+  const bentabetSalesFilter = await saleScopeFilter(bentabetScope);
 
-  const weekCollWhere = { ...collFilter, status: 'approved' };
-  if (!weekCollWhere.collected_at) weekCollWhere.collected_at = { [Op.gte]: week };
-
-  const loginWhere = {};
-  if (opsScope.date_from || opsScope.date_to) {
-    loginWhere.last_login = {};
-    if (opsScope.date_from) loginWhere.last_login[Op.gte] = new Date(opsScope.date_from);
-    if (opsScope.date_to) loginWhere.last_login[Op.lte] = new Date(opsScope.date_to + 'T23:59:59.999Z');
-  } else {
-    loginWhere.last_login = { [Op.gte]: today };
-  }
-
-  // Operations machine / shop counts scoped to business/shop
-  const machineWhere = { status: 'active' };
-  const shopCountWhere = { status: 'active' };
-  if (opsScope.business_type) {
-    shopCountWhere.business_type = opsScope.business_type;
-    const btShopIds = await getShopsByBusinessType(opsScope.business_type);
-    if (btShopIds?.length) {
-      machineWhere.current_shop_id = { [Op.in]: btShopIds };
-    } else {
-      machineWhere.id = -1;
-      shopCountWhere.id = -1;
-    }
-  }
-  if (opsScope.shop_id) {
-    machineWhere.current_shop_id = opsScope.shop_id;
-    shopCountWhere.id = opsScope.shop_id;
-  }
-
-  // Revenue & Expenses — month default when no rev date range selected
-  const monthExpenseWhere = { status: 'approved' };
-  if (revScope.date_from || revScope.date_to) {
-    monthExpenseWhere.created_at = {};
-    if (revScope.date_from) monthExpenseWhere.created_at[Op.gte] = new Date(revScope.date_from);
-    if (revScope.date_to) monthExpenseWhere.created_at[Op.lte] = new Date(revScope.date_to + 'T23:59:59.999Z');
-  } else {
-    monthExpenseWhere.created_at = { [Op.gte]: month };
-  }
-
-  const fySalesWhere = { ...salesFilter, status: 'completed' };
-  if (!fySalesWhere.sale_date) fySalesWhere.sale_date = { [Op.gte]: year };
-
-  const periodRevenueWhere = await buildScopeFilter(revScope);
-  periodRevenueWhere.status = 'approved';
-  if (!periodRevenueWhere.collected_at) periodRevenueWhere.collected_at = { [Op.gte]: month };
-
-  // Token Management — Meteora only, debts optionally scoped to a shop
-  const tokenDebtWhere = { status: ['pending', 'partial'], type: 'token' };
-  if (tokenShopId) tokenDebtWhere.shop_id = tokenShopId;
-
-  // Alerts & Risks — global, no business scope
-  const ticketCountWhere = { status: ['open', 'in_progress', 'reopened'] };
+  const slotShopIds = await getShopsByBusinessType('slot');
 
   const [
-    totalMachines, activeShops, openTickets, pendingExpenses,
-    todayCollections, weekCollections,
-    officeTokenStock, pendingTokenDebts, outstandingTokenDebtAmount, todayLogins,
-    totalSales, totalPurchaseValue, invoiceDue, totalExpenses,
-    stockAlertCount, fySales,
-    periodGross, periodOffice, periodOwner,
-    totalEmployees, activeEmployees, totalPartners, totalShops,
+    totalEmployees, activeEmployees, todayLogins, totalShops, totalPartners,
+    bentabetMachines, bentabetShops, bentabetCollections,
+    meteoraMachines, meteoraShops, meteoraCollections,
+    bentabetGross, bentabetOffice, bentabetOwner, bentabetExpenses,
+    meteoraGross, meteoraOffice, meteoraOwner, meteoraExpenses,
+    totalSales, totalPurchaseValue, invoiceDue, fySales,
+    officeTokenStock, pendingTokenDebts, outstandingTokenDebtAmount,
+    stockAlertCount, pendingExpenses, unresolvedTickets,
   ] = await Promise.all([
-    Machine.count({ where: machineWhere }),
-    Shop.count({ where: shopCountWhere }),
-    Ticket.count({ where: ticketCountWhere }),
-    Expense.count({ where: { status: 'pending' } }),
-    Collection.sum('gross_tzs', { where: collWhere }),
-    Collection.sum('gross_tzs', { where: weekCollWhere }),
-    TokenInventory.sum('qty'),
-    MachineDebt.count({ where: tokenDebtWhere }),
-    MachineDebt.sum('amount', { where: tokenDebtWhere }),
-    User.count({ where: loginWhere }),
-    Sale.sum('net_amount_tzs', { where: { ...salesFilter, status: 'completed' } }),
+    Employee.count(),
+    Employee.count({ where: { status: 'active' } }),
+    User.count({ where: { last_login: { [Op.gte]: today } } }),
+    Shop.count(),
+    Shop.count({
+      distinct: true,
+      col: 'partner_id',
+      where: { business_type: 'meteora', partner_id: { [Op.ne]: null } },
+    }),
+    Machine.count({ where: { status: 'active', manufacturer: 'Novomatic' } }),
+    Shop.count({ where: { status: 'active', business_type: 'slot' } }),
+    Collection.sum('gross_tzs', { where: { ...bentabetCollFilter, status: 'approved' } }),
+    Machine.count({ where: { status: 'active', manufacturer: 'Meteora' } }),
+    Shop.count({ where: { status: 'active', business_type: 'meteora' } }),
+    Collection.sum('gross_tzs', { where: { ...meteoraCollFilter, status: 'approved' } }),
+    Collection.sum('gross_tzs', { where: { ...bentabetCollFilter, status: 'approved' } }),
+    Collection.sum('office_tzs', { where: { ...bentabetCollFilter, status: 'approved' } }),
+    Collection.sum('owner_tzs', { where: { ...bentabetCollFilter, status: 'approved' } }),
+    Expense.sum('amount', { where: { ...buildExpenseScopeFilter(bentabetScope), status: 'approved' } }),
+    Collection.sum('gross_tzs', { where: { ...meteoraCollFilter, status: 'approved' } }),
+    Collection.sum('office_tzs', { where: { ...meteoraCollFilter, status: 'approved' } }),
+    Collection.sum('owner_tzs', { where: { ...meteoraCollFilter, status: 'approved' } }),
+    Expense.sum('amount', { where: { ...buildExpenseScopeFilter(meteoraScope), status: 'approved' } }),
+    Sale.sum('net_amount_tzs', { where: { ...bentabetSalesFilter, status: 'completed' } }),
     (async () => {
       try {
         const movements = await StockMovement.findAll({
-          where: { movement_type: 'purchase' },
+          where: {
+            movement_type: 'purchase',
+            ...(slotShopIds?.length ? { shop_id: { [Op.in]: slotShopIds } } : {}),
+            created_at: { [Op.gte]: new Date(dateFrom), [Op.lte]: new Date(dateTo + 'T23:59:59.999Z') },
+          },
           include: [{ model: Product, as: 'product', attributes: ['purchase_price'] }],
           raw: true,
         });
@@ -312,104 +263,116 @@ exports.adminDashboard = async (reqQuery) => {
         return 0;
       }
     })(),
-    Invoice.sum('total', { where: { status: ['sent', 'overdue'] } }),
-    Expense.sum('amount', { where: monthExpenseWhere }),
+    Invoice.sum('total', { where: { status: ['sent', 'overdue'], ...(slotShopIds?.length ? { shop_id: { [Op.in]: slotShopIds } } : {}) } }),
+    Sale.sum('net_amount_tzs', { where: { status: 'completed', sale_date: { [Op.gte]: year }, ...(slotShopIds?.length ? { shop_id: { [Op.in]: slotShopIds } } : {}) } }),
+    TokenInventory.sum('qty'),
+    MachineDebt.count({ where: { status: ['pending', 'partial'], type: 'token' } }),
+    MachineDebt.sum('amount', { where: { status: ['pending', 'partial'], type: 'token' } }),
     LowStockAlert.count({ where: { acknowledged: false } }),
-    Sale.sum('net_amount_tzs', { where: fySalesWhere }),
-    Collection.sum('gross_tzs', { where: periodRevenueWhere }),
-    Collection.sum('office_tzs', { where: periodRevenueWhere }),
-    Collection.sum('owner_tzs', { where: periodRevenueWhere }),
-    Employee.count(),
-    Employee.count({ where: { status: 'active' } }),
-    Partner.count(),
-    Shop.count(),
+    Expense.count({ where: { status: 'pending' } }),
+    Ticket.count({ where: { status: ['open', 'in_progress', 'reopened'] } }),
   ]);
 
-  const netRevenue = (periodGross || 0) - (totalExpenses || 0);
+  const bentabetNet = (bentabetGross || 0) - (bentabetExpenses || 0);
+  const meteoraNet = (meteoraGross || 0) - (meteoraExpenses || 0);
 
-  // Dynamic trends — charts (last 30d default) + revenue trend (last 6 months default)
-  const chartFrom = chartScope.date_from || daysAgoISO(30);
-  const chartTo = chartScope.date_to || isoDate(new Date());
-  const trendFrom = trendScope.date_from || monthsAgoISO(6);
-  const trendTo = trendScope.date_to || isoDate(new Date());
-
-  const [lastCollections, lastSales, revenueTrend, partnerEarnings, unresolvedTickets] = await Promise.all([
-    getTrendData({ scope: chartScope, granularity: chartGranularity, date_from: chartFrom, date_to: chartTo, table: 'collections', dateCol: 'collected_at', amountCol: 'gross_tzs', statusExpr: "status = 'approved'" }),
-    getTrendData({ scope: chartScope, granularity: chartGranularity, date_from: chartFrom, date_to: chartTo, table: 'sales', dateCol: 'sale_date', amountCol: 'net_amount_tzs', statusExpr: "status = 'completed'" }),
-    getTrendData({ scope: trendScope, granularity: trendGranularity, date_from: trendFrom, date_to: trendTo, table: 'collections', dateCol: 'collected_at', amountCol: 'gross_tzs', statusExpr: "status = 'approved'" }),
-    getPartnerEarnings({ date_from: partnerFrom, date_to: partnerTo }),
-    Ticket.findAll({
-      where: ticketCountWhere,
-      order: [[sequelize.literal("FIELD(priority, 'urgent', 'high', 'medium', 'low')"), 'ASC'], ['created_at', 'DESC']],
-      limit: 8,
-      attributes: ['id', 'ticket_number', 'ticket_type', 'priority', 'status', 'created_at', 'slot_code'],
-      include: [
-        { model: Machine, as: 'machine', attributes: ['slot_code'] },
-        { model: Shop, as: 'shop', attributes: ['name'] },
-      ],
-    }),
+  const [trends, revenueTrend, partnerEarnings, topMachines] = await Promise.all([
+    Promise.all([
+      getTrendData({ scope: bentabetScope, granularity: chartGranularity, date_from: dateFrom, date_to: dateTo, table: 'collections', dateCol: 'collected_at', amountCol: 'gross_tzs', statusExpr: "status = 'approved'" }),
+      getTrendData({ scope: bentabetScope, granularity: chartGranularity, date_from: dateFrom, date_to: dateTo, table: 'sales', dateCol: 'sale_date', amountCol: 'net_amount_tzs', statusExpr: "status = 'completed'" }),
+      getTrendData({ scope: meteoraScope, granularity: chartGranularity, date_from: dateFrom, date_to: dateTo, table: 'collections', dateCol: 'collected_at', amountCol: 'gross_tzs', statusExpr: "status = 'approved'" }),
+    ]),
+    Promise.all([
+      getTrendData({ scope: bentabetScope, granularity: trendGranularity, date_from: dateFrom, date_to: dateTo, table: 'collections', dateCol: 'collected_at', amountCol: 'gross_tzs', statusExpr: "status = 'approved'" }),
+      getTrendData({ scope: meteoraScope, granularity: trendGranularity, date_from: dateFrom, date_to: dateTo, table: 'collections', dateCol: 'collected_at', amountCol: 'gross_tzs', statusExpr: "status = 'approved'" }),
+    ]),
+    getPartnerEarnings({ date_from: dateFrom, date_to: dateTo }),
+    (async () => {
+      const topMachinesWhere = { status: 'approved', ...globalCollFilter };
+      return Collection.findAll({
+        attributes: [
+          'machine_id',
+          'shop_id',
+          [sequelize.fn('SUM', sequelize.col('gross_tzs')), 'total_tzs'],
+          [sequelize.fn('SUM', sequelize.col('office_tzs')), 'office_tzs'],
+          [sequelize.fn('SUM', sequelize.col('owner_tzs')), 'owner_tzs'],
+        ],
+        where: topMachinesWhere,
+        group: ['machine_id', 'shop_id'],
+        order: [[sequelize.fn('SUM', sequelize.col('gross_tzs')), 'DESC']],
+        limit: 5,
+        include: [
+          { model: Machine, as: 'machine', attributes: ['slot_code', 'manufacturer'] },
+          { model: Shop, as: 'shop', attributes: ['name'] },
+        ],
+      });
+    })(),
   ]);
-
-  // Top machines — respect ops date range when set, otherwise "this week"
-  const topMachinesWhere = { status: 'approved', ...collFilter };
-  if (!topMachinesWhere.collected_at) topMachinesWhere.collected_at = { [Op.gte]: week };
-
-  const topMachines = await Collection.findAll({
-    attributes: [
-      'machine_id',
-      'shop_id',
-      [sequelize.fn('SUM', sequelize.col('gross_tzs')), 'total_tzs'],
-      [sequelize.fn('SUM', sequelize.col('office_tzs')), 'office_tzs'],
-      [sequelize.fn('SUM', sequelize.col('owner_tzs')), 'owner_tzs'],
-    ],
-    where: topMachinesWhere,
-    group: ['machine_id', 'shop_id'],
-    order: [[sequelize.fn('SUM', sequelize.col('gross_tzs')), 'DESC']],
-    limit: 5,
-    include: [
-      { model: Machine, as: 'machine', attributes: ['slot_code', 'manufacturer'] },
-      { model: Shop, as: 'shop', attributes: ['name'] },
-    ],
-  });
 
   return {
-    kpis: {
-      totalMachines, activeShops, openTickets, pendingExpenses,
-      todayCollections: todayCollections || 0, weekCollections: weekCollections || 0,
+    overview: {
+      totalEmployees: totalEmployees || 0,
+      activeEmployees: activeEmployees || 0,
       todayLogins: todayLogins || 0,
+      totalPartners: totalPartners || 0,
+      totalShops: totalShops || 0,
     },
-    financialKpis: {
-      periodGross: periodGross || 0,
-      periodOffice: periodOffice || 0,
-      periodOwner: periodOwner || 0,
-      totalExpenses: totalExpenses || 0,
-      netRevenue: netRevenue || 0,
+    operations: {
+      bentabet: {
+        totalMachines: bentabetMachines || 0,
+        activeShops: bentabetShops || 0,
+        collections: bentabetCollections || 0,
+      },
+      meteora: {
+        totalMachines: meteoraMachines || 0,
+        activeShops: meteoraShops || 0,
+        collections: meteoraCollections || 0,
+      },
     },
-    salesKpis: {
-      totalSales: totalSales || 0,
-      totalPurchase: totalPurchaseValue || 0,
-      invoiceDue: invoiceDue || 0,
-      fySales: fySales || 0,
-      stockAlertCount: stockAlertCount || 0,
+    revenueExpenses: {
+      bentabet: {
+        gross: bentabetGross || 0,
+        office: bentabetOffice || 0,
+        owner: bentabetOwner || 0,
+        totalExpenses: bentabetExpenses || 0,
+        net: bentabetNet || 0,
+        totalSales: totalSales || 0,
+        totalPurchase: totalPurchaseValue || 0,
+        invoiceDue: invoiceDue || 0,
+        fySales: fySales || 0,
+      },
+      meteora: {
+        gross: meteoraGross || 0,
+        office: meteoraOffice || 0,
+        owner: meteoraOwner || 0,
+        totalExpenses: meteoraExpenses || 0,
+        net: meteoraNet || 0,
+      },
     },
     tokenKpis: {
       officeStock: officeTokenStock || 0,
       pendingDebtCount: pendingTokenDebts || 0,
       outstandingDebtAmount: outstandingTokenDebtAmount || 0,
     },
-    overview: {
-      totalEmployees: totalEmployees || 0,
-      activeEmployees: activeEmployees || 0,
-      totalPartners: totalPartners || 0,
-      totalShops: totalShops || 0,
+    alerts: {
+      stockAlertCount: stockAlertCount || 0,
+      pendingExpenses: pendingExpenses || 0,
+      unresolvedTickets: unresolvedTickets || 0,
     },
     partnerEarnings,
-    unresolvedTickets,
-    charts: {
-      collections: lastCollections,
-      sales: lastSales,
+    trends: {
+      bentabet: {
+        collections: trends[0],
+        sales: trends[1],
+      },
+      meteora: {
+        collections: trends[2],
+      },
     },
-    trend: revenueTrend,
+    revenueTrend: {
+      bentabet: revenueTrend[0],
+      meteora: revenueTrend[1],
+    },
     topMachines,
   };
 };
