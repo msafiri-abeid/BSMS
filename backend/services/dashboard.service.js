@@ -57,9 +57,9 @@ const buildScopeFilter = async (scope) => {
   }
   if (scope.shop_id) where.shop_id = scope.shop_id;
   if (scope.date_from || scope.date_to) {
-    where.collected_at = {};
-    if (scope.date_from) where.collected_at[Op.gte] = new Date(scope.date_from);
-    if (scope.date_to) where.collected_at[Op.lte] = new Date(scope.date_to + 'T23:59:59.999Z');
+    where.collection_date = {};
+    if (scope.date_from) where.collection_date[Op.gte] = scope.date_from;
+    if (scope.date_to) where.collection_date[Op.lte] = scope.date_to;
   }
   return where;
 };
@@ -164,7 +164,7 @@ const getPartnerEarnings = async ({ date_from, date_to }) => {
     INNER JOIN shops s ON s.id = c.shop_id AND s.partner_id IS NOT NULL
     INNER JOIN partners p ON p.id = s.partner_id
     WHERE c.status = 'approved'
-      AND c.collected_at >= :date_from AND c.collected_at <= :date_to
+      AND c.collection_date >= :date_from AND c.collection_date <= :date_to
     GROUP BY p.id, p.label, p.name
     ORDER BY gross_tzs DESC
     LIMIT 15
@@ -253,7 +253,7 @@ exports.adminDashboard = async (reqQuery) => {
 
   // Per-slot-shop revenue & expenses (Overview tab aggregates these; one tab per shop)
   const bentabetShopRows = await Promise.all((slotShops || []).map(async (s) => {
-    const collWhere = { shop_id: s.id, status: 'approved', collected_at: { [Op.gte]: new Date(dateFrom), [Op.lte]: new Date(dateTo + 'T23:59:59.999Z') } };
+    const collWhere = { shop_id: s.id, status: 'approved', collection_date: { [Op.gte]: dateFrom, [Op.lte]: dateTo } };
     const expWhere = { shop_id: s.id, business_type: 'bentabet', status: 'approved', expense_date: { [Op.gte]: new Date(dateFrom), [Op.lte]: new Date(dateTo + 'T23:59:59.999Z') } };
     const saleWhere = { shop_id: s.id, status: 'completed', sale_date: { [Op.gte]: new Date(dateFrom), [Op.lte]: new Date(dateTo + 'T23:59:59.999Z') } };
     const [gross, owner, totalExpenses, totalSales, totalPurchase, invoiceDue, fySales] = await Promise.all([
@@ -295,13 +295,13 @@ exports.adminDashboard = async (reqQuery) => {
 
   const [trends, revenueTrend, partnerEarnings, topMachines] = await Promise.all([
     Promise.all([
-      getTrendData({ scope: bentabetScope, granularity: chartGranularity, date_from: dateFrom, date_to: dateTo, table: 'collections', dateCol: 'collected_at', amountCol: 'gross_tzs', statusExpr: "status = 'approved'" }),
+      getTrendData({ scope: bentabetScope, granularity: chartGranularity, date_from: dateFrom, date_to: dateTo, table: 'collections', dateCol: 'collection_date', amountCol: 'gross_tzs', statusExpr: "status = 'approved'" }),
       getTrendData({ scope: bentabetScope, granularity: chartGranularity, date_from: dateFrom, date_to: dateTo, table: 'sales', dateCol: 'sale_date', amountCol: 'net_amount_tzs', statusExpr: "status = 'completed'" }),
-      getTrendData({ scope: meteoraScope, granularity: chartGranularity, date_from: dateFrom, date_to: dateTo, table: 'collections', dateCol: 'collected_at', amountCol: 'gross_tzs', statusExpr: "status = 'approved'" }),
+      getTrendData({ scope: meteoraScope, granularity: chartGranularity, date_from: dateFrom, date_to: dateTo, table: 'collections', dateCol: 'collection_date', amountCol: 'gross_tzs', statusExpr: "status = 'approved'" }),
     ]),
     Promise.all([
-      getTrendData({ scope: bentabetScope, granularity: trendGranularity, date_from: dateFrom, date_to: dateTo, table: 'collections', dateCol: 'collected_at', amountCol: 'gross_tzs', statusExpr: "status = 'approved'" }),
-      getTrendData({ scope: meteoraScope, granularity: trendGranularity, date_from: dateFrom, date_to: dateTo, table: 'collections', dateCol: 'collected_at', amountCol: 'gross_tzs', statusExpr: "status = 'approved'" }),
+      getTrendData({ scope: bentabetScope, granularity: trendGranularity, date_from: dateFrom, date_to: dateTo, table: 'collections', dateCol: 'collection_date', amountCol: 'gross_tzs', statusExpr: "status = 'approved'" }),
+      getTrendData({ scope: meteoraScope, granularity: trendGranularity, date_from: dateFrom, date_to: dateTo, table: 'collections', dateCol: 'collection_date', amountCol: 'gross_tzs', statusExpr: "status = 'approved'" }),
     ]),
     getPartnerEarnings({ date_from: dateFrom, date_to: dateTo }),
     (async () => {
@@ -401,10 +401,10 @@ exports.collectorDashboard = async (userId, scope = {}) => {
   const assignWhere = { collector_id: userId, assigned_date: todayStr };
   if (scope.shop_id) assignWhere.shop_id = scope.shop_id;
 
-  const collWhere = { collector_id: userId, status: 'approved', collected_at: { [Op.gte]: week } };
+  const collWhere = { collector_id: userId, status: 'approved', collection_date: { [Op.gte]: isoDate(week) } };
   if (scope.shop_id) collWhere.shop_id = scope.shop_id;
-  if (scope.date_from) collWhere.collected_at[Op.gte] = new Date(scope.date_from);
-  if (scope.date_to) collWhere.collected_at[Op.lte] = new Date(scope.date_to + 'T23:59:59.999Z');
+  if (scope.date_from) collWhere.collection_date[Op.gte] = scope.date_from;
+  if (scope.date_to) collWhere.collection_date[Op.lte] = scope.date_to;
 
   const ticketWhere = { requester_id: userId, status: ['open', 'in_progress'] };
 
@@ -538,7 +538,7 @@ exports.directorDashboard = async (scope = {}) => {
   }
 
   const last6Months = await sequelize.query(`
-    SELECT DATE_FORMAT(collected_at, '%Y-%m') as month, SUM(gross_tzs) as revenue
+    SELECT DATE_FORMAT(collection_date, '%Y-%m') as month, SUM(gross_tzs) as revenue
     FROM collections WHERE status = 'approved' ${trendFilter} GROUP BY month ORDER BY month DESC LIMIT 6
   `, { type: sequelize.QueryTypes.SELECT, replacements: trendReplacements });
 
@@ -581,10 +581,10 @@ exports.cashierDashboard = async (scope = {}) => {
     };
   }
 
-  const collFilter = { status: 'approved', collected_at: { [Op.gte]: today } };
+  const collFilter = { status: 'approved', collection_date: { [Op.gte]: isoDate(today) } };
   if (hasShopScope) collFilter.shop_id = { [Op.in]: shopIds };
-  if (scope.date_from) collFilter.collected_at[Op.gte] = new Date(scope.date_from);
-  if (scope.date_to) collFilter.collected_at[Op.lte] = new Date(scope.date_to + 'T23:59:59.999Z');
+  if (scope.date_from) collFilter.collection_date[Op.gte] = scope.date_from;
+  if (scope.date_to) collFilter.collection_date[Op.lte] = scope.date_to;
 
   const salesFilter = { status: 'completed', sale_date: { [Op.gte]: today } };
   if (hasShopScope) salesFilter.shop_id = { [Op.in]: shopIds };
