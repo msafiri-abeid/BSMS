@@ -7,7 +7,7 @@ import {
   DollarSign, Receipt, FileSignature, Banknote, Headphones,
   Package, Coins, ShoppingCart, ClipboardCheck, TrendingUp, Undo2, AlertTriangle, BarChart3,
   Shield, UserCheck, Building2, Briefcase,
-  Settings, User, LogOut, PanelLeftClose, PanelLeftOpen, Bell, Plus, Menu as MenuIcon,
+  Settings, User, LogOut, PanelLeftClose, PanelLeftOpen, Bell, Menu as MenuIcon,
   Landmark,
 } from "lucide-react";
 import { useAuthStore } from "../store/authStore";
@@ -303,17 +303,6 @@ export default function MainLayout() {
             )}
           </div>
           <Space size={[4, 4]}>
-            {['Admin', 'General Manager', 'Operations Manager', 'Cashier'].includes(getRoleName()) && (
-              <Button
-                type="primary"
-                size="small"
-                icon={<Plus size={14} />}
-                onClick={() => navigate('/inventory/sales?quick=1')}
-                className="!bg-brand-dark !border-0 !font-semibold !shadow-sm hover:!bg-brand-light !flex !items-center !gap-1.5 !px-2 md:!px-3"
-              >
-                <span className="hidden md:inline">Record Sale</span>
-              </Button>
-            )}
             <NotificationBell />
             <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
               <Space style={{ cursor: "pointer" }} className="gap-1 md:gap-2">

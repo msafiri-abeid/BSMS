@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Button, Select, DatePicker, Spin, Table, Tag, Typography, Alert } from 'antd';
+import { Button, Select, DatePicker, Spin, Table, Tag, Typography, Alert, Tabs } from 'antd';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
 import {
   Cpu, Wallet, Store, Ticket, FileText, CheckSquare,
@@ -13,7 +13,7 @@ import { dashboardAPI, shopsAPI } from '../../services/api';
 import { useAuthStore } from '../../store/authStore';
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
-import { getDateRange, DATE_PRESETS, TREND_PRESETS, GRANULARITY_OPTIONS } from '../../utils/datePresets';
+import { getDateRange } from '../../utils/datePresets';
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -66,6 +66,20 @@ const SectionHeader = ({ label }) => (
 const BUSINESS_TYPE_OPTIONS = [
   { value: 'slot', label: 'Bentabet' },
   { value: 'meteora', label: 'Meteora' },
+];
+
+// Minimalist date filter — default option shows the actual (yesterday's) date, like Shop details / Collections
+const PRESET_OPTIONS = [
+  { label: dayjs().subtract(1, 'day').format('DD MMM YYYY'), value: 'yesterday' },
+  { label: 'This Week', value: 'this_week' },
+  { label: 'This Month', value: 'this_month' },
+  { label: 'Last Month', value: 'last_month' },
+  { label: 'Last 7 Days', value: 'last_7' },
+  { label: 'Last 30 Days', value: 'last_30' },
+  { label: 'Last 60 Days', value: 'last_60' },
+  { label: 'Last 90 Days', value: 'last_90' },
+  { label: 'Last Year', value: 'last_year' },
+  { label: 'Custom Range', value: 'custom' },
 ];
 
 function DashboardFilter({
@@ -147,7 +161,7 @@ function DashboardFilter({
   );
 }
 
-const useGlobalDate = (initialPreset = 'this_month') => {
+const useGlobalDate = (initialPreset = 'yesterday') => {
   const [preset, setPreset] = useState(initialPreset);
   const [customRange, setCustomRange] = useState(null);
   const { date_from, date_to } = useMemo(() => {
@@ -206,20 +220,36 @@ const meteoraCols = [
   { title: 'Owner (TZS)', dataIndex: 'owner_tzs', align: 'right', render: v => <span className="text-xs font-semibold text-amber-700">{fmt(Number(v))}</span> },
 ];
 
+// Bentabet has no Office Share (company-owned Novomatic machines) — overview + per-shop tabs share this layout
+const renderBentabetRevCards = (rev) => {
+  const r = rev || {};
+  return (
+    <>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <DashboardKpiCard title="Gross Revenue" value={r.gross} formatter={fmt} icon={TrendingUp} bgIconColor="bg-emerald-50" iconColor="text-emerald-600" link="/collections" />
+        <DashboardKpiCard title="Return To Player" value={r.owner} formatter={fmt} icon={Users} bgIconColor={r.owner <= 0 ? 'bg-rose-50' : 'bg-amber-50'} iconColor={r.owner <= 0 ? 'text-rose-500' : 'text-amber-600'} />
+        <DashboardKpiCard title="Total Expenses" value={r.totalExpenses} formatter={fmt} icon={FileText} bgIconColor="bg-orange-50" iconColor="text-orange-600" link="/finance/expenses" />
+        <DashboardKpiCard title="Net Revenue" value={r.net} formatter={fmt} icon={DollarSign} bgIconColor={r.net >= 0 ? 'bg-emerald-50' : 'bg-rose-50'} iconColor={r.net >= 0 ? 'text-emerald-600' : 'text-rose-600'} />
+      </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
+        <DashboardKpiCard title="Total Sales" value={r.totalSales} formatter={fmt} icon={ShoppingCart} bgIconColor="bg-teal-50" iconColor="text-teal-600" link="/inventory/sales" />
+        <DashboardKpiCard title="Total Purchase" value={r.totalPurchase} formatter={fmt} icon={ShoppingBag} bgIconColor="bg-indigo-50" iconColor="text-indigo-600" link="/inventory/stock" />
+        <DashboardKpiCard title="Invoice Due" value={r.invoiceDue} formatter={fmt} icon={Receipt} bgIconColor="bg-red-50" iconColor="text-red-600" link="/finance/invoices" />
+        <DashboardKpiCard title="FY Sales (YTD)" value={r.fySales} formatter={fmt} icon={BarChart3} bgIconColor="bg-brand-dark/5" iconColor="text-brand-dark" link="/inventory/sales" />
+      </div>
+    </>
+  );
+};
+
 function AdminDashboard() {
   const navigate = useNavigate();
 
-  // Single global date filter drives every section — no "Default" option, always a concrete preset
-  const globalDate = useGlobalDate('this_month');
-  const [granularity, setGranularity] = useState('day');
+  // Single global date filter drives every section — default = actual (yesterday's) date
+  const globalDate = useGlobalDate('yesterday');
 
   const params = {};
   if (globalDate.date_from) params.date_from = globalDate.date_from;
   if (globalDate.date_to) params.date_to = globalDate.date_to;
-  if (granularity) {
-    params.chart_granularity = granularity;
-    params.trend_granularity = granularity;
-  }
 
   const { data, isLoading } = useQuery({
     queryKey: ['dashboard-admin', params],
@@ -246,7 +276,9 @@ function AdminDashboard() {
   const bentabetTrend = mergeTrend(d.trends?.bentabet?.collections, d.trends?.bentabet?.sales);
   const meteoraTrend = (d.trends?.meteora?.collections || []).map(r => ({ period: r.period, collections: Number(r.total) || 0, sales: 0 }));
   const periodRange = globalDate.date_from && globalDate.date_to
-    ? `${dayjs(globalDate.date_from).format('DD MMM YYYY')} → ${dayjs(globalDate.date_to).format('DD MMM YYYY')}`
+    ? globalDate.date_from === globalDate.date_to
+      ? dayjs(globalDate.date_from).format('DD MMM YYYY')
+      : `${dayjs(globalDate.date_from).format('DD MMM YYYY')} → ${dayjs(globalDate.date_to).format('DD MMM YYYY')}`
     : '';
 
   return (
@@ -254,25 +286,15 @@ function AdminDashboard() {
       {/* ─── Global Filter Bar ─── */}
       <div className="bg-white rounded-xl border border-slate-100 p-4">
         <div className="flex items-center gap-3 flex-wrap">
-          <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Period</span>
           <Select
             size="small" className="w-44"
             value={globalDate.preset}
-            onChange={(v) => globalDate.setPreset(v)}
-            options={TREND_PRESETS}
+            onChange={(v) => { globalDate.setPreset(v); if (v !== 'custom') globalDate.setCustomRange(null); }}
+            options={PRESET_OPTIONS}
           />
           {globalDate.preset === 'custom' && (
-            <RangePicker size="small" className="w-64" value={globalDate.customRange} onChange={globalDate.setCustomRange} />
+            <RangePicker size="small" className="w-64" value={globalDate.customRange} onChange={globalDate.setCustomRange} disabledDate={(d) => d.isAfter(dayjs())} />
           )}
-          <div className="hidden sm:flex items-center gap-2 ml-auto">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Granularity</span>
-            <Select
-              size="small" className="w-32"
-              value={granularity}
-              onChange={(v) => setGranularity(v)}
-              options={GRANULARITY_OPTIONS}
-            />
-          </div>
         </div>
         {periodRange && <p className="text-xs text-slate-400 mt-2">Showing {periodRange}</p>}
       </div>
@@ -280,9 +302,8 @@ function AdminDashboard() {
       {/* ─── Company Overview ─── */}
       <div>
         <SectionHeader label="Company Overview" />
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-          <DashboardKpiCard title="Total Employees" value={d.overview?.totalEmployees} icon={Users} bgIconColor="bg-blue-50" iconColor="text-blue-600" link="/staff/employees" />
-          <DashboardKpiCard title="Active Employees" value={d.overview?.activeEmployees} icon={CheckSquare} bgIconColor="bg-emerald-50" iconColor="text-emerald-600" link="/staff/employees" />
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+          <DashboardKpiCard title="Total Employees" value={d.overview?.activeEmployees} icon={Users} bgIconColor="bg-blue-50" iconColor="text-blue-600" link="/staff/employees" />
           <DashboardKpiCard title="Total Partners" value={d.overview?.totalPartners} icon={Handshake} bgIconColor="bg-purple-50" iconColor="text-purple-600" link="/partners" />
           <DashboardKpiCard title="Total Shops" value={d.overview?.totalShops} icon={Store} bgIconColor="bg-orange-50" iconColor="text-orange-600" />
           <DashboardKpiCard title="Today's Login" value={d.overview?.todayLogins} icon={LogIn} bgIconColor="bg-cyan-50" iconColor="text-cyan-600" />
@@ -291,11 +312,11 @@ function AdminDashboard() {
 
       {/* ─── Operations · Bentabet ─── */}
       <div>
-        <SectionHeader label="Operations · Bentabet (Slot)" />
+        <SectionHeader label="Operations · Bentabet" />
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <DashboardKpiCard title="Active Machines" value={d.operations?.bentabet?.totalMachines} icon={Cpu} bgIconColor="bg-emerald-50" iconColor="text-emerald-600" link="/machines/novomatic" />
           <DashboardKpiCard title="Active Shops" value={d.operations?.bentabet?.activeShops} icon={Store} bgIconColor="bg-orange-50" iconColor="text-orange-600" link="/shops/slot" />
-          <DashboardKpiCard title="Collections (Period)" value={d.operations?.bentabet?.collections} formatter={fmt} icon={Wallet} bgIconColor="bg-blue-50" iconColor="text-blue-600" link="/collections" />
+          <DashboardKpiCard title="Collections" value={d.operations?.bentabet?.collections} formatter={fmt} icon={Wallet} bgIconColor="bg-blue-50" iconColor="text-blue-600" link="/collections" />
         </div>
       </div>
 
@@ -305,25 +326,26 @@ function AdminDashboard() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <DashboardKpiCard title="Active Machines" value={d.operations?.meteora?.totalMachines} icon={Cpu} bgIconColor="bg-emerald-50" iconColor="text-emerald-600" link="/machines/meteora" />
           <DashboardKpiCard title="Active Shops" value={d.operations?.meteora?.activeShops} icon={Store} bgIconColor="bg-orange-50" iconColor="text-orange-600" link="/shops/meteora" />
-          <DashboardKpiCard title="Collections (Period)" value={d.operations?.meteora?.collections} formatter={fmt} icon={Wallet} bgIconColor="bg-blue-50" iconColor="text-blue-600" link="/collections" />
+          <DashboardKpiCard title="Collections" value={d.operations?.meteora?.collections} formatter={fmt} icon={Wallet} bgIconColor="bg-blue-50" iconColor="text-blue-600" link="/collections" />
         </div>
       </div>
 
       {/* ─── Revenue & Expenses · Bentabet ─── */}
       <div>
-        <SectionHeader label="Revenue &amp; Expenses · Bentabet (Slot)" />
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-          <DashboardKpiCard title="Gross Revenue" value={bentabetRev.gross} formatter={fmt} icon={TrendingUp} bgIconColor="bg-emerald-50" iconColor="text-emerald-600" link="/collections" />
-          <DashboardKpiCard title="Office Share" value={bentabetRev.office} formatter={fmt} icon={Wallet} bgIconColor="bg-blue-50" iconColor="text-blue-600" />
-          <DashboardKpiCard title="Return To Player" value={bentabetRev.owner} formatter={fmt} icon={Users} bgIconColor={bentabetRev.owner <= 0 ? 'bg-rose-50' : 'bg-amber-50'} iconColor={bentabetRev.owner <= 0 ? 'text-rose-500' : 'text-amber-600'} />
-          <DashboardKpiCard title="Total Expenses" value={bentabetRev.totalExpenses} formatter={fmt} icon={FileText} bgIconColor="bg-orange-50" iconColor="text-orange-600" link="/finance/expenses" />
-          <DashboardKpiCard title="Net Revenue" value={bentabetRev.net} formatter={fmt} icon={DollarSign} bgIconColor={bentabetRev.net >= 0 ? 'bg-emerald-50' : 'bg-rose-50'} iconColor={bentabetRev.net >= 0 ? 'text-emerald-600' : 'text-rose-600'} />
-        </div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
-          <DashboardKpiCard title="Total Sales" value={bentabetRev.totalSales} formatter={fmt} icon={ShoppingCart} bgIconColor="bg-teal-50" iconColor="text-teal-600" link="/inventory/sales" />
-          <DashboardKpiCard title="Total Purchase" value={bentabetRev.totalPurchase} formatter={fmt} icon={ShoppingBag} bgIconColor="bg-indigo-50" iconColor="text-indigo-600" link="/inventory/stock" />
-          <DashboardKpiCard title="Invoice Due" value={bentabetRev.invoiceDue} formatter={fmt} icon={Receipt} bgIconColor="bg-red-50" iconColor="text-red-600" link="/finance/invoices" />
-          <DashboardKpiCard title="FY Sales (YTD)" value={bentabetRev.fySales} formatter={fmt} icon={BarChart3} bgIconColor="bg-brand-dark/5" iconColor="text-brand-dark" link="/inventory/sales" />
+        <SectionHeader label="Revenue &amp; Expenses · Bentabet" />
+        <div className="bg-white rounded-xl border border-slate-100 p-4">
+          <Tabs
+            size="small"
+            defaultActiveKey="overview"
+            items={[
+              { key: 'overview', label: 'Overview', children: renderBentabetRevCards(bentabetRev) },
+              ...(bentabetRev.shops || []).map(s => ({
+                key: String(s.shop_id),
+                label: s.shop_name,
+                children: renderBentabetRevCards(s),
+              })),
+            ]}
+          />
         </div>
       </div>
 
@@ -336,34 +358,6 @@ function AdminDashboard() {
           <DashboardKpiCard title="Owner Payout" value={meteoraRev.owner} formatter={fmt} icon={Users} bgIconColor={meteoraRev.owner <= 0 ? 'bg-rose-50' : 'bg-amber-50'} iconColor={meteoraRev.owner <= 0 ? 'text-rose-500' : 'text-amber-600'} />
           <DashboardKpiCard title="Total Expenses" value={meteoraRev.totalExpenses} formatter={fmt} icon={FileText} bgIconColor="bg-orange-50" iconColor="text-orange-600" link="/finance/expenses" />
           <DashboardKpiCard title="Net Revenue" value={meteoraRev.net} formatter={fmt} icon={DollarSign} bgIconColor={meteoraRev.net >= 0 ? 'bg-emerald-50' : 'bg-rose-50'} iconColor={meteoraRev.net >= 0 ? 'text-emerald-600' : 'text-rose-600'} />
-        </div>
-      </div>
-
-      {/* ─── Partners Earnings ─── */}
-      <div>
-        <SectionHeader label="Partners Earnings" />
-        <div className="bg-white rounded-xl border border-slate-100 p-4">
-          <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
-            <p className="text-sm font-bold text-slate-700">Partner Performance <span className="text-xs font-normal text-slate-400">({periodRange || 'period'})</span></p>
-            {!partnerRows.length && <p className="text-xs text-slate-400">No external partner collections in this period</p>}
-          </div>
-          {partnerRows.length > 0 ? (
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={partnerRows} margin={{ left: 8, right: 8 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey={(r) => r.partner_label || r.partner_name} tick={{ fontSize: 11, fill: '#64748b' }} />
-                <YAxis tick={{ fontSize: 11, fill: '#64748b' }} tickFormatter={(v) => `${(v / 1000000).toFixed(1)}M`} />
-                <Tooltip content={<PartnerEarningsTooltip />} />
-                <Bar dataKey="gross_tzs" name="Gross" fill="#059669" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="office_tzs" name="Office" fill="#021559" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="owner_tzs" name="Owner" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="h-64 flex items-center justify-center border border-dashed border-slate-200 rounded-lg">
-              <p className="text-sm text-slate-400">No data</p>
-            </div>
-          )}
         </div>
       </div>
 
@@ -392,13 +386,13 @@ function AdminDashboard() {
         <SectionHeader label="Trends" />
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div className="bg-white rounded-xl border border-slate-100 p-4">
-            <p className="text-sm font-bold text-slate-700 mb-3">Bentabet (Slot) — Collections &amp; Sales</p>
+            <p className="text-sm font-bold text-slate-700 mb-3">Bentabet — Collections &amp; Sales</p>
             <ResponsiveContainer width="100%" height={280}>
               <BarChart data={bentabetTrend}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="period" tick={{ fontSize: 11, fill: '#64748b' }} tickFormatter={(v) => periodLabel(v, granularity)} />
+                <XAxis dataKey="period" tick={{ fontSize: 11, fill: '#64748b' }} tickFormatter={(v) => periodLabel(v, 'day')} />
                 <YAxis tick={{ fontSize: 11, fill: '#64748b' }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
-                <Tooltip formatter={(v) => fmt(v)} labelFormatter={(l) => periodLabel(l, granularity)} />
+                <Tooltip formatter={(v) => fmt(v)} labelFormatter={(l) => periodLabel(l, 'day')} />
                 <Bar dataKey="collections" name="Collections" fill="#021559" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="sales" name="Sales" fill="#38bdf8" radius={[4, 4, 0, 0]} />
               </BarChart>
@@ -409,9 +403,9 @@ function AdminDashboard() {
             <ResponsiveContainer width="100%" height={280}>
               <BarChart data={meteoraTrend}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="period" tick={{ fontSize: 11, fill: '#64748b' }} tickFormatter={(v) => periodLabel(v, granularity)} />
+                <XAxis dataKey="period" tick={{ fontSize: 11, fill: '#64748b' }} tickFormatter={(v) => periodLabel(v, 'day')} />
                 <YAxis tick={{ fontSize: 11, fill: '#64748b' }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
-                <Tooltip formatter={(v) => fmt(v)} labelFormatter={(l) => periodLabel(l, granularity)} />
+                <Tooltip formatter={(v) => fmt(v)} labelFormatter={(l) => periodLabel(l, 'day')} />
                 <Bar dataKey="collections" name="Collections" fill="#021559" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -424,13 +418,13 @@ function AdminDashboard() {
         <SectionHeader label="Revenue Trend" />
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div className="bg-white rounded-xl border border-slate-100 p-4">
-            <p className="text-sm font-bold text-slate-700 mb-3">Bentabet (Slot)</p>
+            <p className="text-sm font-bold text-slate-700 mb-3">Bentabet</p>
             <ResponsiveContainer width="100%" height={280}>
               <LineChart data={d.revenueTrend?.bentabet || []}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="period" tick={{ fontSize: 11, fill: '#64748b' }} tickFormatter={(v) => periodLabel(v, granularity)} />
+                <XAxis dataKey="period" tick={{ fontSize: 11, fill: '#64748b' }} tickFormatter={(v) => periodLabel(v, 'month')} />
                 <YAxis tick={{ fontSize: 11, fill: '#64748b' }} tickFormatter={(v) => `${(v / 1000000).toFixed(1)}M`} />
-                <Tooltip formatter={(v) => fmt(v)} labelFormatter={(l) => periodLabel(l, granularity)} />
+                <Tooltip formatter={(v) => fmt(v)} labelFormatter={(l) => periodLabel(l, 'month')} />
                 <Line type="monotone" dataKey="total" name="Revenue" stroke="#021559" strokeWidth={2.5} dot={{ fill: '#021559', strokeWidth: 2 }} />
               </LineChart>
             </ResponsiveContainer>
@@ -440,9 +434,9 @@ function AdminDashboard() {
             <ResponsiveContainer width="100%" height={280}>
               <LineChart data={d.revenueTrend?.meteora || []}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="period" tick={{ fontSize: 11, fill: '#64748b' }} tickFormatter={(v) => periodLabel(v, granularity)} />
+                <XAxis dataKey="period" tick={{ fontSize: 11, fill: '#64748b' }} tickFormatter={(v) => periodLabel(v, 'month')} />
                 <YAxis tick={{ fontSize: 11, fill: '#64748b' }} tickFormatter={(v) => `${(v / 1000000).toFixed(1)}M`} />
-                <Tooltip formatter={(v) => fmt(v)} labelFormatter={(l) => periodLabel(l, granularity)} />
+                <Tooltip formatter={(v) => fmt(v)} labelFormatter={(l) => periodLabel(l, 'month')} />
                 <Line type="monotone" dataKey="total" name="Revenue" stroke="#0ea5e9" strokeWidth={2.5} dot={{ fill: '#0ea5e9', strokeWidth: 2 }} />
               </LineChart>
             </ResponsiveContainer>
@@ -462,6 +456,34 @@ function AdminDashboard() {
             <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Meteora <span className="text-slate-300 font-normal normal-case">(office + owner split)</span></p>
             <Table dataSource={meteoraMachines} rowKey={(r) => `${r.machine_id}-${r.shop_id}`} size="small" pagination={false} columns={meteoraCols} />
           </div>
+        </div>
+      </div>
+
+      {/* ─── Partners Earnings ─── */}
+      <div>
+        <SectionHeader label="Partners Earnings" />
+        <div className="bg-white rounded-xl border border-slate-100 p-4">
+          <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+            <p className="text-sm font-bold text-slate-700">Partner Performance <span className="text-xs font-normal text-slate-400">({periodRange || 'period'})</span></p>
+            {!partnerRows.length && <p className="text-xs text-slate-400">No external partner collections in this period</p>}
+          </div>
+          {partnerRows.length > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={partnerRows} margin={{ left: 8, right: 8 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey={(r) => r.partner_label || r.partner_name} tick={{ fontSize: 11, fill: '#64748b' }} />
+                <YAxis tick={{ fontSize: 11, fill: '#64748b' }} tickFormatter={(v) => `${(v / 1000000).toFixed(1)}M`} />
+                <Tooltip content={<PartnerEarningsTooltip />} />
+                <Bar dataKey="gross_tzs" name="Gross" fill="#059669" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="office_tzs" name="Office" fill="#021559" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="owner_tzs" name="Owner" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-64 flex items-center justify-center border border-dashed border-slate-200 rounded-lg">
+              <p className="text-sm text-slate-400">No data</p>
+            </div>
+          )}
         </div>
       </div>
     </div>

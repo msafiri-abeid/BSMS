@@ -64,23 +64,6 @@ const buildScopeFilter = async (scope) => {
   return where;
 };
 
-const saleScopeFilter = async (scope) => {
-  if (!scope) return {};
-  const where = {};
-  if (scope.business_type) {
-    const shopIds = await getShopsByBusinessType(scope.business_type);
-    if (shopIds?.length) where.shop_id = { [Op.in]: shopIds };
-    else where.shop_id = -1;
-  }
-  if (scope.shop_id) where.shop_id = scope.shop_id;
-  if (scope.date_from || scope.date_to) {
-    where.sale_date = {};
-    if (scope.date_from) where.sale_date[Op.gte] = new Date(scope.date_from);
-    if (scope.date_to) where.sale_date[Op.lte] = new Date(scope.date_to + 'T23:59:59.999Z');
-  }
-  return where;
-};
-
 const buildTicketScopeFilter = (scope) => {
   const where = {};
   if (scope?.shop_id) where.shop_id = scope.shop_id;
@@ -192,6 +175,25 @@ const getPartnerEarnings = async ({ date_from, date_to }) => {
   return rows;
 };
 
+// Value of purchase stock movements for a shop within a date range
+const sumPurchaseValue = async ({ shop_id, date_from, date_to }) => {
+  try {
+    const where = {
+      movement_type: 'purchase',
+      created_at: { [Op.gte]: new Date(date_from), [Op.lte]: new Date(date_to + 'T23:59:59.999Z') },
+    };
+    if (shop_id) where.shop_id = shop_id;
+    const movements = await StockMovement.findAll({
+      where,
+      include: [{ model: Product, as: 'product', attributes: ['purchase_price'] }],
+      raw: true,
+    });
+    return movements.reduce((sum, m) => sum + (m['product.purchase_price'] || 0) * m.qty_change, 0);
+  } catch (e) {
+    return 0;
+  }
+};
+
 exports.adminDashboard = async (reqQuery) => {
   const today = todayStart();
   const year = yearStart();
@@ -206,20 +208,21 @@ exports.adminDashboard = async (reqQuery) => {
   const bentabetScope = { ...baseScope, business_type: 'slot' };
   const meteoraScope = { ...baseScope, business_type: 'meteora' };
 
-  const bentabetCollFilter = await buildScopeFilter(bentabetScope);
   const meteoraCollFilter = await buildScopeFilter(meteoraScope);
   const globalCollFilter = await buildScopeFilter(baseScope);
-  const bentabetSalesFilter = await saleScopeFilter(bentabetScope);
 
-  const slotShopIds = await getShopsByBusinessType('slot');
+  const slotShops = await Shop.findAll({
+    where: { business_type: 'slot' },
+    attributes: ['id', 'name'],
+    order: [['name', 'ASC']],
+    raw: true,
+  });
 
   const [
     totalEmployees, activeEmployees, todayLogins, totalShops, totalPartners,
-    bentabetMachines, bentabetShops, bentabetCollections,
+    bentabetMachines, bentabetShops,
     meteoraMachines, meteoraShops, meteoraCollections,
-    bentabetGross, bentabetOffice, bentabetOwner, bentabetExpenses,
     meteoraGross, meteoraOffice, meteoraOwner, meteoraExpenses,
-    totalSales, totalPurchaseValue, invoiceDue, fySales,
     officeTokenStock, pendingTokenDebts, outstandingTokenDebtAmount,
     stockAlertCount, pendingExpenses, unresolvedTickets,
   ] = await Promise.all([
@@ -234,37 +237,12 @@ exports.adminDashboard = async (reqQuery) => {
     }),
     Machine.count({ where: { status: 'active', manufacturer: 'Novomatic' } }),
     Shop.count({ where: { status: 'active', business_type: 'slot' } }),
-    Collection.sum('gross_tzs', { where: { ...bentabetCollFilter, status: 'approved' } }),
     Machine.count({ where: { status: 'active', manufacturer: 'Meteora' } }),
     Shop.count({ where: { status: 'active', business_type: 'meteora' } }),
-    Collection.sum('gross_tzs', { where: { ...meteoraCollFilter, status: 'approved' } }),
-    Collection.sum('gross_tzs', { where: { ...bentabetCollFilter, status: 'approved' } }),
-    Collection.sum('office_tzs', { where: { ...bentabetCollFilter, status: 'approved' } }),
-    Collection.sum('owner_tzs', { where: { ...bentabetCollFilter, status: 'approved' } }),
-    Expense.sum('amount', { where: { ...buildExpenseScopeFilter(bentabetScope), status: 'approved' } }),
     Collection.sum('gross_tzs', { where: { ...meteoraCollFilter, status: 'approved' } }),
     Collection.sum('office_tzs', { where: { ...meteoraCollFilter, status: 'approved' } }),
     Collection.sum('owner_tzs', { where: { ...meteoraCollFilter, status: 'approved' } }),
     Expense.sum('amount', { where: { ...buildExpenseScopeFilter(meteoraScope), status: 'approved' } }),
-    Sale.sum('net_amount_tzs', { where: { ...bentabetSalesFilter, status: 'completed' } }),
-    (async () => {
-      try {
-        const movements = await StockMovement.findAll({
-          where: {
-            movement_type: 'purchase',
-            ...(slotShopIds?.length ? { shop_id: { [Op.in]: slotShopIds } } : {}),
-            created_at: { [Op.gte]: new Date(dateFrom), [Op.lte]: new Date(dateTo + 'T23:59:59.999Z') },
-          },
-          include: [{ model: Product, as: 'product', attributes: ['purchase_price'] }],
-          raw: true,
-        });
-        return movements.reduce((sum, m) => sum + (m['product.purchase_price'] || 0) * m.qty_change, 0);
-      } catch (e) {
-        return 0;
-      }
-    })(),
-    Invoice.sum('total', { where: { status: ['sent', 'overdue'], ...(slotShopIds?.length ? { shop_id: { [Op.in]: slotShopIds } } : {}) } }),
-    Sale.sum('net_amount_tzs', { where: { status: 'completed', sale_date: { [Op.gte]: year }, ...(slotShopIds?.length ? { shop_id: { [Op.in]: slotShopIds } } : {}) } }),
     TokenInventory.sum('qty'),
     MachineDebt.count({ where: { status: ['pending', 'partial'], type: 'token' } }),
     MachineDebt.sum('amount', { where: { status: ['pending', 'partial'], type: 'token' } }),
@@ -273,7 +251,46 @@ exports.adminDashboard = async (reqQuery) => {
     Ticket.count({ where: { status: ['open', 'in_progress', 'reopened'] } }),
   ]);
 
-  const bentabetNet = (bentabetGross || 0) - (bentabetExpenses || 0);
+  // Per-slot-shop revenue & expenses (Overview tab aggregates these; one tab per shop)
+  const bentabetShopRows = await Promise.all((slotShops || []).map(async (s) => {
+    const collWhere = { shop_id: s.id, status: 'approved', collected_at: { [Op.gte]: new Date(dateFrom), [Op.lte]: new Date(dateTo + 'T23:59:59.999Z') } };
+    const expWhere = { shop_id: s.id, business_type: 'bentabet', status: 'approved', expense_date: { [Op.gte]: new Date(dateFrom), [Op.lte]: new Date(dateTo + 'T23:59:59.999Z') } };
+    const saleWhere = { shop_id: s.id, status: 'completed', sale_date: { [Op.gte]: new Date(dateFrom), [Op.lte]: new Date(dateTo + 'T23:59:59.999Z') } };
+    const [gross, owner, totalExpenses, totalSales, totalPurchase, invoiceDue, fySales] = await Promise.all([
+      Collection.sum('gross_tzs', { where: collWhere }),
+      Collection.sum('owner_tzs', { where: collWhere }),
+      Expense.sum('amount', { where: expWhere }),
+      Sale.sum('net_amount_tzs', { where: saleWhere }),
+      sumPurchaseValue({ shop_id: s.id, date_from: dateFrom, date_to: dateTo }),
+      Invoice.sum('total', { where: { status: ['sent', 'overdue'], shop_id: s.id } }),
+      Sale.sum('net_amount_tzs', { where: { status: 'completed', sale_date: { [Op.gte]: year }, shop_id: s.id } }),
+    ]);
+    return {
+      shop_id: s.id,
+      shop_name: s.name,
+      gross: gross || 0,
+      owner: owner || 0,
+      totalExpenses: totalExpenses || 0,
+      totalSales: totalSales || 0,
+      totalPurchase: totalPurchase || 0,
+      invoiceDue: invoiceDue || 0,
+      fySales: fySales || 0,
+      net: (gross || 0) - (totalExpenses || 0),
+    };
+  }));
+
+  const bentabetTotals = (bentabetShopRows || []).reduce((acc, r) => {
+    acc.gross += r.gross;
+    acc.owner += r.owner;
+    acc.totalExpenses += r.totalExpenses;
+    acc.totalSales += r.totalSales;
+    acc.totalPurchase += r.totalPurchase;
+    acc.invoiceDue += r.invoiceDue;
+    acc.fySales += r.fySales;
+    return acc;
+  }, { gross: 0, owner: 0, totalExpenses: 0, totalSales: 0, totalPurchase: 0, invoiceDue: 0, fySales: 0 });
+
+  const bentabetNet = bentabetTotals.gross - bentabetTotals.totalExpenses;
   const meteoraNet = (meteoraGross || 0) - (meteoraExpenses || 0);
 
   const [trends, revenueTrend, partnerEarnings, topMachines] = await Promise.all([
@@ -321,7 +338,7 @@ exports.adminDashboard = async (reqQuery) => {
       bentabet: {
         totalMachines: bentabetMachines || 0,
         activeShops: bentabetShops || 0,
-        collections: bentabetCollections || 0,
+        collections: bentabetTotals.gross || 0,
       },
       meteora: {
         totalMachines: meteoraMachines || 0,
@@ -331,15 +348,15 @@ exports.adminDashboard = async (reqQuery) => {
     },
     revenueExpenses: {
       bentabet: {
-        gross: bentabetGross || 0,
-        office: bentabetOffice || 0,
-        owner: bentabetOwner || 0,
-        totalExpenses: bentabetExpenses || 0,
+        gross: bentabetTotals.gross || 0,
+        owner: bentabetTotals.owner || 0,
+        totalExpenses: bentabetTotals.totalExpenses || 0,
         net: bentabetNet || 0,
-        totalSales: totalSales || 0,
-        totalPurchase: totalPurchaseValue || 0,
-        invoiceDue: invoiceDue || 0,
-        fySales: fySales || 0,
+        totalSales: bentabetTotals.totalSales || 0,
+        totalPurchase: bentabetTotals.totalPurchase || 0,
+        invoiceDue: bentabetTotals.invoiceDue || 0,
+        fySales: bentabetTotals.fySales || 0,
+        shops: bentabetShopRows || [],
       },
       meteora: {
         gross: meteoraGross || 0,
