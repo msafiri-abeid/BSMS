@@ -3,7 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Table, Tag, Button, Spin, Space, DatePicker, InputNumber, Input, Modal, App, Image, Radio, Upload, Select } from 'antd';
 import { ArrowLeft, Store, Cpu, TrendingUp, DollarSign, PiggyBank, MapPin, FileText, BarChart3, History, ExternalLink, Receipt, Wallet, Landmark, Plus, Eye, Camera, Upload as UploadIcon, Download, Building2, CalendarDays, FilterX } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
+import { ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, ReferenceLine, Brush } from 'recharts';
 import { shopsAPI, financeAPI, collectionsAPI, accountsAPI } from '../../services/api';
 import KpiCard from '../../components/KpiCard';
 import { useAuthStore } from '../../store/authStore';
@@ -41,6 +41,38 @@ const getDateRange = (preset) => {
   }
 };
 
+
+const fmtSigned = (v) => {
+  const n = Number(v) || 0;
+  return `${n < 0 ? '−' : ''}TZS ${Math.abs(n).toLocaleString()}`;
+};
+
+const RevenueTrendTooltip = ({ active, payload, label }) => {
+  if (!active || !payload || !payload.length) return null;
+  const d = payload[0]?.payload || {};
+  const hasExpenses = (d.expenses || 0) > 0;
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white shadow-lg px-3 py-2.5 min-w-[190px]">
+      <div className="text-[11px] font-semibold text-slate-700 mb-1.5 pb-1.5 border-b border-slate-100">
+        {dayjs(label).format('DD MMM YYYY')}
+      </div>
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
+        <span className="text-slate-400">Gross</span>
+        <span className={`font-semibold text-right ${(d.gross || 0) < 0 ? 'text-rose-600' : 'text-emerald-600'}`}>{fmtSigned(d.gross)}</span>
+        <span className="text-slate-400">Office</span>
+        <span className="font-semibold text-right text-slate-700">{fmtSigned(d.office)}</span>
+        <span className="text-slate-400">Owner</span>
+        <span className="font-semibold text-right text-slate-700">{fmtSigned(d.owner)}</span>
+        {hasExpenses && (
+          <>
+            <span className="text-slate-400">Expenses</span>
+            <span className="font-semibold text-right text-rose-600">{fmtSigned(-(d.expenses || 0))}</span>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
 
 export default function ShopDetailPage() {
   const { id } = useParams();
@@ -106,11 +138,30 @@ export default function ShopDetailPage() {
 
   const { data: expensesData } = useQuery({
     queryKey: ['shop-expenses', id, date_from, date_to],
-    queryFn: () => financeAPI.listExpenses({ shop_id: id, limit: 50, date_from, date_to, status: 'approved' }).then(r => r.data.data),
+    queryFn: () => financeAPI.listExpenses({ shop_id: id, limit: 500, date_from, date_to, status: 'approved' }).then(r => r.data.data),
     enabled: isSlot,
   });
   const expensesList = expensesData?.rows || [];
   const totalExpenses = isSlot && expensesList.length > 0 ? expensesList.reduce((s, e) => s + (e.amount || 0), 0) : 0;
+
+  const dailyExpense = useMemo(() => {
+    const m = {};
+    expensesList.forEach(e => {
+      const k = e.expense_date;
+      if (k) m[k] = (m[k] || 0) + (e.amount || 0);
+    });
+    return m;
+  }, [expensesList]);
+
+  const revenueData = useMemo(() => chartData.map(d => {
+    const gross = Number(d.gross) || 0;
+    return {
+      ...d,
+      expenses: dailyExpense[d.date] || 0,
+      grossPos: Math.max(0, gross),
+      grossNeg: Math.min(0, gross),
+    };
+  }), [chartData, dailyExpense]);
 
   const { data: collectionsData } = useQuery({
     queryKey: ['shop-novomatic-collections', id, date_from, date_to],
@@ -464,24 +515,49 @@ export default function ShopDetailPage() {
       {/* Revenue Trend Chart */}
       {chartData.length > 0 && (
         <div className="rounded-lg border border-slate-100 p-4 bg-white mb-6">
-          <h5 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-4 flex items-center gap-2">
-            <BarChart3 size={14} className="text-brand-dark" /> Revenue Trend — {periodLabel}
-          </h5>
-          <div className="h-56">
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+            <h5 className="text-xs font-bold uppercase tracking-wider text-slate-500 m-0 flex items-center gap-2">
+              <BarChart3 size={14} className="text-brand-dark" /> Revenue Trend — {periodLabel}
+            </h5>
+            <div className="flex items-center gap-3">
+              <span className="flex items-center gap-1.5 text-[10px] text-slate-400">
+                <span className="w-2 h-2 rounded-full bg-[#021559]" /> Gross
+              </span>
+              <span className="flex items-center gap-1.5 text-[10px] text-slate-400">
+                <span className="w-2 h-2 rounded-full bg-[#f43f5e]" /> Negative
+              </span>
+            </div>
+          </div>
+          <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} margin={{ top: 4, right: 8, bottom: 0, left: -16 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+              <ComposedChart data={revenueData} margin={{ top: 12, right: 12, bottom: 0, left: 4 }}>
+                <defs>
+                  <linearGradient id="revGradPos" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#021559" stopOpacity={0.32} />
+                    <stop offset="100%" stopColor="#021559" stopOpacity={0.02} />
+                  </linearGradient>
+                  <linearGradient id="revGradNeg" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#f43f5e" stopOpacity={0.02} />
+                    <stop offset="100%" stopColor="#f43f5e" stopOpacity={0.3} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid horizontal vertical={false} strokeDasharray="3 6" stroke="#eef2f7" />
                 <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false}
                   tickFormatter={(v) => dayjs(v).format('DD MMM')}
-                  interval={Math.ceil(chartData.length / 15)} />
-                <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false}
+                  interval={Math.ceil(revenueData.length / 15)} minTickGap={16} />
+                <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} width={52}
                   tickFormatter={(v) => v >= 1000000 ? `${(v/1000000).toFixed(1)}M` : v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} />
-                <RechartsTooltip
-                  labelFormatter={(v) => dayjs(v).format('DD MMM YYYY')}
-                  formatter={(v, name) => [`${(v || 0).toLocaleString()} TZS`, name === 'gross' ? 'Gross' : name === 'net' ? 'Net' : name === 'office' ? 'Office' : 'Owner']}
-                  contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e2e8f0' }} />
-                <Bar dataKey="gross" fill="#021559" radius={[2, 2, 0, 0]} maxBarSize={24} />
-              </BarChart>
+                <ReferenceLine y={0} stroke="#cbd5e1" strokeDasharray="4 4" />
+                <RechartsTooltip content={<RevenueTrendTooltip />} cursor={{ stroke: '#cbd5e1', strokeDasharray: '3 3' }} />
+                <Area type="monotone" dataKey="grossPos" stroke="none" fill="url(#revGradPos)" baseValue={0} />
+                <Area type="monotone" dataKey="grossNeg" stroke="none" fill="url(#revGradNeg)" baseValue={0} />
+                <Line type="monotone" dataKey="gross" stroke="#021559" strokeWidth={2} dot={false}
+                  activeDot={{ r: 4, strokeWidth: 0, fill: '#021559' }} />
+                {revenueData.length > 15 && (
+                  <Brush dataKey="date" height={22} stroke="#cbd5e1" fill="#f8fafc" travellerWidth={8}
+                    tickFormatter={(v) => dayjs(v).format('DD MMM')} />
+                )}
+              </ComposedChart>
             </ResponsiveContainer>
           </div>
         </div>
