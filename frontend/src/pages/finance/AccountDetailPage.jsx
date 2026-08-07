@@ -333,7 +333,7 @@ export default function AccountDetailPage() {
           </div>
           <div>
             <span className="text-xs font-semibold text-slate-500 block mb-1">Amount (TZS)</span>
-            <InputNumber min={0} max={account?.current_balance} className="w-full rounded-lg h-9 w-full"
+            <InputNumber min={0} className="w-full rounded-lg h-9 w-full"
               formatter={v => `TZS ${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
               parser={v => Number(v.replace(/[^0-9]/g, ''))}
               value={form.amount} onChange={(v) => setForm(f => ({ ...f, amount: v || 0 }))} />
