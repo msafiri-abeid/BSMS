@@ -343,23 +343,24 @@ const listAccounts = async (query) => {
 };
 
 const createAccount = async (data, userId) => {
+  const opening = Number(data.opening_balance) || 0;
   const account = await Account.create({
     ...data,
-    current_balance: data.opening_balance || 0,
+    current_balance: opening,
     created_by: userId,
   });
 
   // Record opening balance transaction if non-zero
-  if ((data.opening_balance || 0) > 0) {
+  if (opening !== 0) {
     await AccountTransaction.create({
       account_id: account.id,
-      type: 'in',
-      amount: data.opening_balance,
+      type: opening > 0 ? 'in' : 'out',
+      amount: Math.abs(opening),
       balance_before: 0,
-      balance_after: data.opening_balance,
+      balance_after: opening,
       reference_type: 'opening_balance',
       payment_method: 'internal',
-      description: 'Opening balance',
+      description: opening > 0 ? 'Opening balance' : 'Opening balance (debt)',
       recorded_by: userId,
       transaction_date: new Date().toISOString().split('T')[0],
     });
@@ -455,7 +456,6 @@ const transferBetweenAccounts = async (data, userId) => {
   const fromAccount = await Account.findByPk(from_account_id);
   const toAccount = await Account.findByPk(to_account_id);
   if (!fromAccount || !toAccount) throw new Error('Account not found');
-  if (fromAccount.current_balance < amount) throw new Error('Insufficient balance in source account');
 
   const txnDate = data.transaction_date || new Date().toISOString().split('T')[0];
 

@@ -313,7 +313,9 @@ export default function AccountsPage() {
             </Select>
           </Form.Item>
           <Form.Item name="opening_balance" label="Opening Balance (TZS)">
-            <InputNumber className="w-full" min={0} placeholder="0" />
+            <InputNumber className="w-full" placeholder="0" precision={0}
+              formatter={v => `${v ?? 0}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+              parser={v => Number(v.replace(/[^\d-]/g, ''))} />
           </Form.Item>
           <Form.Item name="description" label="Description">
             <Input.TextArea rows={2} placeholder="Optional description" />
