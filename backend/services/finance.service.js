@@ -402,20 +402,140 @@ const updateAccount = async (id, data) => {
 const deleteAccount = async (id) => {
   const account = await Account.findByPk(id);
   if (!account) throw new Error('Account not found');
-  const txCount = await AccountTransaction.count({ where: { account_id: id } });
+  const txCount = await AccountTransaction.count({ where: { account_id: id, status: 'active' } });
   if (txCount > 0) {
     throw new Error('Cannot delete account with transactions. Deactivate it instead.');
   }
   return account.destroy();
 };
 
+// Account balance is derived from the ledger (single source of truth).
+// Recomputes current_balance = opening_balance + active in − active out
+// and refreshes the running balance_before/balance_after snapshots so the
+// remaining active transactions stay coherent after a cancellation.
+const recomputeAccountBalances = async (accountId, t) => {
+  const opts = t ? { transaction: t } : {};
+  const account = await Account.findByPk(accountId, opts);
+  if (!account) return null;
+
+  const txs = await AccountTransaction.findAll({
+    where: { account_id: accountId, status: 'active' },
+    order: [['transaction_date', 'ASC'], ['id', 'ASC']],
+    ...opts,
+  });
+
+  let running = account.opening_balance || 0;
+  for (const tx of txs) {
+    // opening_balance rows are already reflected in account.opening_balance — do not double count
+    if (tx.reference_type === 'opening_balance') continue;
+    const before = running;
+    running += tx.type === 'in' ? tx.amount : -tx.amount;
+    if (tx.balance_before !== before || tx.balance_after !== running) {
+      await tx.update({ balance_before: before, balance_after: running }, opts);
+    }
+  }
+
+  if (account.current_balance !== running) {
+    await account.update({ current_balance: running }, opts);
+  }
+  return running;
+};
+
+const markTransactionCancelled = async (tx, userId, reason, t) => {
+  const opts = t ? { transaction: t } : {};
+  await tx.update({
+    status: 'cancelled',
+    balance_before: null,
+    balance_after: null,
+    cancelled_by: userId,
+    cancelled_at: new Date(),
+    cancel_reason: reason || null,
+  }, opts);
+};
+
+const CANCELABLE_TYPES = ['adjustment', 'transfer'];
+
+const cancelTransaction = async (txId, userId, reason) => {
+  return sequelize.transaction(async (t) => {
+    const tx = await AccountTransaction.findByPk(txId, { transaction: t });
+    if (!tx) throw new Error('Transaction not found');
+    if (tx.status === 'cancelled') throw new Error('Transaction is already cancelled');
+    if (!CANCELABLE_TYPES.includes(tx.reference_type)) {
+      throw new Error('Only deposits, withdrawals and transfers can be cancelled');
+    }
+
+    // Legacy transfers (created before the transfer_id link existed) may not be linked.
+    // Resolve the AccountTransfer only when the match is unambiguous, otherwise refuse
+    // to avoid cancelling the wrong leg.
+    if (tx.reference_type === 'transfer' && !tx.transfer_id) {
+      const candidates = await AccountTransfer.findAll({
+        where: {
+          [Op.or]: [{ from_account_id: tx.account_id }, { to_account_id: tx.account_id }],
+          amount: tx.amount,
+          recorded_by: tx.recorded_by,
+        },
+        transaction: t,
+      });
+      if (candidates.length !== 1) {
+        throw new Error('This transfer is not linked to its counterpart and cannot be safely cancelled. Run the transfer-link backfill first.');
+      }
+      await tx.update({ transfer_id: candidates[0].id, reference_id: candidates[0].id }, { transaction: t });
+    }
+
+    const cancelled = [];
+    const affectedAccounts = [];
+    const addCancelled = async (row) => {
+      await markTransactionCancelled(row, userId, reason, t);
+      cancelled.push(row.id);
+      if (!affectedAccounts.includes(row.account_id)) affectedAccounts.push(row.account_id);
+    };
+
+    if (tx.transfer_id) {
+      // Cancel both legs of a transfer atomically
+      const legs = await AccountTransaction.findAll({
+        where: { transfer_id: tx.transfer_id, status: 'active' },
+        transaction: t,
+      });
+      for (const leg of legs) await addCancelled(leg);
+    } else {
+      await addCancelled(tx);
+    }
+
+    for (const accountId of affectedAccounts) {
+      await recomputeAccountBalances(accountId, t);
+    }
+
+    return { cancelled, affectedAccounts };
+  });
+};
+
+const getTransactionDetail = async (txId) => {
+  const tx = await AccountTransaction.findByPk(txId, {
+    include: [
+      { model: Account, as: 'account', include: [{ model: Shop, as: 'shop', attributes: ['id', 'name'] }] },
+      { model: User, as: 'recorder', attributes: ['name'] },
+      { model: User, as: 'canceller', attributes: ['name'] },
+      {
+        model: AccountTransfer, as: 'transfer',
+        include: [
+          { model: Account, as: 'fromAccount', include: [{ model: Shop, as: 'shop', attributes: ['id', 'name'] }] },
+          { model: Account, as: 'toAccount', include: [{ model: Shop, as: 'shop', attributes: ['id', 'name'] }] },
+        ],
+      },
+    ],
+  });
+  if (!tx) throw new Error('Transaction not found');
+  return tx;
+};
+
 const listAccountTransactions = async (accountId, query) => {
-  const { date_from, date_to, type, reference_type, limit = 50, offset = 0 } = query;
+  const { date_from, date_to, type, reference_type, status, limit = 50, offset = 0 } = query;
   const where = { account_id: accountId };
   if (date_from) where.transaction_date = { ...where.transaction_date, [Op.gte]: date_from };
   if (date_to) where.transaction_date = { ...where.transaction_date, [Op.lte]: date_to };
   if (type) where.type = type;
   if (reference_type) where.reference_type = reference_type;
+  if (status) where.status = status;
   return AccountTransaction.findAndCountAll({
     where,
     limit: +limit,
@@ -429,13 +549,14 @@ const listAccountTransactions = async (accountId, query) => {
 };
 
 const listShopTransactions = async (shopId, query) => {
-  const { date_from, date_to, limit = 50, offset = 0 } = query;
+  const { date_from, date_to, status, limit = 50, offset = 0 } = query;
   const accounts = await Account.findAll({ where: { shop_id: shopId }, attributes: ['id'] });
   const accountIds = accounts.map(a => a.id);
   if (accountIds.length === 0) return { rows: [], count: 0 };
   const where = { account_id: { [Op.in]: accountIds } };
   if (date_from) where.transaction_date = { ...where.transaction_date, [Op.gte]: date_from };
   if (date_to) where.transaction_date = { ...where.transaction_date, [Op.lte]: date_to };
+  if (status) where.status = status;
   return AccountTransaction.findAndCountAll({
     where,
     limit: +limit,
@@ -453,55 +574,69 @@ const transferBetweenAccounts = async (data, userId) => {
   if (from_account_id === to_account_id) throw new Error('Cannot transfer to the same account');
   if (!amount || amount <= 0) throw new Error('Invalid amount');
 
-  const fromAccount = await Account.findByPk(from_account_id);
-  const toAccount = await Account.findByPk(to_account_id);
-  if (!fromAccount || !toAccount) throw new Error('Account not found');
-
   const txnDate = data.transaction_date || new Date().toISOString().split('T')[0];
 
-  // Debit from source (money out)
-  const fromBalanceBefore = fromAccount.current_balance;
-  const fromBalanceAfter = fromBalanceBefore - amount;
-  await AccountTransaction.create({
-    account_id: from_account_id,
-    type: 'out',
-    amount,
-    balance_before: fromBalanceBefore,
-    balance_after: fromBalanceAfter,
-    reference_type: 'transfer',
-    payment_method: 'internal',
-    description: description || `Transfer to ${toAccount.name}`,
-    recorded_by: userId,
-    transaction_date: txnDate,
-  });
-  await fromAccount.update({ current_balance: fromBalanceAfter });
+  return sequelize.transaction(async (t) => {
+    const fromAccount = await Account.findByPk(from_account_id, { transaction: t });
+    const toAccount = await Account.findByPk(to_account_id, { transaction: t });
+    if (!fromAccount || !toAccount) throw new Error('Account not found');
 
-  // Credit to destination (money in)
-  const toBalanceBefore = toAccount.current_balance;
-  const toBalanceAfter = toBalanceBefore + amount;
-  await AccountTransaction.create({
-    account_id: to_account_id,
-    type: 'in',
-    amount,
-    balance_before: toBalanceBefore,
-    balance_after: toBalanceAfter,
-    reference_type: 'transfer',
-    payment_method: 'internal',
-    description: description || `Transfer from ${fromAccount.name}`,
-    recorded_by: userId,
-    transaction_date: txnDate,
-  });
-  await toAccount.update({ current_balance: toBalanceAfter });
+    // Record the transfer first so both legs can be linked and cancelled together
+    const transfer = await AccountTransfer.create({
+      from_account_id,
+      to_account_id,
+      amount,
+      description: description || `Transfer from ${fromAccount.name} to ${toAccount.name}`,
+      status: 'approved',
+      recorded_by: userId,
+      approved_by: userId,
+    }, { transaction: t });
 
-  // Record the transfer
-  return AccountTransfer.create({
-    from_account_id,
-    to_account_id,
-    amount,
-    description: description || `Transfer from ${fromAccount.name} to ${toAccount.name}`,
-    status: 'approved',
-    recorded_by: userId,
-    approved_by: userId,
+    // Debit from source (money out)
+    const fromBalanceBefore = fromAccount.current_balance;
+    const fromBalanceAfter = fromBalanceBefore - amount;
+    await AccountTransaction.create({
+      account_id: from_account_id,
+      type: 'out',
+      amount,
+      balance_before: fromBalanceBefore,
+      balance_after: fromBalanceAfter,
+      reference_type: 'transfer',
+      reference_id: transfer.id,
+      transfer_id: transfer.id,
+      payment_method: 'internal',
+      description: description || `Transfer to ${toAccount.name}`,
+      recorded_by: userId,
+      transaction_date: txnDate,
+    }, { transaction: t });
+    await fromAccount.update({ current_balance: fromBalanceAfter }, { transaction: t });
+
+    // Credit to destination (money in)
+    const toBalanceBefore = toAccount.current_balance;
+    const toBalanceAfter = toBalanceBefore + amount;
+    await AccountTransaction.create({
+      account_id: to_account_id,
+      type: 'in',
+      amount,
+      balance_before: toBalanceBefore,
+      balance_after: toBalanceAfter,
+      reference_type: 'transfer',
+      reference_id: transfer.id,
+      transfer_id: transfer.id,
+      payment_method: 'internal',
+      description: description || `Transfer from ${fromAccount.name}`,
+      recorded_by: userId,
+      transaction_date: txnDate,
+    }, { transaction: t });
+    await toAccount.update({ current_balance: toBalanceAfter }, { transaction: t });
+
+    return AccountTransfer.findByPk(transfer.id, {
+      transaction: t,
+      include: [
+        { model: Account, as: 'fromAccount', attributes: ['id', 'name'] },
+        { model: Account, as: 'toAccount', attributes: ['id', 'name'] },
+      ],
+    });
   });
 };
 
@@ -523,6 +658,7 @@ const generateBalanceSheet = async (query) => {
       type: 'in',
       transaction_date: { [Op.lte]: date },
       reference_type: { [Op.in]: ['collection', 'sale'] },
+      status: 'active',
     },
     attributes: [
       [require('sequelize').fn('COALESCE', require('sequelize').fn('SUM', require('sequelize').col('amount')), 0), 'total'],
@@ -537,6 +673,7 @@ const generateBalanceSheet = async (query) => {
       type: 'out',
       transaction_date: { [Op.lte]: date },
       reference_type: 'expense',
+      status: 'active',
     },
     attributes: [
       [require('sequelize').fn('COALESCE', require('sequelize').fn('SUM', require('sequelize').col('amount')), 0), 'total'],
@@ -590,12 +727,12 @@ const generateTrialBalance = async (query) => {
 
   const rows = await Promise.all(accounts.map(async (a) => {
     const debitResult = await AccountTransaction.findAll({
-      where: { account_id: a.id, type: 'in', transaction_date: { [Op.lte]: date } },
+      where: { account_id: a.id, type: 'in', transaction_date: { [Op.lte]: date }, status: 'active' },
       attributes: [[require('sequelize').fn('COALESCE', require('sequelize').fn('SUM', require('sequelize').col('amount')), 0), 'total']],
       raw: true,
     });
     const creditResult = await AccountTransaction.findAll({
-      where: { account_id: a.id, type: 'out', transaction_date: { [Op.lte]: date } },
+      where: { account_id: a.id, type: 'out', transaction_date: { [Op.lte]: date }, status: 'active' },
       attributes: [[require('sequelize').fn('COALESCE', require('sequelize').fn('SUM', require('sequelize').col('amount')), 0), 'total']],
       raw: true,
     });
@@ -633,6 +770,7 @@ const generateCashFlow = async (query) => {
   const txGroups = await AccountTransaction.findAll({
     where: {
       transaction_date: { [Op.between]: [from, to] },
+      status: 'active',
     },
     attributes: [
       'reference_type',
@@ -697,6 +835,7 @@ const generateAccountReport = async (accountId, query) => {
     where: {
       account_id: accountId,
       transaction_date: { [Op.between]: [from, to] },
+      status: 'active',
     },
     include: [
       { model: User, as: 'recorder', attributes: ['name'] },
@@ -709,6 +848,7 @@ const generateAccountReport = async (accountId, query) => {
     where: {
       account_id: accountId,
       transaction_date: { [Op.lt]: from },
+      status: 'active',
     },
     attributes: [
       [require('sequelize').fn('COALESCE', require('sequelize').fn('SUM', require('sequelize').literal("CASE WHEN type = 'in' THEN amount ELSE -amount END")), 0), 'balance'],
@@ -761,6 +901,8 @@ const recordDeposit = async (accountId, data, userId) => {
     description: description || `Deposit to ${account.name}${charges > 0 ? ` (charges: ${charges})` : ''}`,
     recorded_by: userId,
     transaction_date: txnDate,
+    receipt_url: receipt_url || null,
+    charges: parseInt(charges) || 0,
   });
   await account.update({ current_balance: balanceAfter });
 
@@ -789,6 +931,7 @@ const recordWithdraw = async (accountId, data, userId) => {
     description: description || `Withdrawal from ${account.name}`,
     recorded_by: userId,
     transaction_date: txnDate,
+    receipt_url: receipt_url || null,
   });
   await account.update({ current_balance: balanceAfter });
 
@@ -811,6 +954,7 @@ const generateAccountStatement = async (accountId, query) => {
     where: {
       account_id: accountId,
       transaction_date: { [Op.between]: [from, to] },
+      status: 'active',
     },
     include: [{ model: User, as: 'recorder', attributes: ['name'] }],
     order: [['transaction_date', 'ASC'], ['id', 'ASC']],
@@ -820,6 +964,7 @@ const generateAccountStatement = async (accountId, query) => {
     where: {
       account_id: accountId,
       transaction_date: { [Op.lt]: from },
+      status: 'active',
     },
     attributes: [[require('sequelize').fn('COALESCE', require('sequelize').fn('SUM', require('sequelize').literal("CASE WHEN type = 'in' THEN amount ELSE -amount END")), 0), 'balance']],
     raw: true,
@@ -927,6 +1072,7 @@ module.exports = {
   createInvoice, recordPayment, generateInvoicePDF, createPayrollRun, exportCollectionsExcel,
   listAccounts, createAccount, getAccount, updateAccount, deleteAccount,
   listAccountTransactions, listShopTransactions, transferBetweenAccounts,
+  cancelTransaction, getTransactionDetail,
   generateBalanceSheet, generateTrialBalance, generateCashFlow, generateAccountReport,
   recordDeposit, recordWithdraw, generateAccountStatement,
 };

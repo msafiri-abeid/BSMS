@@ -124,6 +124,8 @@ router.post('/finance/accounts/:id/deposit', authenticate, checkPermission('acco
 router.post('/finance/accounts/:id/withdraw', authenticate, checkPermission('accounts', 'create'), uploadReceipt.single('receipt'), financeC.recordWithdraw);
 router.get('/finance/accounts/:id/statement', authenticate, checkPermission('accounts', 'read'), financeC.downloadAccountStatement);
 router.get('/finance/transactions', authenticate, checkPermission('accounts', 'read'), financeC.listShopTransactions);
+router.get('/finance/transactions/:id', authenticate, checkPermission('accounts', 'read'), financeC.getTransactionDetail);
+router.post('/finance/transactions/:id/cancel', authenticate, checkPermission('accounts', 'update'), financeC.cancelTransaction);
 router.post('/finance/accounts/transfer', authenticate, checkPermission('accounts', 'create'), financeC.transferAccounts);
 router.get('/finance/reports/balance-sheet', authenticate, checkPermission('accounts', 'read'), financeC.balanceSheet);
 router.get('/finance/reports/trial-balance', authenticate, checkPermission('accounts', 'read'), financeC.trialBalance);

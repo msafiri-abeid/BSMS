@@ -2,10 +2,11 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Table, Tag, Button, Spin, Space, DatePicker, InputNumber, Input, Modal, App, Image, Radio, Upload, Select } from 'antd';
-import { ArrowLeft, Store, Cpu, TrendingUp, DollarSign, PiggyBank, MapPin, FileText, BarChart3, History, ExternalLink, Receipt, Wallet, Landmark, Plus, Eye, Camera, Upload as UploadIcon, Download, Building2, CalendarDays, FilterX } from 'lucide-react';
+import { ArrowLeft, Store, Cpu, TrendingUp, DollarSign, PiggyBank, MapPin, FileText, BarChart3, History, ExternalLink, Receipt, Wallet, Landmark, Plus, Eye, Camera, Upload as UploadIcon, Download, Building2, CalendarDays, FilterX, Ban } from 'lucide-react';
 import { ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, ReferenceLine, Brush } from 'recharts';
 import { shopsAPI, financeAPI, collectionsAPI, accountsAPI } from '../../services/api';
 import KpiCard from '../../components/KpiCard';
+import TransactionDetailModal from '../../components/TransactionDetailModal';
 import { useAuthStore } from '../../store/authStore';
 import dayjs from 'dayjs';
 
@@ -87,9 +88,13 @@ export default function ShopDetailPage() {
   const [depositForm, setDepositForm] = useState({
     account_id: null, amount: 0, charges: 0, receipt: null, notes: '', deposit_date: dayjs().format('YYYY-MM-DD'),
   });
+  const [viewTx, setViewTx] = useState(null);
+  const [cancelTx, setCancelTx] = useState(null);
+  const [cancelReason, setCancelReason] = useState('');
 
   const roleName = useAuthStore((s) => s.user?.role?.name);
   const canManageCash = ['Admin', 'General Manager', 'Operations Manager', 'Supervisor'].includes(roleName) || roleName === 'Cashier';
+  const canCancel = useAuthStore((s) => s.hasPermission('accounts', 'update'));
 
   const presetOptions = useMemo(() => [
     { label: dayjs().subtract(1, 'day').format('DD MMM YYYY'), value: 'yesterday' },
@@ -192,7 +197,7 @@ export default function ShopDetailPage() {
 
   const { data: floatTxns } = useQuery({
     queryKey: ['shop-float-txns', floatAccount?.id, date_to],
-    queryFn: () => accountsAPI.transactions(floatAccount.id, { limit: 1, date_to }).then(r => r.data.data),
+    queryFn: () => accountsAPI.transactions(floatAccount.id, { limit: 1, date_to, status: 'active' }).then(r => r.data.data),
     enabled: isSlot && !!floatAccount?.id,
   });
   const floatBalanceAtDate = floatTxns?.rows?.length ? floatTxns.rows[0].balance_after : 0;
@@ -234,6 +239,19 @@ export default function ShopDetailPage() {
       setDepositForm({ account_id: null, amount: 0, charges: 0, receipt: null, notes: '', deposit_date: dayjs().format('YYYY-MM-DD') });
     },
     onError: (e) => message.error(e.response?.data?.message || 'Failed to record deposit'),
+  });
+
+  const cancelMutation = useMutation({
+    mutationFn: ({ tid, reason }) => accountsAPI.cancelTransaction(tid, reason),
+    onSuccess: () => {
+      message.success('Transaction cancelled — account balance recalculated');
+      qc.invalidateQueries({ queryKey: ['shop-transactions', id] });
+      qc.invalidateQueries({ queryKey: ['shop-float-txns', floatAccount?.id] });
+      qc.invalidateQueries({ queryKey: ['shop-float-account', id] });
+      setCancelTx(null);
+      setCancelReason('');
+    },
+    onError: (e) => message.error(e.response?.data?.message || 'Failed to cancel transaction'),
   });
 
   const handleSubmitDeposit = () => {
@@ -387,10 +405,11 @@ export default function ShopDetailPage() {
             </h6>
             {txnRows.length > 0 ? (
               <Table dataSource={txnRows} rowKey="id" size="small" pagination={{ pageSize: 8, showSizeChanger: false, size: 'small' }}
+                rowClassName={(r) => (r.status === 'cancelled' ? 'opacity-50' : '')}
                 columns={[
                   { title: 'Date', dataIndex: 'transaction_date', render: (v) => dayjs(v).format('DD MMM'), width: 80 },
-                  { title: 'Type', dataIndex: 'type', render: (v) => (
-                    <Tag color={v === 'in' ? 'green' : 'red'} className="!text-[10px] uppercase">{v === 'in' ? 'IN' : 'OUT'}</Tag>
+                  { title: 'Type', dataIndex: 'type', render: (v, r) => (
+                    <Tag color={v === 'in' ? 'green' : 'red'} className={`!text-[10px] uppercase ${r.status === 'cancelled' ? 'line-through' : ''}`}>{v === 'in' ? 'IN' : 'OUT'}</Tag>
                   ), width: 60 },
                   { title: 'Account', key: 'account', render: (_, r) => (
                     <span className="text-[10px] text-slate-600">{r.account?.name || r.account?.account_type || '—'}</span>
@@ -402,13 +421,33 @@ export default function ShopDetailPage() {
                     <span className="text-xs text-slate-600 line-clamp-1">{v || '—'}</span>
                   ) },
                   { title: 'Amount', dataIndex: 'amount', render: (v, r) => (
-                    <span className={`font-semibold text-xs ${r.type === 'in' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                    <span className={`font-semibold text-xs ${r.type === 'in' ? 'text-emerald-600' : 'text-rose-600'} ${r.status === 'cancelled' ? 'line-through opacity-60' : ''}`}>
                       {r.type === 'in' ? '+' : '−'}{fmt(v)}
                     </span>
                   ), width: 130 },
-                  { title: 'Balance', dataIndex: 'balance_after', render: (v) => (
-                    <span className="font-semibold text-xs text-slate-700">{fmt(v)}</span>
+                  { title: 'Balance', dataIndex: 'balance_after', render: (v, r) => (
+                    r.status === 'cancelled'
+                      ? <span className="font-semibold text-xs text-slate-300">—</span>
+                      : <span className="font-semibold text-xs text-slate-700">{fmt(v)}</span>
                   ), width: 130 },
+                  {
+                    title: 'Status', dataIndex: 'status', width: 90,
+                    render: (v) => v === 'cancelled'
+                      ? <Tag color="red" className="!text-[10px]">Cancelled</Tag>
+                      : <Tag color="green" className="!text-[10px]">Active</Tag>,
+                  },
+                  {
+                    title: 'Actions', key: 'actions', width: 76,
+                    render: (_, r) => (
+                      <Space size={2}>
+                        <Button type="text" size="small" icon={<Eye size={14} />} onClick={() => setViewTx(r)} />
+                        {canCancel && r.status !== 'cancelled' && ['adjustment', 'transfer'].includes(r.reference_type) && (
+                          <Button type="text" size="small" className="!text-rose-500" icon={<Ban size={14} />}
+                            onClick={() => { setCancelTx(r); setCancelReason(''); }} />
+                        )}
+                      </Space>
+                    ),
+                  },
                 ]} />
             ) : (
               <div className="py-6 text-center">
@@ -831,6 +870,28 @@ export default function ShopDetailPage() {
           </div>
         )}
       </Modal>
+
+      {/* Cancel Transaction Modal */}
+      <Modal title={<span className="text-sm font-bold text-slate-700">Cancel Transaction #{cancelTx?.id}</span>}
+        open={!!cancelTx} onCancel={() => setCancelTx(null)}
+        onOk={() => cancelMutation.mutate({ tid: cancelTx?.id, reason: cancelReason })}
+        confirmLoading={cancelMutation.isPending}
+        okText="Cancel Transaction" okButtonProps={{ danger: true, disabled: !cancelReason.trim(), className: 'rounded-lg' }}
+        cancelButtonProps={{ className: 'rounded-lg' }} width={460} className="top-8" destroyOnClose>
+        <div className="space-y-3 mt-4">
+          <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">
+            Cancelling reverses this transaction on the account balance. The record is kept and marked as cancelled — nothing is deleted. This cannot be undone.
+          </div>
+          <div>
+            <span className="text-xs font-semibold text-slate-500 block mb-1">Reason (required)</span>
+            <Input.TextArea rows={3} className="rounded-lg" placeholder="Why is this transaction being cancelled?"
+              value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} />
+          </div>
+        </div>
+      </Modal>
+
+      {/* Transaction Detail Modal */}
+      <TransactionDetailModal tx={viewTx} open={!!viewTx} onClose={() => setViewTx(null)} />
     </div>
   );
 }

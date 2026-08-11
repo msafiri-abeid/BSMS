@@ -223,6 +223,8 @@ export const accountsAPI = {
   statement: (id, p) => api.get(`/finance/accounts/${id}/statement`, { params: p, responseType: 'blob' }),
   transfer: (d) => api.post('/finance/accounts/transfer', d),
   shopTransactions: (p) => api.get('/finance/transactions', { params: p }),
+  getTransaction: (id) => api.get(`/finance/transactions/${id}`),
+  cancelTransaction: (id, reason) => api.post(`/finance/transactions/${id}/cancel`, { reason }),
 };
 
 export const reportsAPI = {

@@ -626,15 +626,28 @@ const AccountTransaction = sequelize.define('AccountTransaction', {
   account_id: { type: DataTypes.INTEGER, allowNull: false },
   type: { type: DataTypes.ENUM('in', 'out'), allowNull: false },
   amount: { type: DataTypes.INTEGER, allowNull: false },
-  balance_before: { type: DataTypes.INTEGER, allowNull: false },
-  balance_after: { type: DataTypes.INTEGER, allowNull: false },
+  balance_before: { type: DataTypes.INTEGER, allowNull: true },
+  balance_after: { type: DataTypes.INTEGER, allowNull: true },
   reference_type: { type: DataTypes.ENUM('expense', 'collection', 'sale', 'transfer', 'opening_balance', 'adjustment', 'cash_disposition'), allowNull: false },
   reference_id: { type: DataTypes.INTEGER },
   payment_method: { type: DataTypes.ENUM('cash', 'bank_transfer', 'mobile_money', 'cheque', 'internal') },
   description: { type: DataTypes.TEXT },
   recorded_by: { type: DataTypes.INTEGER, allowNull: false },
   transaction_date: { type: DataTypes.DATEONLY, allowNull: false },
-}, { tableName: 'account_transactions' });
+  status: { type: DataTypes.ENUM('active', 'cancelled'), defaultValue: 'active' },
+  receipt_url: { type: DataTypes.STRING(255) },
+  charges: { type: DataTypes.INTEGER },
+  transfer_id: { type: DataTypes.INTEGER },
+  cancelled_by: { type: DataTypes.INTEGER },
+  cancelled_at: { type: DataTypes.DATE },
+  cancel_reason: { type: DataTypes.TEXT },
+}, {
+  tableName: 'account_transactions',
+  indexes: [
+    { fields: ['status'] },
+    { fields: ['transfer_id'] },
+  ],
+});
 
 const AccountTransfer = sequelize.define('AccountTransfer', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
@@ -806,6 +819,8 @@ Account.hasMany(AccountTransaction, { foreignKey: 'account_id', as: 'transaction
 
 AccountTransaction.belongsTo(Account, { foreignKey: 'account_id', as: 'account' });
 AccountTransaction.belongsTo(User, { foreignKey: 'recorded_by', as: 'recorder' });
+AccountTransaction.belongsTo(AccountTransfer, { foreignKey: 'transfer_id', as: 'transfer' });
+AccountTransaction.belongsTo(User, { foreignKey: 'cancelled_by', as: 'canceller' });
 
 AccountTransfer.belongsTo(Account, { foreignKey: 'from_account_id', as: 'fromAccount' });
 AccountTransfer.belongsTo(Account, { foreignKey: 'to_account_id', as: 'toAccount' });

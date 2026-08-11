@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, Table, Tag, Button, Space, Typography, App, DatePicker, Select, Spin, Divider, Modal, InputNumber, Input, Upload } from 'antd';
-import { ArrowLeft, ArrowUpRight, ArrowDownRight, Landmark, Building2, Download, Upload as UploadIcon, Plus, Minus, ArrowLeftRight } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, ArrowDownRight, Landmark, Building2, Download, Upload as UploadIcon, Plus, Minus, ArrowLeftRight, Eye, Ban } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { accountsAPI } from '../../services/api';
+import { useAuthStore } from '../../store/authStore';
+import TransactionDetailModal from '../../components/TransactionDetailModal';
 import dayjs from 'dayjs';
 
 const { Text } = Typography;
@@ -19,6 +21,11 @@ export default function AccountDetailPage() {
   const [txFilters, setTxFilters] = useState({ limit: 50, offset: 0 });
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState({ amount: 0, description: '', receipt: null, to_account_id: null, date_from: null, date_to: null, transaction_date: dayjs().format('YYYY-MM-DD') });
+  const [viewTx, setViewTx] = useState(null);
+  const [cancelTx, setCancelTx] = useState(null);
+  const [cancelReason, setCancelReason] = useState('');
+  const { hasPermission } = useAuthStore();
+  const canCancel = hasPermission('accounts', 'update');
 
   const { data: accountData, isLoading } = useQuery({
     queryKey: ['account', id],
@@ -52,6 +59,18 @@ export default function AccountDetailPage() {
     mutationFn: (d) => accountsAPI.transfer({ ...d, from_account_id: Number(id) }),
     onSuccess: () => { message.success('Transfer completed'); qc.invalidateQueries({ queryKey: ['account', id] }); qc.invalidateQueries({ queryKey: ['account-transactions', id] }); setModal(null); },
     onError: (e) => message.error(e.response?.data?.message || 'Failed'),
+  });
+
+  const cancelMutation = useMutation({
+    mutationFn: ({ tid, reason }) => accountsAPI.cancelTransaction(tid, reason),
+    onSuccess: () => {
+      message.success('Transaction cancelled — account balance recalculated');
+      qc.invalidateQueries({ queryKey: ['account', id] });
+      qc.invalidateQueries({ queryKey: ['account-transactions', id] });
+      setCancelTx(null);
+      setCancelReason('');
+    },
+    onError: (e) => message.error(e.response?.data?.message || 'Failed to cancel transaction'),
   });
 
   const account = accountData;
@@ -100,18 +119,36 @@ export default function AccountDetailPage() {
     { title: 'Date', dataIndex: 'transaction_date', render: v => dayjs(v).format('DD MMM YYYY'), width: 120 },
     {
       title: 'Type', dataIndex: 'type', width: 80,
-      render: v => v === 'in'
-        ? <span className="flex items-center gap-1 text-emerald-600 text-xs font-semibold"><ArrowUpRight size={14} /> IN</span>
-        : <span className="flex items-center gap-1 text-red-600 text-xs font-semibold"><ArrowDownRight size={14} /> OUT</span>,
+      render: (v, r) => v === 'in'
+        ? <span className={`flex items-center gap-1 text-emerald-600 text-xs font-semibold ${r.status === 'cancelled' ? 'opacity-50 line-through' : ''}`}><ArrowUpRight size={14} /> IN</span>
+        : <span className={`flex items-center gap-1 text-red-600 text-xs font-semibold ${r.status === 'cancelled' ? 'opacity-50 line-through' : ''}`}><ArrowDownRight size={14} /> OUT</span>,
     },
     { title: 'Amount', dataIndex: 'amount', render: (v, r) => (
-      <span className={`font-semibold ${r.type === 'in' ? 'text-emerald-600' : 'text-red-600'}`}>{fmt(v)}</span>
+      <span className={`font-semibold ${r.type === 'in' ? 'text-emerald-600' : 'text-red-600'} ${r.status === 'cancelled' ? 'line-through opacity-60' : ''}`}>{fmt(v)}</span>
     ), width: 130 },
-    { title: 'Balance Before', dataIndex: 'balance_before', render: v => <span className="text-xs">{fmt(v)}</span>, width: 120 },
-    { title: 'Balance After', dataIndex: 'balance_after', render: v => <span className="font-semibold">{fmt(v)}</span>, width: 120 },
+    { title: 'Balance Before', dataIndex: 'balance_before', render: (v, r) => r.status === 'cancelled' ? <span className="text-xs text-slate-300">—</span> : <span className="text-xs">{fmt(v)}</span>, width: 120 },
+    { title: 'Balance After', dataIndex: 'balance_after', render: (v, r) => r.status === 'cancelled' ? <span className="text-xs text-slate-300">—</span> : <span className="font-semibold">{fmt(v)}</span>, width: 120 },
     { title: 'Reference', key: 'reference', render: (_, r) => <Tag className="!text-[10px]">{r.reference_type?.replace(/_/g, ' ')}</Tag>, width: 100 },
     { title: 'Description', dataIndex: 'description', render: v => <span className="text-xs text-slate-500">{v || '—'}</span>, ellipsis: true },
     { title: 'Recorded By', dataIndex: ['recorder', 'name'], render: v => v || '—', width: 120 },
+    {
+      title: 'Status', dataIndex: 'status', width: 100,
+      render: (v) => v === 'cancelled'
+        ? <Tag color="red" className="!text-[10px]">Cancelled</Tag>
+        : <Tag color="green" className="!text-[10px]">Active</Tag>,
+    },
+    {
+      title: 'Actions', key: 'actions', width: 80,
+      render: (_, r) => (
+        <Space size={4}>
+          <Button type="text" size="small" icon={<Eye size={15} />} onClick={() => setViewTx(r)} />
+          {canCancel && r.status !== 'cancelled' && ['adjustment', 'transfer'].includes(r.reference_type) && (
+            <Button type="text" size="small" className="!text-rose-500" icon={<Ban size={15} />}
+              onClick={() => { setCancelTx(r); setCancelReason(''); }} />
+          )}
+        </Space>
+      ),
+    },
   ];
 
   if (isLoading) return <div className="flex justify-center py-20"><Spin size="large" /></div>;
@@ -235,6 +272,7 @@ export default function AccountDetailPage() {
         rowKey="id"
         size="middle"
         loading={txLoading}
+        rowClassName={(r) => (r.status === 'cancelled' ? 'opacity-50' : '')}
         pagination={{ pageSize: 50, total: txData?.count || 0, showSizeChanger: false,
           onChange: (p) => setTxFilters(f => ({ ...f, offset: (p - 1) * 50 })) }}
       />
@@ -366,6 +404,28 @@ export default function AccountDetailPage() {
           <p className="text-[10px] text-slate-400 m-0">Leave blank for full statement (all time)</p>
         </div>
       </Modal>
+
+      {/* Cancel Transaction Modal */}
+      <Modal title={<span className="text-sm font-bold text-slate-700">Cancel Transaction #{cancelTx?.id}</span>}
+        open={!!cancelTx} onCancel={() => setCancelTx(null)}
+        onOk={() => cancelMutation.mutate({ tid: cancelTx?.id, reason: cancelReason })}
+        confirmLoading={cancelMutation.isPending}
+        okText="Cancel Transaction" okButtonProps={{ danger: true, disabled: !cancelReason.trim(), className: 'rounded-lg' }}
+        cancelButtonProps={{ className: 'rounded-lg' }} width={460} className="top-8" destroyOnClose>
+        <div className="space-y-3 mt-4">
+          <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">
+            Cancelling reverses this transaction on the account balance. The record is kept and marked as cancelled — nothing is deleted. This cannot be undone.
+          </div>
+          <div>
+            <span className="text-xs font-semibold text-slate-500 block mb-1">Reason (required)</span>
+            <Input.TextArea rows={3} className="rounded-lg" placeholder="Why is this transaction being cancelled?"
+              value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} />
+          </div>
+        </div>
+      </Modal>
+
+      {/* Transaction Detail Modal */}
+      <TransactionDetailModal tx={viewTx} open={!!viewTx} onClose={() => setViewTx(null)} />
     </div>
   );
 }

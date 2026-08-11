@@ -298,6 +298,24 @@ GET|POST       /api/finance/payroll
 GET            /api/finance/export/collections
 ```
 
+### Accounting
+```
+GET|POST       /api/finance/accounts
+GET|PUT|DELETE /api/finance/accounts/:id
+GET            /api/finance/accounts/:id/transactions   # ?status=active filters cancelled out
+GET            /api/finance/accounts/:id/statement
+POST           /api/finance/accounts/:id/deposit
+POST           /api/finance/accounts/:id/withdraw
+POST           /api/finance/accounts/transfer
+GET            /api/finance/transactions               # shop transactions (?shop_id=)
+GET            /api/finance/transactions/:id           # transaction detail (account, recorder, transfer route, receipt)
+POST           /api/finance/transactions/:id/cancel    # Admin/GM/Finance — soft-void + recalc balances (body: { reason })
+```
+
+**Transaction Cancel / Detail** — deposits, withdrawals and transfers can be cancelled from the transaction history. Cancel is a soft-void (`status='cancelled'`): the row is kept, `balance_before/after` are nulled, and the account's `current_balance` is **recomputed from the active ledger** (`opening_balance + Σin − Σout`, excluding `opening_balance` rows) — the balance is the single source of truth. Transfer legs are linked via `transfer_id` and cancel together. Cancelled rows stay visible (greyed out) but are excluded from all reports/statements. Run `node backend/scripts/backfill-transfer-links.js` once to link pre-existing transfer legs.
+
+> Production: the new `account_transactions` columns (`status`, `receipt_url`, `charges`, `transfer_id`, `cancelled_by`, `cancelled_at`, `cancel_reason`; `balance_before/balance_after` now nullable) are applied automatically by `alter:true` in development. On production, apply them manually with an `ALTER TABLE` before restarting.
+
 ### Tickets
 ```
 GET|POST       /api/tickets

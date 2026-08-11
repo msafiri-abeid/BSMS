@@ -249,6 +249,24 @@ const listShopTransactions = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+const getTransactionDetail = async (req, res, next) => {
+  try {
+    const tx = await financeService.getTransactionDetail(req.params.id);
+    res.json({ success: true, data: tx });
+  } catch (err) { next(err); }
+};
+
+const cancelTransaction = async (req, res, next) => {
+  try {
+    const { reason } = req.body;
+    if (!reason || !reason.trim()) {
+      return res.status(400).json({ success: false, message: 'A cancel reason is required' });
+    }
+    const result = await financeService.cancelTransaction(req.params.id, req.user.id, reason.trim());
+    res.json({ success: true, data: result });
+  } catch (err) { next(err); }
+};
+
 const transferAccounts = async (req, res, next) => {
   try {
     const result = await financeService.transferBetweenAccounts(req.body, req.user.id);
@@ -288,7 +306,7 @@ module.exports = {
   submitExpense, updateExpense, removeExpense, getPendingExpenses, approveExpense, changeExpenseStatus, listExpenses, listCategories,
   createInvoice, listInvoices, downloadInvoicePDF, recordPayment, listPayroll, createPayroll, exportCollections,
   listAccounts, createAccount, getAccount, updateAccount, deleteAccount,
-  listTransactions, listShopTransactions, transferAccounts,
+  listTransactions, listShopTransactions, getTransactionDetail, cancelTransaction, transferAccounts,
   balanceSheet, trialBalance, cashFlow, accountReport,
   recordDeposit, recordWithdraw, downloadAccountStatement,
 };
