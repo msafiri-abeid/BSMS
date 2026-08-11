@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Table, Tag, Button, Space, DatePicker, Select, Input, InputNumber, Typography, Empty, Modal, App, Image, List, Segmented, Upload } from 'antd';
+import { Table, Tag, Button, Space, DatePicker, Select, Input, InputNumber, Typography, Empty, Modal, App, Image, List, Segmented } from 'antd';
 import { Download, Plus, Eye, Edit3, Trash2, Camera, Search, X, CheckCircle, XCircle, FileDown, TrendingUp, ShieldCheck, ClipboardList, Calendar, RefreshCw } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { collectionsAPI, financeAPI, shopsAPI, usersAPI } from '../../services/api';
@@ -7,6 +7,7 @@ import { useAuthStore } from '../../store/authStore';
 import KpiCard from '../../components/KpiCard';
 import ActionMenu from '../../components/ActionMenu';
 import MobileCard from '../../components/MobileCard';
+import PhotoUpload from '../../components/PhotoUpload';
 import CreateAssignmentModal from './CreateAssignmentModal';
 import RecordCollectionModal from './RecordCollectionModal';
 import dayjs from 'dayjs';
@@ -761,19 +762,7 @@ export default function CollectionsPage() {
                       <Camera className="w-4 h-4" /> Current image will be removed. Upload a new one below if needed.
                     </div>
                   ) : null}
-                  <Upload.Dragger
-                    fileList={editFileList}
-                    beforeUpload={(file) => { setEditFileList([file]); return false; }}
-                    onRemove={() => setEditFileList([])}
-                    accept="image/*"
-                    maxCount={1}
-                    className="rounded-lg"
-                  >
-                    <div className="flex flex-col items-center gap-1 py-2">
-                      <Camera className="w-6 h-6 text-slate-400" />
-                      <Text className="text-xs text-slate-500">Tap to replace meter photo</Text>
-                    </div>
-                  </Upload.Dragger>
+                  <PhotoUpload file={editFileList[0]} onChange={(f) => setEditFileList(f ? [f] : [])} />
                 </div>
               </>
             ) : (

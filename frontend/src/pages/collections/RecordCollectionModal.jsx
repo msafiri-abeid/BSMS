@@ -1,12 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Modal, Form, Select, InputNumber, Upload, App, Typography, DatePicker } from 'antd';
-import { Camera } from 'lucide-react';
+import { Modal, Form, Select, InputNumber, App, DatePicker } from 'antd';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { machinesAPI, collectionsAPI, shopsAPI } from '../../services/api';
 import { useAuthStore } from '../../store/authStore';
+import PhotoUpload from '../../components/PhotoUpload';
 import dayjs from 'dayjs';
 
-const { Text } = Typography;
 const { Option } = Select;
 const ADMIN_ROLES = ['Admin', 'General Manager', 'Operations Manager'];
 
@@ -163,24 +162,7 @@ export default function RecordCollectionModal({ open, onClose }) {
         </Form.Item>
 
         <Form.Item label={<span className="text-slate-600 font-medium text-xs">Meter Screen Photo</span>}>
-          <Upload.Dragger
-            fileList={fileList}
-            beforeUpload={(file) => { setFileList([file]); return false; }}
-            onRemove={() => setFileList([])}
-            accept="image/*"
-            maxCount={1}
-            className="rounded-lg"
-          >
-            <div className="flex flex-col items-center gap-1 py-3">
-              <Camera className="w-8 h-8 text-slate-400" />
-              <Text className="text-xs text-slate-500">Tap to open camera or upload a photo</Text>
-            </div>
-          </Upload.Dragger>
-          {fileList[0]?.originFileObj && (
-            <div className="mt-2 rounded-lg overflow-hidden border border-slate-200">
-              <img src={URL.createObjectURL(fileList[0].originFileObj)} alt="Meter preview" className="w-full max-h-48 object-contain bg-slate-50" />
-            </div>
-          )}
+          <PhotoUpload file={fileList[0]} onChange={(f) => setFileList(f ? [f] : [])} />
         </Form.Item>
 
         {/* Gross summary (read-only) */}

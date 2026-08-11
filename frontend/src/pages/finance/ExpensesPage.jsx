@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Table, Button, Modal, Form, Input, Select, InputNumber, Upload, Tag, Space, App, Typography, List, Empty, Segmented, DatePicker, Image } from 'antd';
+import { Table, Button, Modal, Form, Input, Select, InputNumber, Tag, Space, App, Typography, List, Empty, Segmented, DatePicker, Image } from 'antd';
 import { Plus, CheckCircle, XCircle, FileDown, Search, X, Store, Cpu, Smartphone, Wallet, Eye, Edit3, Trash2, Landmark, Camera, RefreshCw } from 'lucide-react';
 import ActionMenu from '../../components/ActionMenu';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -7,6 +7,7 @@ import { financeAPI, shopsAPI, machinesAPI, accountsAPI } from '../../services/a
 import { useAuthStore } from '../../store/authStore';
 import KpiCard from '../../components/KpiCard';
 import MobileCard from '../../components/MobileCard';
+import PhotoUpload from '../../components/PhotoUpload';
 import dayjs from 'dayjs';
 
 const { Option } = Select;
@@ -421,22 +422,7 @@ export default function ExpensesPage() {
                 <Camera className="w-4 h-4" /> Current receipt will be removed. Upload a new one below if needed.
               </div>
             )}
-            <Upload
-              fileList={receiptFileList}
-              beforeUpload={(file) => { setReceiptFileList([file]); return false; }}
-              onRemove={() => setReceiptFileList([])}
-              accept="image/*"
-              maxCount={1}
-            >
-              <Button icon={<Camera size={14} />}>
-                {receiptFileList.length ? 'Replace Receipt' : 'Attach / Take Receipt Photo'}
-              </Button>
-            </Upload>
-            {receiptFileList[0] && (
-              <div className="mt-2 rounded-lg overflow-hidden border border-slate-200">
-                <img src={URL.createObjectURL(receiptFileList[0])} alt="Receipt preview" className="w-full max-h-48 object-contain bg-slate-50" />
-              </div>
-            )}
+            <PhotoUpload file={receiptFileList[0]} onChange={(f) => setReceiptFileList(f ? [f] : [])} />
           </Form.Item>
         </Form>
       </Modal>

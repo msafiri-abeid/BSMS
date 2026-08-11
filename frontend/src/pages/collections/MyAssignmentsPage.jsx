@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { Card, Button, Tag, Modal, Form, InputNumber, Upload, Alert, Spin, App, Typography, Table, Select, DatePicker, Space, List, Empty } from 'antd';
+import { Card, Button, Tag, Modal, Form, InputNumber, Alert, Spin, App, Typography, Table, Select, DatePicker, Space, List, Empty } from 'antd';
 import { Camera, CheckCircle, Clock, DoorOpen, Download, FileText, Plus, Unlock, Lock, Eye, Edit3, Trash2, X } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { collectionsAPI, usersAPI, machinesAPI } from '../../services/api';
 import { useAuthStore } from '../../store/authStore';
 import CreateAssignmentModal from './CreateAssignmentModal';
 import MobileCard from '../../components/MobileCard';
+import PhotoUpload from '../../components/PhotoUpload';
 import dayjs from 'dayjs';
 
 const { Text, Title } = Typography;
@@ -328,26 +329,8 @@ export default function MyAssignmentsPage() {
         >
           <Form form={form} layout="vertical" onFinish={onFinish} className="mt-4">
             <Form.Item label={<span className="text-xs font-semibold text-slate-600">Meter Photo</span>}>
-              <Upload.Dragger
-                beforeUpload={(file) => { setMeterPhoto(file); return false; }}
-                onRemove={() => setMeterPhoto(null)}
-                accept="image/*"
-                maxCount={1}
-                fileList={meterPhoto ? [{ uid: '-1', name: meterPhoto.name, status: 'done' }] : []}
-                className="rounded-lg"
-              >
-                <div className="flex flex-col items-center gap-1 py-2">
-                  <Camera className="w-8 h-8 text-slate-400" />
-                  <span className="text-xs text-slate-500">Tap to open camera or choose a photo</span>
-                </div>
-              </Upload.Dragger>
+              <PhotoUpload file={meterPhoto} onChange={setMeterPhoto} />
             </Form.Item>
-
-            {meterPhoto && (
-              <div className="mb-4 rounded-lg overflow-hidden border border-slate-200">
-                <img src={URL.createObjectURL(meterPhoto)} alt="Meter preview" className="w-full max-h-48 object-contain bg-slate-50" />
-              </div>
-            )}
 
             <Form.Item name="curr_count" label={<span className="text-xs font-semibold text-slate-600">Current Counter Reading</span>} rules={[{ required: true }]}>
               <InputNumber className="w-full" size="large" />
