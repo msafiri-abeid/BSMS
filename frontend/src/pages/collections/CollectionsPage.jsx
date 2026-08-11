@@ -766,7 +766,6 @@ export default function CollectionsPage() {
                     beforeUpload={(file) => { setEditFileList([file]); return false; }}
                     onRemove={() => setEditFileList([])}
                     accept="image/*"
-                    capture="environment"
                     maxCount={1}
                     className="rounded-lg"
                   >

@@ -332,7 +332,6 @@ export default function MyAssignmentsPage() {
                 beforeUpload={(file) => { setMeterPhoto(file); return false; }}
                 onRemove={() => setMeterPhoto(null)}
                 accept="image/*"
-                capture="environment"
                 maxCount={1}
                 fileList={meterPhoto ? [{ uid: '-1', name: meterPhoto.name, status: 'done' }] : []}
                 className="rounded-lg"

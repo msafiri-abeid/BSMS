@@ -168,7 +168,6 @@ export default function RecordCollectionModal({ open, onClose }) {
             beforeUpload={(file) => { setFileList([file]); return false; }}
             onRemove={() => setFileList([])}
             accept="image/*"
-            capture="environment"
             maxCount={1}
             className="rounded-lg"
           >

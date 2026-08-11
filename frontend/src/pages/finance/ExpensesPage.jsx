@@ -426,7 +426,6 @@ export default function ExpensesPage() {
               beforeUpload={(file) => { setReceiptFileList([file]); return false; }}
               onRemove={() => setReceiptFileList([])}
               accept="image/*"
-              capture="environment"
               maxCount={1}
             >
               <Button icon={<Camera size={14} />}>
