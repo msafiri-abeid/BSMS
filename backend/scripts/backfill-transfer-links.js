@@ -3,7 +3,8 @@
 // reference_type='transfer' and no transfer_id) to their AccountTransfer record so that
 // transfer cancellation / detail view works for pre-existing transfers.
 // Run: node scripts/backfill-transfer-links.js
-const { sequelize, Account, AccountTransaction, AccountTransfer } = require('../models');
+const { Op } = require('sequelize');
+const { Account, AccountTransaction, AccountTransfer } = require('../models');
 
 async function backfill() {
   console.log('[BACKFILL] Linking legacy transfer legs to AccountTransfer records...');
@@ -28,7 +29,7 @@ async function backfill() {
       const outId = outLeg.id;
       const inId = inLeg.id;
       if (outLeg.transfer_id || inLeg.transfer_id) continue; // already linked
-      await AccountTransaction.update({ transfer_id: transfer.id, reference_id: transfer.id }, { where: { id: { [sequelize.Op.in]: [outId, inId] } } });
+      await AccountTransaction.update({ transfer_id: transfer.id, reference_id: transfer.id }, { where: { id: { [Op.in]: [outId, inId] } } });
       linked += 2;
     } else {
       ambiguous++;
