@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { accountsAPI } from '../../services/api';
 import { useAuthStore } from '../../store/authStore';
 import TransactionDetailModal from '../../components/TransactionDetailModal';
+import ActionMenu from '../../components/ActionMenu';
 import dayjs from 'dayjs';
 
 const { Text } = Typography;
@@ -26,6 +27,19 @@ export default function AccountDetailPage() {
   const [cancelReason, setCancelReason] = useState('');
   const { hasPermission } = useAuthStore();
   const canCancel = hasPermission('accounts', 'update');
+
+  const actionItems = (r) => {
+    const items = [{ key: 'view', label: 'View', icon: <Eye className="w-4 h-4" /> }];
+    if (canCancel && r.status !== 'cancelled' && ['adjustment', 'transfer'].includes(r.reference_type)) {
+      items.push({ key: 'cancel', label: 'Cancel', icon: <Ban className="w-4 h-4" />, danger: true });
+    }
+    return items;
+  };
+
+  const handleAction = (key, r) => {
+    if (key === 'view') setViewTx(r);
+    if (key === 'cancel') { setCancelTx(r); setCancelReason(''); }
+  };
 
   const { data: accountData, isLoading } = useQuery({
     queryKey: ['account', id],
@@ -138,16 +152,8 @@ export default function AccountDetailPage() {
         : <Tag color="green" className="!text-[10px]">Active</Tag>,
     },
     {
-      title: 'Actions', key: 'actions', width: 80,
-      render: (_, r) => (
-        <Space size={4}>
-          <Button type="text" size="small" icon={<Eye size={15} />} onClick={() => setViewTx(r)} />
-          {canCancel && r.status !== 'cancelled' && ['adjustment', 'transfer'].includes(r.reference_type) && (
-            <Button type="text" size="small" className="!text-rose-500" icon={<Ban size={15} />}
-              onClick={() => { setCancelTx(r); setCancelReason(''); }} />
-          )}
-        </Space>
-      ),
+      title: 'Actions', width: 55, align: 'center',
+      render: (_, r) => <ActionMenu record={r} actionItems={actionItems} onAction={handleAction} />,
     },
   ];
 

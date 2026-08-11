@@ -7,6 +7,7 @@ import { ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip as Rech
 import { shopsAPI, financeAPI, collectionsAPI, accountsAPI } from '../../services/api';
 import KpiCard from '../../components/KpiCard';
 import TransactionDetailModal from '../../components/TransactionDetailModal';
+import ActionMenu from '../../components/ActionMenu';
 import { useAuthStore } from '../../store/authStore';
 import dayjs from 'dayjs';
 
@@ -95,6 +96,19 @@ export default function ShopDetailPage() {
   const roleName = useAuthStore((s) => s.user?.role?.name);
   const canManageCash = ['Admin', 'General Manager', 'Operations Manager', 'Supervisor'].includes(roleName) || roleName === 'Cashier';
   const canCancel = useAuthStore((s) => s.hasPermission('accounts', 'update'));
+
+  const transactionActionItems = (r) => {
+    const items = [{ key: 'view', label: 'View', icon: <Eye className="w-4 h-4" /> }];
+    if (canCancel && r.status !== 'cancelled' && ['adjustment', 'transfer'].includes(r.reference_type)) {
+      items.push({ key: 'cancel', label: 'Cancel', icon: <Ban className="w-4 h-4" />, danger: true });
+    }
+    return items;
+  };
+
+  const handleTransactionAction = (key, r) => {
+    if (key === 'view') setViewTx(r);
+    if (key === 'cancel') { setCancelTx(r); setCancelReason(''); }
+  };
 
   const presetOptions = useMemo(() => [
     { label: dayjs().subtract(1, 'day').format('DD MMM YYYY'), value: 'yesterday' },
@@ -437,16 +451,8 @@ export default function ShopDetailPage() {
                       : <Tag color="green" className="!text-[10px]">Active</Tag>,
                   },
                   {
-                    title: 'Actions', key: 'actions', width: 76,
-                    render: (_, r) => (
-                      <Space size={2}>
-                        <Button type="text" size="small" icon={<Eye size={14} />} onClick={() => setViewTx(r)} />
-                        {canCancel && r.status !== 'cancelled' && ['adjustment', 'transfer'].includes(r.reference_type) && (
-                          <Button type="text" size="small" className="!text-rose-500" icon={<Ban size={14} />}
-                            onClick={() => { setCancelTx(r); setCancelReason(''); }} />
-                        )}
-                      </Space>
-                    ),
+                    title: 'Actions', width: 55, align: 'center',
+                    render: (_, r) => <ActionMenu record={r} actionItems={transactionActionItems} onAction={handleTransactionAction} />,
                   },
                 ]} />
             ) : (
