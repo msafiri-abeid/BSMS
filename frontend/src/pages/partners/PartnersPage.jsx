@@ -350,7 +350,7 @@ export default function PartnersPage() {
           <Form.Item name="type" label={<span className="text-xs font-semibold text-slate-600">Type</span>}>
             <Select>
               <Option value="partner">External Partner</Option>
-              <Option value="own">Own (Bentabet)</Option>
+              <Option value="own">Own (Meteora)</Option>
             </Select>
           </Form.Item>
           <Form.Item name="phone" label={<span className="text-xs font-semibold text-slate-600">Phone</span>}><Input /></Form.Item>
