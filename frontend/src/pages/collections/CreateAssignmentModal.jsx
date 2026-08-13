@@ -26,7 +26,7 @@ export default function CreateAssignmentModal({ open, onClose }) {
   const { message } = App.useApp();
   const qc = useQueryClient();
   const roleName = useAuthStore((s) => s.user?.role?.name);
-  const canAssign = ['Admin', 'General Manager', 'Operations Manager'].includes(roleName);
+  const canAssign = ['Admin', 'General Manager', 'Operations Manager', 'Finance'].includes(roleName);
 
   const { data: collectorsData, isLoading: collectorsLoading } = useQuery({
     queryKey: ['users', { role: 'Collector' }],

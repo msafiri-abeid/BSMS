@@ -55,9 +55,9 @@ const myAssignments = async (req, res, next) => {
 
 const createAssignment = async (req, res, next) => {
   try {
-    const allowed = ['Admin', 'General Manager', 'Operations Manager'];
+    const allowed = ['Admin', 'General Manager', 'Operations Manager', 'Finance'];
     if (!allowed.includes(req.user.role?.name)) {
-      return res.status(403).json({ success: false, message: 'Only Admin, Operations Manager, or General Manager can create assignments' });
+      return res.status(403).json({ success: false, message: 'Only Admin, Operations Manager, General Manager, or Finance can create assignments' });
     }
     const { collector_id, machine_ids, date } = req.body;
     const machines = await Machine.findAll({ where: { id: machine_ids } });
@@ -211,7 +211,7 @@ const weeklyTargets = async (req, res, next) => {
   }
 };
 
-const assignAllowed = (user) => ['Admin', 'General Manager', 'Operations Manager'].includes(user.role?.name);
+const assignAllowed = (user) => ['Admin', 'General Manager', 'Operations Manager', 'Finance'].includes(user.role?.name);
 
 const listAssignments = async (req, res, next) => {
   try {

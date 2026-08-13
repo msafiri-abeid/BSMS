@@ -29,7 +29,7 @@ export default function CollectionsPage() {
   const qc = useQueryClient();
   const canWrite = ['create', 'update', 'delete'].some(a => hasPermission('collections', a));
   const roleName = useAuthStore((s) => s.user?.role?.name);
-  const canAssign = canWrite && ['Admin', 'General Manager', 'Operations Manager'].includes(roleName);
+  const canAssign = canWrite && ['Admin', 'General Manager', 'Operations Manager', 'Finance'].includes(roleName);
   const canApprove = ['Admin', 'General Manager', 'Operations Manager', 'Supervisor'].includes(roleName);
   const userId = useAuthStore((s) => s.user?.id);
 

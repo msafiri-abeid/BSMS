@@ -198,7 +198,7 @@ Owner TZS  = max(0, Net − Weekly target)
 | General Manager | All modules read/write (no system settings) |
 | Director | Read-only dashboard and reports |
 | Operations Manager | Machines, shops, collections, tickets, inventory |
-| Finance | Finance module full + reports |
+| Finance | Finance module full + reports + accounts (read/create/update) + collections read + Meteora assignments (create/edit) + weekly targets + machines read + Meteora machines + machine debts (create/pay/write-off) + tickets + users read (collector list) |
 | Sales | Partners, shops, reports |
 | Collector | Own daily assignments only |
 | Technician | Tickets + machine read |

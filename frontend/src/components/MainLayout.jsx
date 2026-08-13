@@ -28,8 +28,8 @@ const ALL_NAV = [
     module: "collections",
     children: [
       { key: "/collections", label: "All Collections", icon: <ListChecks size={16} />, module: "collections" },
-      { key: "/my-assignments", label: "Assignments", icon: <ClipboardList size={16} />, module: "collections", roles: ['Admin', 'General Manager', 'Operations Manager', 'Collector'] },
-      { key: "/weekly-targets", label: "Weekly Targets", icon: <Crosshair size={16} />, module: "collections", roles: ['Admin', 'General Manager', 'Operations Manager'] },
+      { key: "/my-assignments", label: "Assignments", icon: <ClipboardList size={16} />, module: "collections", roles: ['Admin', 'General Manager', 'Operations Manager', 'Finance', 'Collector'] },
+      { key: "/weekly-targets", label: "Weekly Targets", icon: <Crosshair size={16} />, module: "collections", roles: ['Admin', 'General Manager', 'Operations Manager', 'Finance'] },
     ],
   },
   {
@@ -39,8 +39,8 @@ const ALL_NAV = [
     module: "machines",
     children: [
       { key: "/machines/novomatic", label: "Novomatic", icon: <Monitor size={16} />, module: "machines", businessType: 'slot' },
-      { key: "/machines/meteora", label: "Meteora", icon: <Monitor size={16} />, module: "machines", businessType: 'meteora', roles: ['Admin', 'General Manager', 'Operations Manager', 'Collector'] },
-      { key: "/debts", label: "Debts", icon: <FileText size={16} />, module: "machines", businessType: 'meteora', roles: ['Admin', 'General Manager', 'Operations Manager'] },
+      { key: "/machines/meteora", label: "Meteora", icon: <Monitor size={16} />, module: "machines", businessType: 'meteora', roles: ['Admin', 'General Manager', 'Operations Manager', 'Finance', 'Collector'] },
+      { key: "/debts", label: "Debts", icon: <FileText size={16} />, module: "machines", businessType: 'meteora', roles: ['Admin', 'General Manager', 'Operations Manager', 'Finance'] },
     ],
   },
   {

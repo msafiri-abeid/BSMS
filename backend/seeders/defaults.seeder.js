@@ -61,6 +61,8 @@ module.exports = async () => {
     }
 
     // Finance: finance module full + reports read + accounts CRUD + read collections, machines, shops, partners
+    // + Meteora assignments (collections create/update), machine debt management (machines create/update),
+    //   tickets access, and users read (needed to list collectors for assignment creation).
     if (role.name === 'Finance') {
       for (const act of ACTIONS) {
         await Permission.findOrCreate({ where: { role_id: role.id, module: 'finance', action: act } });
@@ -69,8 +71,14 @@ module.exports = async () => {
       for (const act of ['read', 'create', 'update']) {
         await Permission.findOrCreate({ where: { role_id: role.id, module: 'accounts', action: act } });
       }
-      await Permission.findOrCreate({ where: { role_id: role.id, module: 'collections', action: 'read' } });
-      await Permission.findOrCreate({ where: { role_id: role.id, module: 'machines', action: 'read' } });
+      for (const act of ['read', 'create', 'update']) {
+        await Permission.findOrCreate({ where: { role_id: role.id, module: 'collections', action: act } });
+      }
+      for (const act of ['read', 'create', 'update']) {
+        await Permission.findOrCreate({ where: { role_id: role.id, module: 'machines', action: act } });
+      }
+      await Permission.findOrCreate({ where: { role_id: role.id, module: 'tickets', action: 'read' } });
+      await Permission.findOrCreate({ where: { role_id: role.id, module: 'users', action: 'read' } });
       await Permission.findOrCreate({ where: { role_id: role.id, module: 'shops', action: 'read' } });
       await Permission.findOrCreate({ where: { role_id: role.id, module: 'partners', action: 'read' } });
     }
@@ -181,6 +189,18 @@ module.exports = async () => {
   const opsRole = await Role.findOne({ where: { name: 'Operations Manager' } });
   if (opsRole) {
     await Permission.findOrCreate({ where: { role_id: opsRole.id, module: 'finance', action: 'read' } });
+  }
+  // Ensure Finance gets its extended access on existing installs too (idempotent).
+  const financeRole = await Role.findOne({ where: { name: 'Finance' } });
+  if (financeRole) {
+    for (const act of ['create', 'update']) {
+      await Permission.findOrCreate({ where: { role_id: financeRole.id, module: 'collections', action: act } });
+    }
+    for (const act of ['create', 'update']) {
+      await Permission.findOrCreate({ where: { role_id: financeRole.id, module: 'machines', action: act } });
+    }
+    await Permission.findOrCreate({ where: { role_id: financeRole.id, module: 'tickets', action: 'read' } });
+    await Permission.findOrCreate({ where: { role_id: financeRole.id, module: 'users', action: 'read' } });
   }
   console.log('[SEED] Permissions ensured');
 

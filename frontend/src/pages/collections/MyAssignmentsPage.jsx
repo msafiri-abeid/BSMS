@@ -45,7 +45,7 @@ export default function MyAssignmentsPage() {
   const qc = useQueryClient();
   const { hasPermission } = useAuthStore();
   const roleName = useAuthStore((s) => s.user?.role?.name);
-  const isAssigner = ['Admin', 'General Manager', 'Operations Manager'].includes(roleName);
+  const isAssigner = ['Admin', 'General Manager', 'Operations Manager', 'Finance'].includes(roleName);
   const canWrite = ['create', 'update', 'delete'].some(a => hasPermission('collections', a));
 
   // ── Collector view: my assignments ──
