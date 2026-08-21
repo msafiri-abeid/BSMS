@@ -81,7 +81,7 @@ router.post('/collections/assignments/:id/open', authenticate, collectionC.openM
 router.get('/collections/assignments/export', authenticate, checkPermission('collections', 'read'), collectionC.exportAssignments);
 router.get('/collections/weekly-targets', authenticate, checkPermission('collections', 'read'), collectionC.weeklyTargets);
 router.put('/collections/:id', authenticate, uploadMeter.single('meter_image'), (req, res, next) => {
-  const allowed = ['Admin', 'General Manager', 'Operations Manager', 'Supervisor', 'Cashier'];
+  const allowed = ['Admin', 'General Manager', 'Operations Manager', 'Supervisor', 'Cashier', 'Finance'];
   if (allowed.includes(req.user.role?.name)) return collectionC.update(req, res, next);
   return res.status(403).json({ success: false, message: 'Permission denied' });
 });

@@ -4,6 +4,7 @@ import { Plus, Search, X, Eye, Edit, Trash2, Building2, Handshake, Upload as Upl
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { partnersAPI, regionsAPI, districtsAPI, wardsAPI, streetsAPI } from '../../services/api';
+import { useAuthStore } from '../../store/authStore';
 import KpiCard from '../../components/KpiCard';
 import ActionMenu from '../../components/ActionMenu';
 import MobileCard from '../../components/MobileCard';
@@ -20,6 +21,10 @@ export default function PartnersPage() {
   const [form] = Form.useForm();
   const { message } = App.useApp();
   const qc = useQueryClient();
+  const hasPermission = useAuthStore((s) => s.hasPermission);
+  const canCreate = hasPermission('partners', 'create');
+  const canUpdate = hasPermission('partners', 'update');
+  const canDelete = hasPermission('partners', 'delete');
 
   const [search, setSearch] = useState('');
   const [labelFilter, setLabelFilter] = useState('');
@@ -199,9 +204,8 @@ export default function PartnersPage() {
 
   const actionItems = (r) => [
     { key: 'view', icon: <Eye className="w-4 h-4" />, label: 'View' },
-    { key: 'edit', icon: <Edit className="w-4 h-4" />, label: 'Edit' },
-    { type: 'divider' },
-    { key: 'delete', icon: <Trash2 className="w-4 h-4" />, label: 'Delete', danger: true },
+    ...(canUpdate ? [{ key: 'edit', icon: <Edit className="w-4 h-4" />, label: 'Edit' }] : []),
+    ...(canDelete ? [{ type: 'divider' }, { key: 'delete', icon: <Trash2 className="w-4 h-4" />, label: 'Delete', danger: true }] : []),
   ];
 
   const cols = [
@@ -230,10 +234,12 @@ export default function PartnersPage() {
           <h4 className="text-base font-bold text-slate-800 m-0">Partners</h4>
           <span className="text-xs text-slate-500">{data?.count || 0} total</span>
         </div>
-        <Button type="primary" icon={<Plus size={14} />} onClick={() => { setEditing(null); form.resetFields(); setOpen(true); }}
-          className="!bg-brand-dark hover:!bg-brand-light border-none shadow-sm flex items-center gap-1.5 text-white">
-          Add Partner
-        </Button>
+        {canCreate && (
+          <Button type="primary" icon={<Plus size={14} />} onClick={() => { setEditing(null); form.resetFields(); setOpen(true); }}
+            className="!bg-brand-dark hover:!bg-brand-light border-none shadow-sm flex items-center gap-1.5 text-white">
+            Add Partner
+          </Button>
+        )}
       </div>
 
       {/* KPI Cards */}

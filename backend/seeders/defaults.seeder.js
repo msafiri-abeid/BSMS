@@ -62,6 +62,7 @@ module.exports = async () => {
 
     // Finance: finance module full + reports read + accounts CRUD + read collections, machines, shops, partners
     // + Meteora assignments (collections create/update), machine debt management (machines create/update),
+    //   partner/shop registration (partners/shops create/update),
     //   tickets access, and users read (needed to list collectors for assignment creation).
     if (role.name === 'Finance') {
       for (const act of ACTIONS) {
@@ -77,10 +78,14 @@ module.exports = async () => {
       for (const act of ['read', 'create', 'update']) {
         await Permission.findOrCreate({ where: { role_id: role.id, module: 'machines', action: act } });
       }
+      for (const act of ['read', 'create', 'update']) {
+        await Permission.findOrCreate({ where: { role_id: role.id, module: 'shops', action: act } });
+      }
+      for (const act of ['read', 'create', 'update']) {
+        await Permission.findOrCreate({ where: { role_id: role.id, module: 'partners', action: act } });
+      }
       await Permission.findOrCreate({ where: { role_id: role.id, module: 'tickets', action: 'read' } });
       await Permission.findOrCreate({ where: { role_id: role.id, module: 'users', action: 'read' } });
-      await Permission.findOrCreate({ where: { role_id: role.id, module: 'shops', action: 'read' } });
-      await Permission.findOrCreate({ where: { role_id: role.id, module: 'partners', action: 'read' } });
     }
 
     // Operations Manager
@@ -198,6 +203,11 @@ module.exports = async () => {
     }
     for (const act of ['create', 'update']) {
       await Permission.findOrCreate({ where: { role_id: financeRole.id, module: 'machines', action: act } });
+    }
+    for (const mod of ['partners', 'shops']) {
+      for (const act of ['create', 'update']) {
+        await Permission.findOrCreate({ where: { role_id: financeRole.id, module: mod, action: act } });
+      }
     }
     await Permission.findOrCreate({ where: { role_id: financeRole.id, module: 'tickets', action: 'read' } });
     await Permission.findOrCreate({ where: { role_id: financeRole.id, module: 'users', action: 'read' } });

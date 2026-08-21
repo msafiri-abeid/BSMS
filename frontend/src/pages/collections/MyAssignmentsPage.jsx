@@ -47,6 +47,7 @@ export default function MyAssignmentsPage() {
   const roleName = useAuthStore((s) => s.user?.role?.name);
   const isAssigner = ['Admin', 'General Manager', 'Operations Manager', 'Finance'].includes(roleName);
   const canWrite = ['create', 'update', 'delete'].some(a => hasPermission('collections', a));
+  const canDeleteAssignments = hasPermission('collections', 'delete');
 
   // ── Collector view: my assignments ──
   const { data: assignmentsRaw, isLoading: loadingMy } = useQuery({
@@ -193,16 +194,18 @@ export default function MyAssignmentsPage() {
               setEditModalOpen(r);
             }}
             className="!text-slate-500 hover:!text-amber-600" title="Edit" />
-          <Button type="text" size="small" icon={<Trash2 className="w-4 h-4" />}
-            onClick={() => {
-              Modal.confirm({
-                title: 'Delete Assignment',
-                content: `Delete assignment for ${r.machine?.slot_code} on ${r.assigned_date}?`,
-                okText: 'Delete', okType: 'danger',
-                onOk: () => deleteMutation.mutate(r.id),
-              });
-            }}
-            className="!text-slate-500 hover:!text-red-600" title="Delete" />
+          {canDeleteAssignments && (
+            <Button type="text" size="small" icon={<Trash2 className="w-4 h-4" />}
+              onClick={() => {
+                Modal.confirm({
+                  title: 'Delete Assignment',
+                  content: `Delete assignment for ${r.machine?.slot_code} on ${r.assigned_date}?`,
+                  okText: 'Delete', okType: 'danger',
+                  onOk: () => deleteMutation.mutate(r.id),
+                });
+              }}
+              className="!text-slate-500 hover:!text-red-600" title="Delete" />
+          )}
         </Space>
       ),
     },

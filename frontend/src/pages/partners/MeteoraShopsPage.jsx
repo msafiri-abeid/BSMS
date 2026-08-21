@@ -4,6 +4,7 @@ import { Plus, Search, Eye, Edit, Trash2, Store, Upload as UploadIcon, FileDown,
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { shopsAPI, partnersAPI, regionsAPI, districtsAPI, wardsAPI, streetsAPI } from '../../services/api';
+import { useAuthStore } from '../../store/authStore';
 import KpiCard from '../../components/KpiCard';
 import ActionMenu from '../../components/ActionMenu';
 import MobileCard from '../../components/MobileCard';
@@ -20,6 +21,10 @@ export default function MeteoraShopsPage() {
   const [form] = Form.useForm();
   const { message } = App.useApp();
   const qc = useQueryClient();
+  const hasPermission = useAuthStore((s) => s.hasPermission);
+  const canCreate = hasPermission('shops', 'create');
+  const canUpdate = hasPermission('shops', 'update');
+  const canDelete = hasPermission('shops', 'delete');
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -178,9 +183,8 @@ export default function MeteoraShopsPage() {
 
   const actionItems = (r) => [
     { key: 'view', icon: <Eye className="w-4 h-4" />, label: 'View' },
-    { key: 'edit', icon: <Edit className="w-4 h-4" />, label: 'Edit' },
-    { type: 'divider' },
-    { key: 'delete', icon: <Trash2 className="w-4 h-4" />, label: 'Delete', danger: true },
+    ...(canUpdate ? [{ key: 'edit', icon: <Edit className="w-4 h-4" />, label: 'Edit' }] : []),
+    ...(canDelete ? [{ type: 'divider' }, { key: 'delete', icon: <Trash2 className="w-4 h-4" />, label: 'Delete', danger: true }] : []),
   ];
 
   const cols = [
@@ -206,10 +210,12 @@ export default function MeteoraShopsPage() {
           <h4 className="text-base font-bold text-slate-800 m-0">Meteora Shops</h4>
           <span className="text-xs text-slate-500">{data?.count || 0} total</span>
         </div>
-        <Button type="primary" icon={<Plus size={14} />} onClick={() => { setEditing(null); form.resetFields(); setOpen(true); }}
-          className="!bg-brand-dark hover:!bg-brand-light border-none shadow-sm flex items-center gap-1.5 text-white">
-          Add Shop
-        </Button>
+        {canCreate && (
+          <Button type="primary" icon={<Plus size={14} />} onClick={() => { setEditing(null); form.resetFields(); setOpen(true); }}
+            className="!bg-brand-dark hover:!bg-brand-light border-none shadow-sm flex items-center gap-1.5 text-white">
+            Add Shop
+          </Button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
