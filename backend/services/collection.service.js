@@ -301,7 +301,11 @@ const updateCollection = async (id, data) => {
       });
 
       // Update machine previous_count for next collection
-      await machine.update({ previous_count: nd.closing_credits }, { transaction: t });
+      // Guard: an edit to a collection recorded BEFORE a meter reset must not undo that reset
+      const isPreResetEdit = machine.meter_reset_at && new Date(collection.collected_at) < new Date(machine.meter_reset_at);
+      if (!isPreResetEdit) {
+        await machine.update({ previous_count: nd.closing_credits }, { transaction: t });
+      }
 
       // Update Collection meter-derived fields
       Object.assign(updateData, {
@@ -330,17 +334,25 @@ const removeCollection = async (id) => {
 
   // For Novomatic: restore machine.previous_count to the previous valid collection's closing
   if (collection.novomaticReading) {
+    const machine = await Machine.findByPk(collection.machine_id);
+
+    // Guard: only collections recorded AFTER a meter reset may restore the meter,
+    // otherwise deleting an old (pre-reset) collection would silently undo the reset
+    const prevWhere = {
+      machine_id: collection.machine_id,
+      id: { [Op.ne]: id },
+      status: { [Op.in]: ['approved', 'supervisor_approved'] },
+    };
+    if (machine.meter_reset_at) {
+      prevWhere.collected_at = { [Op.gt]: machine.meter_reset_at };
+    }
+
     const prevCollection = await Collection.findOne({
-      where: {
-        machine_id: collection.machine_id,
-        id: { [Op.ne]: id },
-        status: { [Op.in]: ['approved', 'supervisor_approved'] }
-      },
+      where: prevWhere,
       order: [['collected_at', 'DESC']],
       include: [{ model: NovomaticReading, as: 'novomaticReading' }],
     });
 
-    const machine = await Machine.findByPk(collection.machine_id);
     if (prevCollection?.novomaticReading) {
       await machine.update({ previous_count: prevCollection.novomaticReading.closing_credits });
     } else {
@@ -438,18 +450,25 @@ const disputeCollection = async (id, { reason, userId }) => {
 
   return sequelize.transaction(async (t) => {
     // 1. Find the previous valid collection for the same machine
+    const machine = await Machine.findByPk(collection.machine_id, { transaction: t });
+
+    // Guard: only collections recorded AFTER a meter reset may restore the meter,
+    // otherwise disputing an old (pre-reset) collection would silently undo the reset
+    const prevWhere = {
+      machine_id: collection.machine_id,
+      id: { [Op.ne]: id },
+      status: { [Op.in]: ['approved', 'supervisor_approved', 'pending'] },
+    };
+    if (machine.meter_reset_at) {
+      prevWhere.collected_at = { [Op.gt]: machine.meter_reset_at };
+    }
+
     const prevCollection = await Collection.findOne({
-      where: {
-        machine_id: collection.machine_id,
-        id: { [Op.ne]: id },
-        status: { [Op.in]: ['approved', 'supervisor_approved', 'pending'] },
-      },
+      where: prevWhere,
       order: [['collected_at', 'DESC']],
       include: [{ model: NovomaticReading, as: 'novomaticReading' }],
       transaction: t,
     });
-
-    const machine = await Machine.findByPk(collection.machine_id, { transaction: t });
 
     // 2. Revert machine.previous_count
     if (collection.novomaticReading) {

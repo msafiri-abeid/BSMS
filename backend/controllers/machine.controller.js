@@ -54,6 +54,18 @@ const refill = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+const resetMeter = async (req, res, next) => {
+  try {
+    const allowed = ['Admin', 'General Manager', 'Operations Manager'];
+    if (!allowed.includes(req.user.role?.name)) {
+      return res.status(403).json({ success: false, message: 'Only Admin, General Manager, or Operations Manager can reset a machine meter' });
+    }
+    const machine = await machineService.resetMeter(req.params.id);
+    if (!machine) return res.status(404).json({ success: false, message: 'Machine not found' });
+    res.json({ success: true, data: machine, message: 'Meter reset successfully. The next collection will open from 0.' });
+  } catch (err) { next(err); }
+};
+
 const getMachineStats = async (req, res, next) => {
   try {
     const stats = await machineService.getMachineStats(req.params.id, req.query);
@@ -111,4 +123,4 @@ const recordCollection = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { list, getOne, getMachineStats, create, update, remove, deploy, exchange, refill, exportExcel, downloadPDF, recordCollection };
+module.exports = { list, getOne, getMachineStats, create, update, remove, deploy, exchange, refill, exportExcel, downloadPDF, recordCollection, resetMeter };

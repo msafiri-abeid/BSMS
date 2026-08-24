@@ -137,6 +137,7 @@ export const machinesAPI = {
   deploy: (id, d) => api.post(`/machines/${id}/deploy`, d),
   exchange: (id, d) => api.post(`/machines/${id}/exchange`, d),
   refill: (id, d) => api.post(`/machines/${id}/refill`, d),
+  resetMeter: (id) => api.post(`/machines/${id}/reset-meter`),
   export: () => api.get('/machines/export', { responseType: 'blob' }),
   exportPDF: (id) => api.get(`/machines/${id}/pdf`, { responseType: 'blob' }),
   recordCollection: (id, d) => api.post(`/machines/${id}/collections`, d),

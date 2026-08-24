@@ -269,6 +269,7 @@ POST           /api/machines/:id/exchange
 POST           /api/machines/:id/refill
 GET            /api/machines/:id/pdf
 POST           /api/machines/:id/collections
+POST           /api/machines/:id/reset-meter
 ```
 
 ### Collections

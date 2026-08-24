@@ -120,6 +120,7 @@ const Machine = sequelize.define('Machine', {
   cycle_start_date: { type: DataTypes.DATEONLY },
   opening_count: { type: DataTypes.BIGINT, defaultValue: 0 },
   previous_count: { type: DataTypes.BIGINT, defaultValue: 0 },
+  meter_reset_at: { type: DataTypes.DATE, allowNull: true },
   current_shop_id: { type: DataTypes.INTEGER },
   status: { type: DataTypes.ENUM('active', 'inactive', 'maintenance', 'transferred'), defaultValue: 'inactive' },
 }, { tableName: 'machines', indexes: [

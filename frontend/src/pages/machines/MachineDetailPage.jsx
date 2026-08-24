@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, Tag, Table, Button, Typography, Space, Modal, Form, Input, InputNumber, Select, Checkbox, DatePicker, App, Empty, Image, Tooltip } from 'antd';
-import { ArrowLeft, Download, Plus, Pencil, Trash2, Eye, Edit3, X, CheckCircle, XCircle, Cpu, DollarSign, MapPin, Target, Receipt, BarChart3, History } from 'lucide-react';
+import { ArrowLeft, Download, Plus, Pencil, Trash2, Eye, Edit3, X, CheckCircle, XCircle, Cpu, DollarSign, MapPin, Target, Receipt, BarChart3, History, RotateCcw } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import { machinesAPI, collectionsAPI, financeAPI, shopsAPI } from '../../services/api';
 import { useAuthStore } from '../../store/authStore';
@@ -33,6 +33,7 @@ export default function MachineDetailPage() {
   const canWriteCollections = ['create', 'update', 'delete'].some(a => hasPermission('collections', a));
   const roleName = user?.role?.name;
   const isManager = ['Admin', 'General Manager', 'Operations Manager'].includes(roleName);
+  const canResetMeter = isManager && hasPermission('machines', 'update');
 
   const [filters, setFilters] = useState({ limit: 50, offset: 0 });
   const [selectedRowKeys, setSelectedRowKeys] = useState([]);
@@ -41,6 +42,7 @@ export default function MachineDetailPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deployOpen, setDeployOpen] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
   const [editForm] = Form.useForm();
   const [deployForm] = Form.useForm();
 
@@ -118,6 +120,18 @@ export default function MachineDetailPage() {
       deployForm.resetFields();
     },
     onError: (e) => message.error(e.response?.data?.message || 'Error deploying machine'),
+  });
+
+  const resetMeterMutation = useMutation({
+    mutationFn: () => machinesAPI.resetMeter(id),
+    onSuccess: () => {
+      message.success('Meter reset. The next collection will open from 0.');
+      queryClient.invalidateQueries({ queryKey: ['machine', id] });
+      queryClient.invalidateQueries({ queryKey: ['machine-detail'] });
+      queryClient.invalidateQueries({ queryKey: ['machines'] });
+      setResetOpen(false);
+    },
+    onError: (e) => message.error(e.response?.data?.message || 'Reset failed'),
   });
 
   const removeCollMutation = useMutation({
@@ -321,6 +335,12 @@ export default function MachineDetailPage() {
               }}
               className="h-10 px-4 border-slate-200 rounded-lg flex items-center gap-1.5 font-medium text-slate-600">
               Edit
+            </Button>
+          )}
+          {isNovomatic && canResetMeter && (
+            <Button danger icon={<RotateCcw size={16} />} onClick={() => setResetOpen(true)}
+              className="h-10 px-4 border-amber-200 bg-amber-50/60 hover:bg-amber-50 rounded-lg flex items-center gap-1.5 font-medium !text-amber-700">
+              Reset Meter
             </Button>
           )}
           {canWrite && (
@@ -773,6 +793,28 @@ export default function MachineDetailPage() {
         <p className="text-slate-600 text-sm mt-3 leading-relaxed">
           Are you sure you want to discard machine entry <strong className="text-slate-800">{machine.slot_code}</strong>? All historical collections associated with this profile will become decoupled. This action is irreversible.
         </p>
+      </Modal>
+
+      {/* ── Reset Meter Modal ────────────────────────────────── */}
+      <Modal
+        title={<span className="text-base font-bold text-amber-600">Reset Meter — {machine.slot_code}</span>}
+        open={resetOpen}
+        onCancel={() => setResetOpen(false)}
+        onOk={() => resetMeterMutation.mutate()}
+        confirmLoading={resetMeterMutation.isPending}
+        okText="Confirm Reset"
+        okButtonProps={{ danger: true, className: 'rounded-lg' }}
+        cancelButtonProps={{ className: 'rounded-lg' }}
+        centered
+      >
+        <div className="mt-4 space-y-3 text-sm">
+          <div className="grid grid-cols-2 gap-3 p-3 rounded-lg bg-slate-50 border border-slate-200">
+            <div><span className="text-xs font-semibold text-slate-500 block">Previous Meter (credits)</span><span className="font-mono font-bold">{(machine.previous_count ?? 0).toLocaleString()}</span></div>
+            <div><span className="text-xs font-semibold text-slate-500 block">Opening Meter (credits)</span><span className="font-mono font-bold">{(machine.opening_count ?? 0).toLocaleString()}</span></div>
+          </div>
+          <p className="m-0 text-slate-600 leading-relaxed">Use this only after the machine's physical meter has been reset. Both meters will be set to <strong>0</strong> and the next collection will open from 0.</p>
+          <p className="m-0 text-xs text-amber-600">Existing collection history is not affected. This action cannot be undone.</p>
+        </div>
       </Modal>
 
       {/* ── Deploy Modal ─────────────────────────────────────── */}

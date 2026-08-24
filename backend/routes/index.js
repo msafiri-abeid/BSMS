@@ -68,6 +68,7 @@ router.post('/machines/:id/refill', authenticate, checkPermission('machines', 'c
 router.get('/machines/export', authenticate, checkPermission('machines', 'read'), machineC.exportExcel);
 router.get('/machines/:id/pdf', authenticate, checkPermission('machines', 'read'), machineC.downloadPDF);
 router.post('/machines/:id/collections', authenticate, checkPermission('machines', 'create'), machineC.recordCollection);
+router.post('/machines/:id/reset-meter', authenticate, checkPermission('machines', 'update'), machineC.resetMeter);
 
 // ── COLLECTIONS ───────────────────────────────────────────────
 router.get('/collections/my-assignments', authenticate, collectionC.myAssignments);

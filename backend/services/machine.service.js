@@ -570,4 +570,18 @@ const recordCollection = async ({ machineId, shopId, userId, currCount, novomati
   });
 };
 
-module.exports = { list, getOne, getMachineStats, create, update, remove, deploy, exchange, refill, exportExcel, generateMachinePDF, recordCollection };
+const resetMeter = async (id) => {
+  const machine = await Machine.findByPk(id);
+  if (!machine) return null;
+  if (machine.manufacturer !== 'Novomatic') {
+    throw new Error('Meter reset is only supported for Novomatic machines');
+  }
+  await machine.update({
+    previous_count: 0,
+    opening_count: 0,
+    meter_reset_at: new Date(),
+  });
+  return machine;
+};
+
+module.exports = { list, getOne, getMachineStats, create, update, remove, deploy, exchange, refill, exportExcel, generateMachinePDF, recordCollection, resetMeter };

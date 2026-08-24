@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Table, Button, Modal, Form, Input, Select, Tag, Space, InputNumber, App, Checkbox, List, Empty } from 'antd';
-import { FileText, Clock, Building2, Plus, UserPlus, Eye, Edit, Trash2, Search, X, FileDown } from 'lucide-react';
+import { FileText, Clock, Building2, Plus, UserPlus, Eye, Edit, Trash2, Search, X, FileDown, RotateCcw } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { machinesAPI, shopsAPI } from '../../services/api';
 import { useAuthStore } from '../../store/authStore';
@@ -15,12 +15,13 @@ const { Option } = Select;
 const STATUS_COLORS = { active: 'green', inactive: 'default', maintenance: 'orange', transferred: 'blue' };
 
 export default function NovomaticMachinesPage() {
-  const { hasPermission } = useAuthStore();
+  const { hasPermission, user } = useAuthStore();
   const [registerOpen, setRegisterOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(null);
   const [deleteOpen, setDeleteOpen] = useState(null);
   const [deployOpen, setDeployOpen] = useState(null);
   const [exchangeOpen, setExchangeOpen] = useState(null);
+  const [resetOpen, setResetOpen] = useState(null);
   const [form] = Form.useForm();
   const [editForm] = Form.useForm();
   const [deployForm] = Form.useForm();
@@ -78,6 +79,20 @@ export default function NovomaticMachinesPage() {
     onError: (e) => message.error(e.response?.data?.message || 'Error'),
   });
 
+  const resetMutation = useMutation({
+    mutationFn: (id) => machinesAPI.resetMeter(id),
+    onSuccess: () => {
+      message.success('Meter reset. The next collection will open from 0.');
+      qc.invalidateQueries({ queryKey: ['machines'] });
+      qc.invalidateQueries({ queryKey: ['machine-detail'] });
+      qc.invalidateQueries({ queryKey: ['machine'] });
+      setResetOpen(null);
+    },
+    onError: (e) => message.error(e.response?.data?.message || 'Reset failed'),
+  });
+
+  const canReset = ['Admin', 'General Manager', 'Operations Manager'].includes(user?.role?.name) && hasPermission('machines', 'update');
+
   const activeCount = rows.filter(r => r.status === 'active').length;
   const inactiveCount = rows.filter(r => r.status === 'inactive').length;
   const hasFilters = slotCodeSearch || locationFilter || statusFilter;
@@ -124,6 +139,7 @@ export default function NovomaticMachinesPage() {
     if (key === 'delete') setDeleteOpen(r);
     if (key === 'deploy') { setDeployOpen(r); deployForm.resetFields(); }
     if (key === 'exchange') { setExchangeOpen(r); exchangeForm.resetFields(); }
+    if (key === 'reset') setResetOpen(r);
   };
 
   const actionItems = (r) => {
@@ -136,6 +152,9 @@ export default function NovomaticMachinesPage() {
     }
     if (r.status === 'active') {
       items.push({ key: 'exchange', icon: <Building2 size={14} />, label: 'Exchange' });
+    }
+    if (canReset) {
+      items.push({ key: 'reset', icon: <RotateCcw size={14} />, label: 'Reset Meter' });
     }
     items.push({ type: 'divider' },
       { key: 'delete', icon: <Trash2 size={14} />, label: 'Delete', danger: true },
@@ -311,6 +330,21 @@ export default function NovomaticMachinesPage() {
           </Form.Item>
           <Form.Item name="reason" label={<span className="text-xs font-semibold text-slate-600">Reason</span>}><Input.TextArea rows={2} /></Form.Item>
         </Form>
+      </Modal>
+
+      <Modal title={<span className="text-sm font-bold text-amber-600">Reset Meter — {resetOpen?.slot_code}</span>}
+        open={!!resetOpen} onCancel={() => setResetOpen(null)}
+        onOk={() => resetMutation.mutate(resetOpen.id)} confirmLoading={resetMutation.isPending}
+        okText="Confirm Reset" okButtonProps={{ danger: true }}
+        className="top-8">
+        <div className="mt-4 space-y-3 text-sm">
+          <div className="grid grid-cols-2 gap-2 p-3 rounded-lg bg-slate-50 border border-slate-200">
+            <div><span className="text-xs font-semibold text-slate-500 block">Previous Meter (credits)</span><span className="font-mono font-bold">{(resetOpen?.previous_count ?? 0).toLocaleString()}</span></div>
+            <div><span className="text-xs font-semibold text-slate-500 block">Opening Meter (credits)</span><span className="font-mono font-bold">{(resetOpen?.opening_count ?? 0).toLocaleString()}</span></div>
+          </div>
+          <p className="m-0 text-slate-600">Use this only after the machine's physical meter has been reset. Both meters will be set to <strong>0</strong> and the next collection will open from 0.</p>
+          <p className="m-0 text-xs text-amber-600">Existing collection history is not affected. This action cannot be undone.</p>
+        </div>
       </Modal>
     </div>
   );
