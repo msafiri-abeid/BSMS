@@ -29,13 +29,14 @@ export default function PartnersPage() {
   const [search, setSearch] = useState('');
   const [labelFilter, setLabelFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [offset, setOffset] = useState(0);
   const [selectedRegion, setSelectedRegion] = useState(null);
   const [selectedDistrict, setSelectedDistrict] = useState(null);
   const [selectedWard, setSelectedWard] = useState(null);
   const [fileList, setFileList] = useState([]);
   const [selectedRowKeys, setSelectedRowKeys] = useState([]);
 
-  const params = {};
+  const params = { limit: 50, offset };
   if (search) params.search = search;
   if (labelFilter) params.label = labelFilter;
   if (statusFilter) params.status = statusFilter;
@@ -74,6 +75,7 @@ export default function PartnersPage() {
     setSearch('');
     setLabelFilter('');
     setStatusFilter('');
+    setOffset(0);
   };
 
   const saveMutation = useMutation({
@@ -254,17 +256,17 @@ export default function PartnersPage() {
         <Space wrap size={[8, 8]}>
           <Input.Search size="small" placeholder="Search by name..." allowClear
             defaultValue={search}
-            onSearch={(v) => setSearch(v || '')}
+            onSearch={(v) => { setSearch(v || ''); setOffset(0); }}
             className="w-full sm:w-56" />
           <Select size="small" placeholder="Filter by label" value={labelFilter || undefined}
-            onChange={(v) => setLabelFilter(v || '')} allowClear className="w-full sm:w-40">
+            onChange={(v) => { setLabelFilter(v || ''); setOffset(0); }} allowClear className="w-full sm:w-40">
             <Option value="Bentabet">Bentabet</Option>
             <Option value="Meteora">Meteora</Option>
             <Option value="Dante">Dante</Option>
             <Option value="Other">Other</Option>
           </Select>
           <Select size="small" placeholder="Filter by status" value={statusFilter || undefined}
-            onChange={(v) => setStatusFilter(v || '')} allowClear className="w-full sm:w-36">
+            onChange={(v) => { setStatusFilter(v || ''); setOffset(0); }} allowClear className="w-full sm:w-36">
             <Option value="active">Active</Option>
             <Option value="inactive">Inactive</Option>
           </Select>
@@ -303,7 +305,8 @@ export default function PartnersPage() {
         <Table dataSource={rows} columns={cols} rowKey="id" loading={isLoading}
           size="middle"
           rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}
-          pagination={{ total: data?.count, pageSize: 20 }}
+          pagination={{ total: data?.count, pageSize: 50, showSizeChanger: false,
+            onChange: (p) => setOffset((p - 1) * 50) }}
           summary={() => rows.length > 0 ? (
             <Table.Summary fixed>
               <Table.Summary.Row className="bg-slate-50 font-semibold">

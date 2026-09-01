@@ -28,21 +28,16 @@ export default function MeteoraMachinesPage() {
   const [exchangeForm] = Form.useForm();
   const [refillForm] = Form.useForm();
   const [selectedRowKeys, setSelectedRowKeys] = useState([]);
-  const [slotCodeSearch, setSlotCodeSearch] = useState('');
-  const [locationFilter, setLocationFilter] = useState();
-  const [statusFilter, setStatusFilter] = useState();
+  const [filters, setFilters] = useState({ limit: 50, offset: 0, manufacturer: 'Meteora' });
   const { message } = App.useApp();
   const qc = useQueryClient();
   const navigate = useNavigate();
 
-  const params = { manufacturer: 'Meteora' };
-  if (slotCodeSearch) params.search = slotCodeSearch;
-  if (locationFilter) params.shop_id = locationFilter;
-  if (statusFilter) params.status = statusFilter;
+  const setFilter = (key, value) => setFilters(f => ({ ...f, [key]: value, offset: 0 }));
 
   const { data: machines, isLoading } = useQuery({
-    queryKey: ['machines', params],
-    queryFn: () => machinesAPI.list(params).then(r => r.data.data),
+    queryKey: ['machines', filters],
+    queryFn: () => machinesAPI.list(filters).then(r => r.data.data),
   });
 
   const rows = machines?.rows || [];
@@ -88,7 +83,7 @@ export default function MeteoraMachinesPage() {
 
   const activeCount = rows.filter(r => r.status === 'active').length;
   const inactiveCount = rows.filter(r => r.status === 'inactive').length;
-  const hasFilters = slotCodeSearch || locationFilter || statusFilter;
+  const hasFilters = filters.search || filters.shop_id || filters.status;
 
   const handleExport = async () => {
     try {
@@ -205,20 +200,20 @@ export default function MeteoraMachinesPage() {
       <div className="rounded-lg border border-slate-100 p-4 mb-4 bg-white">
         <Space wrap size={[8, 8]}>
           <Input.Search size="small" allowClear placeholder="Search slot code"
-            defaultValue={slotCodeSearch}
-            onSearch={(v) => setSlotCodeSearch(v)}
+            defaultValue={filters.search}
+            onSearch={(v) => setFilter('search', v || undefined)}
             className="w-full sm:w-44" />
-          <Select size="small" allowClear placeholder="Shop" value={locationFilter} onChange={(v) => setLocationFilter(v)} className="w-full sm:w-36">
+          <Select size="small" allowClear placeholder="Shop" value={filters.shop_id} onChange={(v) => setFilter('shop_id', v)} className="w-full sm:w-36">
             {shops.map(s => <Option key={s.id} value={String(s.id)}>{s.name}</Option>)}
           </Select>
-          <Select size="small" allowClear placeholder="Status" value={statusFilter} onChange={(v) => setStatusFilter(v)} className="w-full sm:w-32">
+          <Select size="small" allowClear placeholder="Status" value={filters.status} onChange={(v) => setFilter('status', v)} className="w-full sm:w-32">
             <Option value="active">Active</Option>
             <Option value="inactive">Inactive</Option>
             <Option value="maintenance">Maintenance</Option>
             <Option value="transferred">Transferred</Option>
           </Select>
           {hasFilters && (
-            <Button size="small" icon={<X className="w-3 h-3" />} onClick={() => { setSlotCodeSearch(''); setLocationFilter(); setStatusFilter(); }}
+            <Button size="small" icon={<X className="w-3 h-3" />} onClick={() => setFilters({ limit: 50, offset: 0, manufacturer: 'Meteora' })}
               className="flex items-center gap-1 !text-xs hover:!border-brand-dark hover:!text-brand-dark">
               Clear
             </Button>
@@ -249,7 +244,8 @@ export default function MeteoraMachinesPage() {
       <div className="hidden overflow-x-auto md:block">
         <Table dataSource={rows} columns={cols} rowKey="id" loading={isLoading} size="middle"
           rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}
-          pagination={{ total: machines?.count, pageSize: 20 }} />
+          pagination={{ total: machines?.count, pageSize: 50, showSizeChanger: false,
+            onChange: (p) => setFilters(f => ({ ...f, offset: (p - 1) * 50 })) }} />
       </div>
 
       <div className="md:hidden space-y-2">

@@ -317,6 +317,10 @@ POST           /api/finance/transactions/:id/cancel    # Admin/GM/Finance — so
 
 > Production: the new `account_transactions` columns (`status`, `receipt_url`, `charges`, `transfer_id`, `cancelled_by`, `cancelled_at`, `cancel_reason`; `balance_before/balance_after` now nullable) are applied automatically by `alter:true` in development. On production, apply them manually with an `ALTER TABLE` before restarting.
 
+> Production: the `machines.meter_reset_at` column (Novomatic meter reset) is also added by `alter:true` in development only. On production it must be applied manually — if missing, **every** machine query (list, detail, stats, collections) throws `Unknown column 'Machine.meter_reset_at' in 'field list'` and the Machines pages fail to load entirely. Apply: `ALTER TABLE machines ADD COLUMN meter_reset_at DATETIME NULL;`
+
+> **List pagination (Sep 2026)**: all server-driven list pages must paginate server-side with `limit`/`offset` (see AGENTS.md "Server-Side Pagination for List Pages"). Applies to `MeteoraMachinesPage`, `NovomaticMachinesPage`, `MeteoraShopsPage`, `SlotShopsPage`, `PartnersPage`; the `/machines`, `/shops`, and `/partners` list endpoints support `limit`/`offset` (default `50`).
+
 ### Tickets
 ```
 GET|POST       /api/tickets

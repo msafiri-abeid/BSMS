@@ -28,13 +28,14 @@ export default function MeteoraShopsPage() {
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [offset, setOffset] = useState(0);
   const [selectedRegion, setSelectedRegion] = useState(null);
   const [selectedDistrict, setSelectedDistrict] = useState(null);
   const [selectedWard, setSelectedWard] = useState(null);
   const [fileList, setFileList] = useState([]);
   const [selectedRowKeys, setSelectedRowKeys] = useState([]);
 
-  const params = { business_type: 'meteora' };
+  const params = { business_type: 'meteora', limit: 50, offset };
   if (search) params.search = search;
   if (statusFilter) params.status = statusFilter;
 
@@ -65,6 +66,7 @@ export default function MeteoraShopsPage() {
   const clearFilters = () => {
     setSearch('');
     setStatusFilter('');
+    setOffset(0);
   };
 
   const saveMutation = useMutation({
@@ -227,10 +229,10 @@ export default function MeteoraShopsPage() {
         <Space wrap size={[8, 8]}>
           <Input.Search size="small" placeholder="Search by name..." allowClear
             defaultValue={search}
-            onSearch={(v) => setSearch(v || '')}
+            onSearch={(v) => { setSearch(v || ''); setOffset(0); }}
             className="w-full sm:w-56" />
           <Select size="small" placeholder="Filter by status" value={statusFilter || undefined}
-            onChange={(v) => setStatusFilter(v || '')} allowClear className="w-full sm:w-36">
+            onChange={(v) => { setStatusFilter(v || ''); setOffset(0); }} allowClear className="w-full sm:w-36">
             <Option value="active">Active</Option>
             <Option value="inactive">Inactive</Option>
             <Option value="suspended">Suspended</Option>
@@ -268,7 +270,8 @@ export default function MeteoraShopsPage() {
         <Table dataSource={rows} columns={cols} rowKey="id" loading={isLoading}
           size="middle"
           rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}
-          pagination={{ total: data?.count, pageSize: 20 }}
+          pagination={{ total: data?.count, pageSize: 50, showSizeChanger: false,
+            onChange: (p) => setOffset((p - 1) * 50) }}
           summary={() => rows.length > 0 ? (
             <Table.Summary fixed>
               <Table.Summary.Row className="bg-slate-50 font-semibold">

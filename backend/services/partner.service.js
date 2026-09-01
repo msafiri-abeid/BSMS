@@ -36,7 +36,7 @@ const shopIncludes = () => [
   },
 ];
 
-exports.listPartners = async ({ status, type, search, label }) => {
+exports.listPartners = async ({ status, type, search, label, limit = 50, offset = 0 }) => {
   const where = {};
   if (status) where.status = status;
   if (type) where.type = type;
@@ -45,6 +45,8 @@ exports.listPartners = async ({ status, type, search, label }) => {
   const data = await Partner.findAndCountAll({
     where,
     include: partnerIncludes(false),
+    limit: +limit,
+    offset: +offset,
     order: [['name', 'ASC']],
   });
   return data;
@@ -96,7 +98,7 @@ exports.deletePartner = async (id) => {
   return true;
 };
 
-exports.listShops = async ({ partner_id, status, business_type, search, supervisor_id }) => {
+exports.listShops = async ({ partner_id, status, business_type, search, supervisor_id, limit = 50, offset = 0 }) => {
   const where = {};
   if (partner_id) where.partner_id = partner_id;
   if (status) where.status = status;
@@ -114,6 +116,8 @@ exports.listShops = async ({ partner_id, status, business_type, search, supervis
       { model: Partner, as: 'partner', attributes: ['id', 'name', 'label', 'type'] },
       { model: Employee, as: 'supervisor', attributes: ['id', 'full_name', 'phone'] },
     ],
+    limit: +limit,
+    offset: +offset,
     order: [['name', 'ASC']],
   });
   return data;
