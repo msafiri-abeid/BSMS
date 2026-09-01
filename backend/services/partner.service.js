@@ -1,4 +1,4 @@
-const { Partner, Shop, Region, District, Ward, Street, Address, Machine, Collection, Employee, Expense } = require('../models');
+const { Partner, Shop, Region, District, Ward, Street, Address, Machine, Collection, Employee, Expense, Account } = require('../models');
 const { Op, fn, col, literal } = require('sequelize');
 
 const partnerIncludes = (includeShops = false) => {
@@ -135,6 +135,13 @@ exports.createShop = async (body, files) => {
   if (address) {
     const addrData = typeof address === 'string' ? JSON.parse(address) : address;
     await Address.create({ ...addrData, shop_id: shop.id });
+  }
+  // Auto-create cash float account for Slot shops
+  if (shop.business_type === 'slot') {
+    await Account.findOrCreate({
+      where: { shop_id: shop.id, account_type: 'cash' },
+      defaults: { name: `Cash - ${shop.name}`, account_type: 'cash', business_type: 'bentabet', opening_balance: 0, current_balance: 0, is_active: true, shop_id: shop.id, created_by: shopData.created_by || 1, description: `Cash float account for ${shop.name}`, float_minimum: 400000 },
+    });
   }
   return exports.getShop(shop.id);
 };

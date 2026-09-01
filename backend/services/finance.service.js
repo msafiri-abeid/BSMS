@@ -3,7 +3,7 @@ const PDFDocument = require('pdfkit');
 const ExcelJS = require('exceljs');
 const { Op } = require('sequelize');
 const sequelize = require('../config/database');
-const { Expense, Invoice, Payment, CreditNote, Payroll, ExpenseCategory, Partner, Shop, Machine, Setting, User, Account, AccountTransaction, AccountTransfer } = require('../models');
+const { Expense, Invoice, Payment, CreditNote, Payroll, ExpenseCategory, Partner, Shop, Machine, Setting, User, Account, AccountTransaction, AccountTransfer, Collection } = require('../models');
 
 const getSetting = async (key, def) => {
   const row = await Setting.findOne({ where: { key } });
@@ -27,7 +27,12 @@ const resolveExpenseAccount = async (expense) => {
   // Priority 1: Use expense.account_id if set (new flow)
   if (expense.account_id) {
     const acc = await Account.findByPk(expense.account_id);
-    if (acc) return acc;
+    if (acc) {
+      // Validate business_type match — if mismatch, fall through to legacy fallback
+      const expBizType = expense.business_type || 'meteora';
+      if (acc.business_type === expBizType) return acc;
+      console.warn(`[ACCOUNTING] Account ${acc.id} (${acc.business_type}) does not match expense business_type (${expBizType}), falling back`);
+    }
   }
 
   const paymentSource = expense.payment_source || 'cash';
@@ -325,10 +330,11 @@ const exportCollectionsExcel = async (filters) => {
 // ── ACCOUNTING ─────────────────────────────────────────────────
 
 const listAccounts = async (query) => {
-  const { account_type, shop_id, is_active, limit = 50, offset = 0 } = query;
+  const { account_type, shop_id, is_active, business_type, limit = 50, offset = 0 } = query;
   const where = {};
   if (account_type) where.account_type = account_type;
   if (shop_id) where.shop_id = shop_id;
+  if (business_type) where.business_type = business_type;
   if (is_active !== undefined) where.is_active = is_active === 'true' || is_active === true;
   return Account.findAndCountAll({
     where,
@@ -550,10 +556,33 @@ const listAccountTransactions = async (accountId, query) => {
 
 const listShopTransactions = async (shopId, query) => {
   const { date_from, date_to, status, limit = 50, offset = 0 } = query;
+
+  // Find shop-specific account IDs
   const accounts = await Account.findAll({ where: { shop_id: shopId }, attributes: ['id'] });
-  const accountIds = accounts.map(a => a.id);
-  if (accountIds.length === 0) return { rows: [], count: 0 };
-  const where = { account_id: { [Op.in]: accountIds } };
+  const shopAccountIds = accounts.map(a => a.id);
+
+  // Also find expense IDs that reference this shop (for cross-account transactions)
+  const shopExpenses = await Expense.findAll({ where: { shop_id: shopId }, attributes: ['id'] });
+  const shopExpenseIds = shopExpenses.map(e => e.id);
+
+  // Also find collection IDs that reference this shop (for cross-account transactions)
+  const shopCollections = await Collection.findAll({ where: { shop_id: shopId }, attributes: ['id'] });
+  const shopCollectionIds = shopCollections.map(c => c.id);
+
+  // Build OR conditions: transactions on shop accounts OR transactions referencing this shop's expenses/collections
+  const orConditions = [];
+  if (shopAccountIds.length > 0) {
+    orConditions.push({ account_id: { [Op.in]: shopAccountIds } });
+  }
+  if (shopExpenseIds.length > 0) {
+    orConditions.push({ reference_type: 'expense', reference_id: { [Op.in]: shopExpenseIds } });
+  }
+  if (shopCollectionIds.length > 0) {
+    orConditions.push({ reference_type: 'collection', reference_id: { [Op.in]: shopCollectionIds } });
+  }
+  if (orConditions.length === 0) return { rows: [], count: 0 };
+
+  const where = { [Op.or]: orConditions };
   if (date_from) where.transaction_date = { ...where.transaction_date, [Op.gte]: date_from };
   if (date_to) where.transaction_date = { ...where.transaction_date, [Op.lte]: date_to };
   if (status) where.status = status;
