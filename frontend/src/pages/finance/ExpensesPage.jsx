@@ -64,15 +64,15 @@ export default function ExpensesPage() {
   });
 
   const { data: accountsList } = useQuery({
-    queryKey: ['accounts-for-expense', watchedBizType],
-    queryFn: () => accountsAPI.list({ limit: 100, is_active: 'true', business_type: watchedBizType }).then(r => r.data.data),
+    queryKey: ['accounts-for-expense'],
+    queryFn: () => accountsAPI.list({ limit: 100, is_active: 'true' }).then(r => r.data.data),
     enabled: !!watchedBizType,
   });
   const allAccounts = accountsList?.rows || [];
   const watchedShopId = Form.useWatch('shop_id', form);
   const accounts = watchedShopId
-    ? [...allAccounts.filter(a => a.shop_id === watchedShopId && a.business_type === watchedBizType), ...allAccounts.filter(a => !a.shop_id && a.business_type === watchedBizType)]
-    : allAccounts.filter(a => a.business_type === watchedBizType);
+    ? [...allAccounts.filter(a => a.shop_id === watchedShopId), ...allAccounts.filter(a => !a.shop_id)]
+    : allAccounts;
 
   const rows = expenses?.rows || [];
   const totals = { total: 0, approved: 0, pending: 0, rejected: 0 };
