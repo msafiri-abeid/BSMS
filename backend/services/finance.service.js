@@ -24,15 +24,10 @@ const submitExpense = async (data, userId) => {
 };
 
 const resolveExpenseAccount = async (expense) => {
-  // Priority 1: Use expense.account_id if set (new flow)
+  // Priority 1: Use expense.account_id if set (new flow) — always honor the explicitly selected account
   if (expense.account_id) {
     const acc = await Account.findByPk(expense.account_id);
-    if (acc) {
-      // Validate business_type match — if mismatch, fall through to legacy fallback
-      const expBizType = expense.business_type || 'meteora';
-      if (acc.business_type === expBizType) return acc;
-      console.warn(`[ACCOUNTING] Account ${acc.id} (${acc.business_type}) does not match expense business_type (${expBizType}), falling back`);
-    }
+    if (acc) return acc;
   }
 
   const paymentSource = expense.payment_source || 'cash';

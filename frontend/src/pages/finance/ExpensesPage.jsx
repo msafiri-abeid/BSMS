@@ -67,12 +67,13 @@ export default function ExpensesPage() {
     queryKey: ['accounts-for-expense'],
     queryFn: () => accountsAPI.list({ limit: 100, is_active: 'true' }).then(r => r.data.data),
     enabled: !!watchedBizType,
+    placeholderData: (prev) => prev,
   });
   const allAccounts = accountsList?.rows || [];
   const watchedShopId = Form.useWatch('shop_id', form);
   const accounts = watchedShopId
-    ? [...allAccounts.filter(a => a.shop_id === watchedShopId), ...allAccounts.filter(a => !a.shop_id)]
-    : allAccounts;
+    ? [...allAccounts.filter(a => a.shop_id === watchedShopId && a.business_type === watchedBizType), ...allAccounts.filter(a => !a.shop_id && a.business_type === watchedBizType)]
+    : allAccounts.filter(a => a.business_type === watchedBizType);
 
   const rows = expenses?.rows || [];
   const totals = { total: 0, approved: 0, pending: 0, rejected: 0 };
