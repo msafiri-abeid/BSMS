@@ -19,6 +19,7 @@ const returnsC = require('../controllers/inventory.returns.controller');
 const accountingC = require('../controllers/inventory.accounting.controller');
 const alertsC = require('../controllers/inventory.alerts.controller');
 const stockC = require('../controllers/inventory.stock.controller');
+const kitchenC = require('../controllers/kitchenStock.controller');
 
 // ── AUTH ──────────────────────────────────────────────────────
 router.post('/auth/register', authC.register);
@@ -256,6 +257,28 @@ router.get('/inventory/accounting/profit-loss', authenticate, checkPermission('i
 router.get('/inventory/accounting/margins', authenticate, checkPermission('inventory', 'accounting'), accountingC.getProductMargins);
 router.get('/inventory/accounting/valuation', authenticate, checkPermission('inventory', 'accounting'), accountingC.getInventoryValuation);
 router.get('/inventory/accounting/daily-report', authenticate, checkPermission('inventory', 'accounting'), accountingC.getDailyReport);
+
+// Kitchen Stock — Locations
+router.get('/inventory/locations', authenticate, checkPermission('inventory', 'read'), kitchenC.listLocations);
+router.post('/inventory/locations', authenticate, checkPermission('inventory', 'create'), kitchenC.createLocation);
+router.put('/inventory/locations/:id', authenticate, checkPermission('inventory', 'update'), kitchenC.updateLocation);
+router.delete('/inventory/locations/:id', authenticate, checkPermission('inventory', 'delete'), kitchenC.deleteLocation);
+
+// Kitchen Stock — Item Catalog
+router.get('/inventory/kitchen/items', authenticate, checkPermission('inventory', 'read'), kitchenC.listItems);
+router.post('/inventory/kitchen/items', authenticate, checkPermission('inventory', 'create'), kitchenC.createItem);
+router.put('/inventory/kitchen/items/:id', authenticate, checkPermission('inventory', 'update'), kitchenC.updateItem);
+
+// Kitchen Stock — Daily Entries
+router.get('/inventory/kitchen/entries', authenticate, checkPermission('inventory', 'read'), kitchenC.listEntries);
+router.post('/inventory/kitchen/entries', authenticate, checkPermission('inventory', 'create'), kitchenC.upsertEntries);
+router.put('/inventory/kitchen/entries/:id', authenticate, checkPermission('inventory', 'update'), kitchenC.updateEntry);
+router.post('/inventory/kitchen/quick-adjust', authenticate, checkPermission('inventory', 'create'), kitchenC.quickAdjust);
+
+// Kitchen Stock — Reports
+router.get('/inventory/kitchen/restock-list', authenticate, checkPermission('inventory', 'read'), kitchenC.getRestockList);
+router.get('/inventory/kitchen/stats', authenticate, checkPermission('inventory', 'read'), kitchenC.getStats);
+router.get('/inventory/kitchen/export', authenticate, checkPermission('inventory', 'read'), kitchenC.exportEntries);
 
 // ── DASHBOARDS ────────────────────────────────────────────────
 router.get('/dashboard/admin', authenticate, dashC.adminDashboard);

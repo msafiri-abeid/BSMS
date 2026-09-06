@@ -293,6 +293,30 @@ export const inventoryAPI = {
   getDailyReport: (p) => api.get('/inventory/accounting/daily-report', { params: p }),
 };
 
+export const kitchenStockAPI = {
+  // Locations
+  listLocations: (p) => api.get('/inventory/locations', { params: p }),
+  createLocation: (d) => api.post('/inventory/locations', d),
+  updateLocation: (id, d) => api.put(`/inventory/locations/${id}`, d),
+  deleteLocation: (id) => api.delete(`/inventory/locations/${id}`),
+
+  // Item Catalog
+  listItems: (p) => api.get('/inventory/kitchen/items', { params: p }),
+  createItem: (d) => api.post('/inventory/kitchen/items', d),
+  updateItem: (id, d) => api.put(`/inventory/kitchen/items/${id}`, d),
+
+  // Daily Entries
+  getEntries: (p) => api.get('/inventory/kitchen/entries', { params: p }),
+  upsertEntries: (d) => api.post('/inventory/kitchen/entries', d),
+  updateEntry: (id, d) => api.put(`/inventory/kitchen/entries/${id}`, d),
+  quickAdjust: (d) => api.post('/inventory/kitchen/quick-adjust', d),
+
+  // Reports
+  getRestockList: (p) => api.get('/inventory/kitchen/restock-list', { params: p }),
+  getStats: (p) => api.get('/inventory/kitchen/stats', { params: p }),
+  exportEntries: (p) => api.get('/inventory/kitchen/export', { params: p, responseType: 'blob' }),
+};
+
 export const tokensAPI = {
   balances: () => api.get('/tokens/balances'),
   movements: (p) => api.get('/inventory/tokens', { params: p }),

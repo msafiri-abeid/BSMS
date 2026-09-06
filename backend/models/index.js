@@ -385,6 +385,8 @@ const StockMovement = sequelize.define('StockMovement', {
 const StockLevel = sequelize.define('StockLevel', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
   product_id: { type: DataTypes.INTEGER, allowNull: false, unique: 'uq_stock_levels_product' },
+  current_qty: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0 },
+  reorder_level: { type: DataTypes.DECIMAL(10, 2), defaultValue: 10 },
   expiry_date: { type: DataTypes.DATEONLY },
 }, { tableName: 'stock_levels', createdAt: false });
 
@@ -490,6 +492,47 @@ const LowStockAlert = sequelize.define('LowStockAlert', {
   acknowledged_by: { type: DataTypes.INTEGER },
   acknowledged_at: { type: DataTypes.DATE },
 }, { tableName: 'low_stock_alerts', updatedAt: false });
+
+// ─── KITCHEN STOCK ─────────────────────────────────────────────
+const Location = sequelize.define('Location', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  name: { type: DataTypes.STRING(150), allowNull: false, unique: 'uq_locations_name' },
+  code: { type: DataTypes.STRING(20), allowNull: false, unique: 'uq_locations_code' },
+  is_active: { type: DataTypes.BOOLEAN, defaultValue: true },
+}, { tableName: 'locations' });
+
+const KitchenItem = sequelize.define('KitchenItem', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  name: { type: DataTypes.STRING(200), allowNull: false, unique: 'uq_kitchen_items_name' },
+  category: { type: DataTypes.ENUM('meats_proteins', 'perishables', 'staples', 'seasonings', 'consumables', 'beverages', 'other'), allowNull: false, defaultValue: 'other' },
+  default_unit: { type: DataTypes.ENUM('portions', 'kg', 'qty', 'packs', 'bottles', 'liters', 'boxes', 'bags'), allowNull: false, defaultValue: 'qty' },
+  min_threshold: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0 },
+  is_active: { type: DataTypes.BOOLEAN, defaultValue: true },
+}, { tableName: 'kitchen_items' });
+
+const KitchenDailyEntry = sequelize.define('KitchenDailyEntry', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  location_id: { type: DataTypes.INTEGER, allowNull: false },
+  item_id: { type: DataTypes.INTEGER, allowNull: false },
+  entry_date: { type: DataTypes.DATEONLY, allowNull: false },
+  opening_stock: { type: DataTypes.DECIMAL(10, 2), allowNull: false, defaultValue: 0 },
+  received: { type: DataTypes.DECIMAL(10, 2), allowNull: false, defaultValue: 0 },
+  sold: { type: DataTypes.DECIMAL(10, 2), allowNull: false, defaultValue: 0 },
+  spoiled: { type: DataTypes.DECIMAL(10, 2), allowNull: false, defaultValue: 0 },
+  closing_stock: { type: DataTypes.DECIMAL(10, 2), allowNull: false, defaultValue: 0 },
+  physical_count: { type: DataTypes.DECIMAL(10, 2) },
+  variance: { type: DataTypes.DECIMAL(10, 2) },
+  notes: { type: DataTypes.STRING(255) },
+  created_by: { type: DataTypes.INTEGER, allowNull: false },
+  updated_by: { type: DataTypes.INTEGER },
+}, {
+  tableName: 'kitchen_daily_entries',
+  indexes: [
+    { unique: true, fields: ['location_id', 'item_id', 'entry_date'] },
+    { fields: ['location_id', 'entry_date'] },
+    { fields: ['entry_date'] },
+  ],
+});
 
 // ─── TICKETS ──────────────────────────────────────────────────
 const TicketGroup = sequelize.define('TicketGroup', {
@@ -796,6 +839,14 @@ LowStockAlert.belongsTo(Product, { foreignKey: 'product_id', as: 'product' });
 LowStockAlert.belongsTo(Shop, { foreignKey: 'shop_id', as: 'shop' });
 LowStockAlert.belongsTo(User, { foreignKey: 'acknowledged_by', as: 'acknowledger' });
 
+// Kitchen stock associations
+Location.hasMany(KitchenDailyEntry, { foreignKey: 'location_id', as: 'entries' });
+KitchenDailyEntry.belongsTo(Location, { foreignKey: 'location_id', as: 'location' });
+KitchenItem.hasMany(KitchenDailyEntry, { foreignKey: 'item_id', as: 'entries' });
+KitchenDailyEntry.belongsTo(KitchenItem, { foreignKey: 'item_id', as: 'item' });
+KitchenDailyEntry.belongsTo(User, { foreignKey: 'created_by', as: 'creator' });
+KitchenDailyEntry.belongsTo(User, { foreignKey: 'updated_by', as: 'updater' });
+
 Ticket.belongsTo(Machine, { foreignKey: 'machine_id', as: 'machine' });
 Ticket.belongsTo(Shop, { foreignKey: 'shop_id', as: 'shop' });
 Ticket.belongsTo(TicketGroup, { foreignKey: 'assigned_group_id', as: 'group' });
@@ -845,6 +896,7 @@ module.exports = {
   ExpenseCategory, Expense, Invoice, Payment, CreditNote, Payroll, SalePayment,
   TokenInventory, Product, StockMovement, StockLevel, VipOffer,
   Sale, SaleItem, SalesReturn, StockAudit, AuditItem, StockTransfer, LowStockAlert,
+  Location, KitchenItem, KitchenDailyEntry,
   TicketGroup, Ticket, TicketActivity,
   Department, Position, Employee, Attendance,
   SmsLog, Notification,

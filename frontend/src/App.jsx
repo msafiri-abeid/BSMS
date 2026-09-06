@@ -29,6 +29,7 @@ import TrialBalancePage from './pages/finance/TrialBalancePage';
 import CashFlowPage from './pages/finance/CashFlowPage';
 import AccountReportPage from './pages/finance/AccountReportPage';
 import TokenInventoryPage from './pages/inventory/TokenInventoryPage';
+import KitchenStockPage from './pages/inventory/KitchenStockPage';
 import ShopInventoryPage from './pages/inventory/ShopInventoryPage';
 import StockManagementPage from './pages/inventory/StockManagementPage';
 import SalesPage from './pages/inventory/SalesPage';
@@ -114,6 +115,7 @@ export default function App() {
               <Route path="inventory">
                 <Route path="products" element={<ShopInventoryPage />} />
                 <Route path="tokens" element={<TokenInventoryPage />} />
+                <Route path="kitchen-stock" element={<KitchenStockPage />} />
                 <Route path="stock" element={<StockManagementPage />} />
                 <Route path="sales" element={<SalesPage />} />
                 <Route path="returns" element={<SalesReturnsPage />} />

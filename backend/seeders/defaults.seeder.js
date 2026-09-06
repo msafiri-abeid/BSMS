@@ -1,9 +1,9 @@
 const { Op } = require('sequelize');
-const { Role, Permission, User, Employee, ExpenseCategory, Account, Shop, Partner } = require('../models');
+const { Role, Permission, User, Employee, ExpenseCategory, Account, Shop, Partner, Location, KitchenItem } = require('../models');
 const seedRegions = require('./regions.seeder');
 const seedLocations = require('./location.seeder');
 const bcrypt = require('bcryptjs');
-const { ROLES, MODULES, ACTIONS, BCRYPT_ROUNDS } = require('../config/constants');
+const { ROLES, MODULES, ACTIONS, BCRYPT_ROUNDS, KITCHEN_SEED_ITEMS } = require('../config/constants');
 const settingsService = require('../services/settings.service');
 
 module.exports = async () => {
@@ -181,6 +181,13 @@ module.exports = async () => {
       }
       await Permission.findOrCreate({ where: { role_id: role.id, module: 'accounts', action: 'read' } });
     }
+
+    // Stock Manager: kitchen stock CRUD (inventory module) + own stock only
+    if (role.name === 'Stock Manager') {
+      for (const act of ['read', 'create', 'update']) {
+        await Permission.findOrCreate({ where: { role_id: role.id, module: 'inventory', action: act } });
+      }
+    }
   }
 
   // ─── ALWAYS: ensure expense-access permissions for existing roles ───
@@ -212,6 +219,13 @@ module.exports = async () => {
     await Permission.findOrCreate({ where: { role_id: financeRole.id, module: 'tickets', action: 'read' } });
     await Permission.findOrCreate({ where: { role_id: financeRole.id, module: 'users', action: 'read' } });
   }
+  // Ensure Stock Manager gets inventory perms on existing installs (idempotent).
+  const stockMgrRole = await Role.findOne({ where: { name: 'Stock Manager' } });
+  if (stockMgrRole) {
+    for (const act of ['read', 'create', 'update']) {
+      await Permission.findOrCreate({ where: { role_id: stockMgrRole.id, module: 'inventory', action: act } });
+    }
+  }
   console.log('[SEED] Permissions ensured');
 
   // ─── ALWAYS: migrate 'selcom' account_type → 'bank' ───
@@ -220,6 +234,25 @@ module.exports = async () => {
 
   // ─── ALWAYS: set float_minimum for all Bentabet cash accounts ───
   await Account.update({ float_minimum: 400000 }, { where: { account_type: 'cash', business_type: 'bentabet' } });
+
+  // ─── ALWAYS: seed default kitchen locations ───
+  const defaultLocations = [
+    { name: 'Dante26 Main Kitchen', code: 'DANTE26' },
+    { name: 'Dante26 Branch B', code: 'BRANCH-B' },
+  ];
+  for (const loc of defaultLocations) {
+    await Location.findOrCreate({ where: { name: loc.name }, defaults: { ...loc, is_active: true } });
+  }
+  console.log('[SEED] Kitchen locations seeded');
+
+  // ─── ALWAYS: seed default kitchen item catalog ───
+  for (const item of KITCHEN_SEED_ITEMS) {
+    await KitchenItem.findOrCreate({
+      where: { name: item.name },
+      defaults: { ...item, is_active: true },
+    });
+  }
+  console.log(`[SEED] Kitchen item catalog seeded (${KITCHEN_SEED_ITEMS.length} items)`);
 
   // ─── PRODUCTION: skip heavy seeding below (already exists) ───
   if (isProduction) {

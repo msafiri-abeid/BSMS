@@ -241,7 +241,7 @@ GET            /api/streets?ward_id=X
 
 **Multi-document upload**: Partners and Shops support drag-and-drop upload of multiple documents (contracts, letters, agreements) — PDF, JPG, PNG, WebP, DOC, DOCX, XLS, XLSX. Stored as JSON array in the `documents` field on each model.
 
-### Inventory (POS / Bar Stock)
+### Inventory (POS / Bar Stock / Kitchen Stock)
 ```
 GET|POST       /api/inventory/products
 GET            /api/inventory/categories
@@ -259,6 +259,26 @@ GET|POST       /api/inventory/alerts
 PUT            /api/inventory/alerts/:id/acknowledge
 GET            /api/inventory/accounting/profit-loss|margins|valuation|daily-report
 ```
+
+### Kitchen Stock (multi-restaurant daily ledger)
+```
+GET|POST       /api/inventory/locations
+PUT|DELETE     /api/inventory/locations/:id
+GET|POST       /api/inventory/kitchen/items
+PUT            /api/inventory/kitchen/items/:id
+GET|POST       /api/inventory/kitchen/entries        # ?location_id (required), ?date (default today)
+PUT            /api/inventory/kitchen/entries/:id
+POST           /api/inventory/kitchen/quick-adjust   # { location_id, item_id, type: received|sold|spoiled, adjustment, entry_date }
+GET            /api/inventory/kitchen/restock-list   # ?location_id, ?date — items at/below min_threshold
+GET            /api/inventory/kitchen/stats          # KPI counts + active location count
+GET            /api/inventory/kitchen/export         # Excel workbook matching the daily sheet layout
+```
+
+**Kitchen Stock business rules**: `Closing = Opening + Received − Sold − Spoiled`; `Variance = Physical Count − Closing`. Opening stock auto-carries from the previous day's closing per item. Physical count is optional; variance is auto-computed when entered. `/entries` returns a merged per-item list (items without an entry get a pre-filled row with opening carried over), and `POST /entries` upserts all rows in bulk (`findOrCreate` on `location_id + item_id + entry_date`). Categories: meats_proteins, perishables, staples, seasonings, consumables, beverages, other. Units: portions, kg, qty, packs, bottles, liters, boxes, bags. Low stock = closing ≤ item min_threshold. Seeded locations: `Dante26 Main Kitchen` (DANTE26), `Dante26 Branch B` (BRANCH-B). Seeded catalog: 41 items in `backend/config/constants.js` `KITCHEN_SEED_ITEMS`.
+
+**Stock Manager role**: inventory read/create/update only — no delete. Can view every location but can only edit/delete entries they created themselves (`created_by == own user id`, enforced in `kitchenStock.controller.js`).
+
+**Production schema**: dev applies via `sequelize.sync({ alter: true })`. Production (`sync()` only) needs a manual `CREATE TABLE` for `locations`, `kitchen_items`, `kitchen_daily_entries` (see model definitions in `backend/models/index.js`), plus `current_qty`/`reorder_level` columns on the existing `stock_levels` table.
 
 ### Machines
 ```
