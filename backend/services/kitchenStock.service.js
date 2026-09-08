@@ -445,6 +445,123 @@ const getStats = async (filters = {}) => {
   return { totalItems, lowStock, outOfStock, todayCount, activeLocationCount, date: entryDate };
 };
 
+// ─── STOCK MANAGER DASHBOARD ──────────────────────────────────
+// Aggregates kitchen data across all active locations for the Stock Manager dashboard.
+const getStockManagerDashboard = async (filters = {}) => {
+  const today = new Date().toISOString().split('T')[0];
+
+  const [locations, items] = await Promise.all([
+    Location.findAll({ where: { is_active: true }, order: [['name', 'ASC']] }),
+    KitchenItem.findAll({ where: { is_active: true }, attributes: ['id', 'name', 'category', 'default_unit', 'min_threshold'] }),
+  ]);
+
+  // Today's entries per location, summed.
+  const todaysEntries = await KitchenDailyEntry.findAll({
+    where: { entry_date: today },
+    attributes: ['location_id', 'received', 'sold', 'spoiled', 'closing_stock'],
+    raw: true,
+  });
+
+  // Per-location low-stock count from the latest closing stock per item.
+  const latestRows = await KitchenDailyEntry.findAll({
+    where: { entry_date: { [Op.lte]: today } },
+    attributes: ['location_id', 'item_id', 'entry_date', 'closing_stock'],
+    order: [['entry_date', 'DESC']],
+    raw: true,
+  });
+  const latestByLocationItem = {};
+  for (const r of latestRows) {
+    const key = `${r.location_id}:${r.item_id}`;
+    if (latestByLocationItem[key] === undefined) latestByLocationItem[key] = r;
+  }
+
+  const thresholdByItem = new Map(items.map((i) => [i.id, num(i.min_threshold)]));
+
+  const perLocation = locations.map((loc) => {
+    const sums = todaysEntries
+      .filter((e) => Number(e.location_id) === Number(loc.id))
+      .reduce(
+        (acc, e) => ({
+          received: acc.received + num(e.received),
+          sold: acc.sold + num(e.sold),
+          spoiled: acc.spoiled + num(e.spoiled),
+          closing: acc.closing + num(e.closing_stock),
+        }),
+        { received: 0, sold: 0, spoiled: 0, closing: 0 },
+      );
+
+    let lowStockCount = 0;
+    let outOfStockCount = 0;
+    items.forEach((item) => {
+      const latest = latestByLocationItem[`${loc.id}:${item.id}`];
+      if (!latest) return;
+      const closing = num(latest.closing_stock);
+      const threshold = thresholdByItem.get(item.id) || 0;
+      if (threshold > 0 && closing <= threshold) lowStockCount++;
+      if (closing <= 0) outOfStockCount++;
+    });
+
+    return {
+      location_id: loc.id,
+      name: loc.name,
+      code: loc.code,
+      received: round2(sums.received),
+      sold: round2(sums.sold),
+      spoiled: round2(sums.spoiled),
+      closing: round2(sums.closing),
+      lowStockCount,
+      outOfStockCount,
+    };
+  });
+
+  // Global low / out-of-stock: an item is flagged when ANY location needs restock.
+  let lowStockItems = 0;
+  let outOfStockItems = 0;
+  items.forEach((item) => {
+    let latestClosing = null;
+    for (const loc of locations) {
+      const latest = latestByLocationItem[`${loc.id}:${item.id}`];
+      if (!latest) continue;
+      const c = num(latest.closing_stock);
+      latestClosing = latestClosing === null ? c : Math.min(latestClosing, c);
+    }
+    const threshold = thresholdByItem.get(item.id) || 0;
+    if (latestClosing === null) return;
+    if (threshold > 0 && latestClosing <= threshold) lowStockItems++;
+    if (latestClosing <= 0) outOfStockItems++;
+  });
+
+  const todayCount = await KitchenDailyEntry.count({ where: { entry_date: today } });
+
+  // Restock list per location (items at/below threshold).
+  const restock = [];
+  for (const loc of locations) {
+    const locRestock = await getRestockList({ location_id: loc.id, date: today });
+    for (const row of locRestock.data) {
+      restock.push({
+        item: row.item,
+        location: { id: loc.id, name: loc.name, code: loc.code },
+        closing_stock: row.closing_stock,
+        stock_ratio: row.stock_ratio,
+      });
+    }
+  }
+  restock.sort((a, b) => a.stock_ratio - b.stock_ratio);
+
+  return {
+    overview: {
+      totalItems: items.length,
+      activeLocations: locations.length,
+      lowStockItems,
+      outOfStockItems,
+      todayRecordedCount: todayCount,
+    },
+    perLocation,
+    restock,
+    date: today,
+  };
+};
+
 // Excel export mirroring the DANTE26 DAILY KITCHEN STOCK sheet layout.
 const exportEntriesExcel = async (filters = {}) => {
   const locationId = +filters.location_id;
@@ -527,5 +644,6 @@ module.exports = {
   quickAdjust,
   getRestockList,
   getStats,
+  getStockManagerDashboard,
   exportEntriesExcel,
 };

@@ -274,9 +274,11 @@ GET            /api/inventory/kitchen/stats          # KPI counts + active locat
 GET            /api/inventory/kitchen/export         # Excel workbook matching the daily sheet layout
 ```
 
-**Kitchen Stock business rules**: `Closing = Opening + Received − Sold − Spoiled`; `Variance = Physical Count − Closing`. Opening stock auto-carries from the previous day's closing per item. Physical count is optional; variance is auto-computed when entered. `/entries` returns a merged per-item list (items without an entry get a pre-filled row with opening carried over), and `POST /entries` upserts all rows in bulk (`findOrCreate` on `location_id + item_id + entry_date`). Categories: meats_proteins, perishables, staples, seasonings, consumables, beverages, other. Units: portions, kg, qty, packs, bottles, liters, boxes, bags. Low stock = closing ≤ item min_threshold. Seeded locations: `Dante26 Main Kitchen` (DANTE26), `Dante26 Branch B` (BRANCH-B). Seeded catalog: 41 items in `backend/config/constants.js` `KITCHEN_SEED_ITEMS`.
+**Kitchen Stock business rules**: `Closing = Opening + Received − Sold − Spoiled`; `Shot = Physical Count − Closing`. Opening stock auto-carries from the previous day's closing per item. Physical count is optional; variance (shot) is auto-computed when entered. `/entries` returns a merged per-item list (items without an entry get a pre-filled row with opening carried over), and `POST /entries` upserts all rows in bulk (`findOrCreate` on `location_id + item_id + entry_date`). Categories: meats_proteins, perishables, staples, seasonings, consumables, beverages, other. Units: portions, kg, qty, packs, bottles, liters, boxes, bags. Low stock = closing ≤ item min_threshold. Seeded locations: `Dante26 Main Kitchen` (DANTE26), `Dante26 Branch B` (BRANCH-B). Seeded catalog: 41 items in `backend/config/constants.js` `KITCHEN_SEED_ITEMS`.
 
-**Stock Manager role**: inventory read/create/update only — no delete. Can view every location but can only edit/delete entries they created themselves (`created_by == own user id`, enforced in `kitchenStock.controller.js`).
+**Stock Manager role**: inventory read/create/update only — no delete, and the sidebar Inventory group shows **Kitchen Stock only** (all POS/bar submodules are hidden for this role only; pages/routes remain for Admin/GM/Ops/Sales). Can view every location but can only edit/delete entries they created themselves (`created_by == own user id`, enforced in `kitchenStock.controller.js`).
+
+**Stock Manager dashboard**: `GET /api/dashboard/stockmanager` (inventory read) aggregates across all active locations — `overview` (totalItems, activeLocations, lowStockItems, outOfStockItems, todayRecordedCount), `perLocation` (today's received/sold/spoiled/closing + low/out counts), and a merged `restock` list (sorted by stock_ratio). Rendered by `StockManagerDashboard` in `Dashboard.jsx`.
 
 **Production schema**: dev applies via `sequelize.sync({ alter: true })`. Production (`sync()` only) needs a manual `CREATE TABLE` for `locations`, `kitchen_items`, `kitchen_daily_entries` (see model definitions in `backend/models/index.js`), plus `current_qty`/`reorder_level` columns on the existing `stock_levels` table.
 
@@ -373,6 +375,7 @@ GET /api/dashboard/admin       # ?date_from=&date_to= (optional chart_granularit
 GET /api/dashboard/cashier
 GET /api/dashboard/sales
 GET /api/dashboard/technician
+GET /api/dashboard/stockmanager  # Stock Manager (kitchen) — overview, per-location today, restock
 ```
 
 ---

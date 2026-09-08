@@ -1,4 +1,5 @@
 const dashService = require('../services/dashboard.service');
+const kitchenStockService = require('../services/kitchenStock.service');
 
 exports.adminDashboard = async (req, res, next) => {
   try {
@@ -52,6 +53,13 @@ exports.technicianDashboard = async (req, res, next) => {
 exports.hrDashboard = async (req, res, next) => {
   try {
     const data = await dashService.hrDashboard();
+    res.json({ success: true, data });
+  } catch (err) { next(err); }
+};
+
+exports.stockManagerDashboard = async (req, res, next) => {
+  try {
+    const data = await kitchenStockService.getStockManagerDashboard(req.query);
     res.json({ success: true, data });
   } catch (err) { next(err); }
 };

@@ -289,6 +289,7 @@ router.get('/dashboard/cashier', authenticate, dashC.cashierDashboard);
 router.get('/dashboard/sales', authenticate, dashC.salesDashboard);
 router.get('/dashboard/technician', authenticate, dashC.technicianDashboard);
 router.get('/dashboard/hr', authenticate, dashC.hrDashboard);
+router.get('/dashboard/stockmanager', authenticate, checkPermission('inventory', 'read'), dashC.stockManagerDashboard);
 
 // ── STAFF ─────────────────────────────────────────────────────
 const staffC = require('../controllers/staff.controller');

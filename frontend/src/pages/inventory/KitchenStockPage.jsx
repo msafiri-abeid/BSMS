@@ -4,7 +4,7 @@ import {
 } from 'antd';
 import {
   Plus, Minus, RefreshCw, FileDown, X, MapPin, Box, AlertTriangle, CalendarCheck,
-  Package, Settings2, Save, Pencil,
+  Package, Settings2, Save,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { kitchenStockAPI } from '../../services/api';
@@ -46,6 +46,7 @@ export default function KitchenStockPage() {
   const [selectedDate, setSelectedDate] = useState(dayjs());
   const [draftRows, setDraftRows] = useState([]);
   const [activeTab, setActiveTab] = useState('daily');
+  const [categoryFilter, setCategoryFilter] = useState(null);
 
   const [adjustModal, setAdjustModal] = useState({ open: false, row: null, type: 'sold', qty: 1 });
   const [editModal, setEditModal] = useState({ open: false, row: null });
@@ -209,22 +210,14 @@ export default function KitchenStockPage() {
 
   // ── Desktop columns (Daily Entry tab) ──
   const entryCols = [
-    { title: '#', width: 45, render: (_, __, i) => <span className="text-xs text-slate-400">{i + 1}</span> },
     {
-      title: 'Item Name', dataIndex: ['item', 'name'], width: 180, fixed: 'left',
+      title: 'Item Name', dataIndex: ['item', 'name'], width: 180,
       render: (name, r) => (
         <div>
           <span className="font-medium text-sm text-slate-700">{name}</span>
           <div className="text-[10px] uppercase tracking-wide text-slate-400 mt-0.5">{UNIT_META[r.item?.default_unit] || r.item?.default_unit}</div>
         </div>
       ),
-    },
-    {
-      title: 'Category', width: 140, responsive: ['lg'],
-      render: (_, r) => {
-        const cat = CATEGORY_META[r.item?.category] || CATEGORY_META.other;
-        return <Tag color={cat.color}>{cat.label}</Tag>;
-      },
     },
     {
       title: 'Opening', dataIndex: 'opening_stock', width: 90, align: 'right',
@@ -275,7 +268,7 @@ export default function KitchenStockPage() {
       ),
     },
     {
-      title: 'Variance (Shot)', width: 110, align: 'right',
+      title: 'Shot', width: 110, align: 'right',
       render: (_, r) => {
         if (r.variance === null || r.variance === undefined) return <span className="text-slate-300">—</span>;
         const v = toNum(r.variance);
@@ -284,15 +277,7 @@ export default function KitchenStockPage() {
       },
     },
     {
-      title: 'Notes', dataIndex: 'notes', width: 140,
-      render: (_, r) => (
-        <Input size="small" value={r.notes || ''} placeholder="Comment"
-          onChange={(e) => updateDraft(r.item_id, 'notes', e.target.value)}
-          disabled={!canCreate && !canUpdate} />
-      ),
-    },
-    {
-      title: 'Quick', width: 90, fixed: 'right',
+      title: 'Quick', width: 90,
       render: (_, r) => (
         <Space size={4}>
           <Button size="small" type="text" className="!text-red-600 hover:!bg-red-50 flex items-center justify-center" icon={<Minus className="w-3.5 h-3.5" />}
@@ -304,9 +289,40 @@ export default function KitchenStockPage() {
     },
   ];
 
+  // ── Per-item details row (expand) ──
+  const entryDetailsRender = (r) => {
+    const cat = CATEGORY_META[r.item?.category] || CATEGORY_META.other;
+    return (
+      <div className="px-2 py-2 text-xs text-slate-600 flex flex-wrap items-center gap-x-6 gap-y-2">
+        <span className="flex items-center gap-1.5">
+          <span className="text-slate-400 uppercase tracking-wide font-semibold">Category</span>
+          <Tag color={cat.color}>{cat.label}</Tag>
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="text-slate-400 uppercase tracking-wide font-semibold">Min Threshold</span>
+          <span className="font-semibold text-slate-700">{toNum(r.item?.min_threshold)} {UNIT_META[r.item?.default_unit] || ''}</span>
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="text-slate-400 uppercase tracking-wide font-semibold">Unit</span>
+          <span className="font-medium">{UNIT_META[r.item?.default_unit] || r.item?.default_unit || '—'}</span>
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="text-slate-400 uppercase tracking-wide font-semibold">Notes</span>
+          <span className="font-medium">{r.notes || '—'}</span>
+        </span>
+      </div>
+    );
+  };
+
+  // Category-filtered view (display only — Save All always saves every draft row)
+  const visibleRows = useMemo(() => {
+    if (!categoryFilter) return draftRows || [];
+    return (draftRows || []).filter(r => r.item?.category === categoryFilter);
+  }, [draftRows, categoryFilter]);
+
   const summaryTotals = useMemo(() => {
     const t = { opening: 0, received: 0, sold: 0, spoiled: 0, closing: 0 };
-    (draftRows || []).forEach(r => {
+    (visibleRows || []).forEach(r => {
       t.opening += toNum(r.opening_stock);
       t.received += toNum(r.received);
       t.sold += toNum(r.sold);
@@ -314,7 +330,7 @@ export default function KitchenStockPage() {
       t.closing += toNum(r.closing_stock);
     });
     return t;
-  }, [draftRows]);
+  }, [visibleRows]);
 
   // ── Overview columns ──
   const overviewCols = [
@@ -359,7 +375,7 @@ export default function KitchenStockPage() {
       },
     },
     {
-      key: 'variance', label: 'Variance',
+      key: 'shot', label: 'Shot',
       render: (_, r) => r.variance === null || r.variance === undefined ? '—' : `${toNum(r.variance) > 0 ? '+' : ''}${toNum(r.variance)}`,
     },
   ];
@@ -438,7 +454,15 @@ export default function KitchenStockPage() {
                 onChange={(d) => { setSelectedDate(d || dayjs()); setDraftRows([]); }}
                 className="w-full sm:w-[160px]"
               />
-              <span className="text-xs text-slate-400">Closing = Opening + Received − Sold − Spoiled · Variance = Physical − Closing</span>
+              <Select
+                allowClear
+                placeholder="All categories"
+                className="w-full sm:w-[180px]"
+                value={categoryFilter || undefined}
+                onChange={(v) => setCategoryFilter(v || null)}>
+                {Object.entries(CATEGORY_META).map(([k, v]) => <Option key={k} value={k}>{v.label}</Option>)}
+              </Select>
+              <span className="text-xs text-slate-400">Closing = Opening + Received − Sold − Spoiled · Shot = Physical − Closing</span>
               <div className="flex-1" />
               <Button size="small" icon={<RefreshCw className="w-3.5 h-3.5" />} className="flex items-center gap-1 !text-xs"
                 onClick={() => invalidateAll()}>
@@ -465,25 +489,26 @@ export default function KitchenStockPage() {
                 <div>
                   <div className="hidden overflow-x-auto md:block">
                     <Table
-                      dataSource={draftRows}
+                      dataSource={visibleRows}
                       columns={entryCols}
                       rowKey={(r) => r.id || `new-${r.item_id}`}
                       loading={entriesLoading}
                       size="middle"
-                      scroll={{ x: 1300 }}
+                      scroll={{ x: 980 }}
                       locale={{ emptyText: <Empty description="No items available" /> }}
                       pagination={false}
+                      expandable={{ expandedRowRender: entryDetailsRender }}
                       summary={() => (
                         <Table.Summary.Row>
-                          <Table.Summary.Cell index={0} colSpan={3}>
+                          <Table.Summary.Cell index={0} colSpan={2}>
                             <span className="text-xs font-bold uppercase text-slate-500">Totals</span>
                           </Table.Summary.Cell>
-                          <Table.Summary.Cell index={3} align="right"><span className="font-bold">{summaryTotals.opening}</span></Table.Summary.Cell>
-                          <Table.Summary.Cell index={4} align="right"><span className="font-bold text-emerald-600">{summaryTotals.received}</span></Table.Summary.Cell>
-                          <Table.Summary.Cell index={5} align="right"><span className="font-bold text-red-600">{summaryTotals.sold}</span></Table.Summary.Cell>
-                          <Table.Summary.Cell index={6} align="right"><span className="font-bold text-amber-600">{summaryTotals.spoiled}</span></Table.Summary.Cell>
-                          <Table.Summary.Cell index={7} align="right"><span className="font-bold">{summaryTotals.closing}</span></Table.Summary.Cell>
-                          <Table.Summary.Cell index={8} colSpan={4} />
+                          <Table.Summary.Cell index={2} align="right"><span className="font-bold">{summaryTotals.opening}</span></Table.Summary.Cell>
+                          <Table.Summary.Cell index={3} align="right"><span className="font-bold text-emerald-600">{summaryTotals.received}</span></Table.Summary.Cell>
+                          <Table.Summary.Cell index={4} align="right"><span className="font-bold text-red-600">{summaryTotals.sold}</span></Table.Summary.Cell>
+                          <Table.Summary.Cell index={5} align="right"><span className="font-bold text-amber-600">{summaryTotals.spoiled}</span></Table.Summary.Cell>
+                          <Table.Summary.Cell index={6} align="right"><span className="font-bold">{summaryTotals.closing}</span></Table.Summary.Cell>
+                          <Table.Summary.Cell index={7} colSpan={3} />
                         </Table.Summary.Row>
                       )}
                     />
@@ -491,9 +516,9 @@ export default function KitchenStockPage() {
 
                   {/* MOBILE */}
                   <div className="md:hidden space-y-2">
-                    {draftRows.length === 0 ? <Empty description="No items" /> : (
+                    {visibleRows.length === 0 ? <Empty description="No items" /> : (
                       <List
-                        dataSource={draftRows}
+                        dataSource={visibleRows}
                         renderItem={(r) => (
                           <MobileCard
                             record={r}
@@ -611,6 +636,26 @@ export default function KitchenStockPage() {
             }]);
             setEditModal({ open: false, row: null });
           }}>
+          {editModal.row && (
+            <div className="rounded-lg bg-slate-50 border border-slate-100 p-3 mb-4 grid grid-cols-2 gap-3 text-xs">
+              <div>
+                <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">Category</p>
+                <span>{CATEGORY_META[editModal.row.item?.category]?.label || 'Other'}</span>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">Unit</p>
+                <span>{UNIT_META[editModal.row.item?.default_unit] || editModal.row.item?.default_unit || '—'}</span>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">Min Threshold</p>
+                <span className="font-semibold">{toNum(editModal.row.item?.min_threshold)}</span>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">Closing</p>
+                <span className={toNum(editModal.row.closing_stock) <= toNum(editModal.row.item?.min_threshold) && toNum(editModal.row.item?.min_threshold) > 0 ? 'text-red-600 font-semibold' : 'font-semibold'}>{toNum(editModal.row.closing_stock)}</span>
+              </div>
+            </div>
+          )}
           <Form.Item name="received" label={<span className="text-xs font-semibold text-slate-600">Received</span>}>
             <InputNumber min={0} className="w-full" />
           </Form.Item>

@@ -7,7 +7,7 @@ import {
   TrendingUp, ArrowDownRight, Package, CircleDollarSign,
   BadgeAlert, LogIn, ShoppingCart, DollarSign, Receipt, AlertTriangle,
   BarChart3, Handshake, Users, Briefcase, Headphones,
-  ShoppingBag, Banknote,
+  ShoppingBag, Banknote, PackageX, Salad,
 } from 'lucide-react';
 import { dashboardAPI, shopsAPI } from '../../services/api';
 import { useAuthStore } from '../../store/authStore';
@@ -783,6 +783,90 @@ function TechnicianDashboard() {
   );
 }
 
+function StockManagerDashboard() {
+  const navigate = useNavigate();
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['dashboard-stockmanager'],
+    queryFn: () => dashboardAPI.stockmanager().then(r => r.data.data),
+  });
+
+  if (isLoading) return <Spin size="large" className="block my-20 mx-auto" />;
+  const d = data || {};
+
+  const restockCols = [
+    { title: 'Item', dataIndex: ['item', 'name'], className: 'text-xs font-semibold text-slate-700' },
+    { title: 'Location', dataIndex: ['location', 'name'], className: 'text-xs text-slate-600' },
+    { title: 'Current', dataIndex: 'closing_stock', className: 'text-xs text-slate-700', render: v => <span className="font-semibold">{v}</span> },
+    { title: 'Threshold', dataIndex: ['item', 'min_threshold'], className: 'text-xs text-slate-500' },
+    { title: 'Unit', dataIndex: ['item', 'default_unit'], className: 'text-xs text-slate-500' },
+    { title: 'Level', dataIndex: 'stock_ratio', className: 'text-xs', render: v => (
+      <Tag className="rounded-full uppercase text-[10px]" color={v <= 0 ? 'red' : v <= 0.5 ? 'orange' : 'gold'}>{v}×</Tag>
+    ) },
+  ];
+
+  const Metric = ({ label, value, tone = 'text-slate-700' }) => (
+    <div className="bg-slate-50 rounded-lg p-2">
+      <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">{label}</p>
+      <p className={`text-sm font-bold ${tone}`}>{value ?? 0}</p>
+    </div>
+  );
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <DashboardKpiCard title="Active Locations" value={d.overview?.activeLocations} icon={Store} bgIconColor="bg-blue-50" iconColor="text-blue-600" />
+        <DashboardKpiCard title="Catalog Items" value={d.overview?.totalItems} icon={Package} bgIconColor="bg-purple-50" iconColor="text-purple-600" />
+        <DashboardKpiCard title="Low Stock" value={d.overview?.lowStockItems} icon={BadgeAlert} bgIconColor="bg-amber-50" iconColor="text-amber-600" />
+        <DashboardKpiCard title="Out of Stock" value={d.overview?.outOfStockItems} icon={PackageX} bgIconColor="bg-red-50" iconColor="text-red-600" />
+      </div>
+
+      <div className="bg-gradient-to-r from-brand-dark to-[#0a206a] rounded-xl p-5 flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <p className="text-white text-lg font-bold tracking-tight">{dayjs(d.date).format('dddd, D MMMM')}</p>
+          <p className="text-blue-200 text-xs mt-0.5">{d.overview?.todayRecordedCount ?? 0} item records logged today — open the daily register to record stock.</p>
+        </div>
+        <Button type="default" icon={<Salad size={14} />} onClick={() => navigate('/inventory/kitchen-stock')} className="!bg-white !text-brand-dark !border-0 !text-xs !font-semibold">
+          Open Kitchen Stock
+        </Button>
+      </div>
+
+      <div>
+        <p className="text-sm font-bold text-slate-700 mb-3">Today · By Location</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          {(d.perLocation || []).map(loc => (
+            <div key={loc.location_id} className="bg-white rounded-xl border border-slate-100 p-4 flex flex-col">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-sm font-bold text-slate-800 truncate">{loc.name}</p>
+                <span className="text-[10px] font-mono uppercase bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">{loc.code}</span>
+              </div>
+              <div className="flex items-center gap-2 mb-3 min-h-6">
+                {loc.lowStockCount > 0 && <Tag className="rounded-full uppercase text-[10px]" color="red">{loc.lowStockCount} low</Tag>}
+                {loc.outOfStockCount > 0 && <Tag className="rounded-full uppercase text-[10px]" color="red">out</Tag>}
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-xs mt-auto">
+                <Metric label="Received" value={loc.received} tone="text-emerald-600" />
+                <Metric label="Sold" value={loc.sold} tone="text-slate-700" />
+                <Metric label="Spoiled" value={loc.spoiled} tone="text-amber-600" />
+                <Metric label="Closing" value={loc.closing} tone="text-brand-dark" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl border border-slate-100 p-4">
+        <p className="text-sm font-bold text-slate-700 mb-3">Restock List</p>
+        {d.restock?.length ? (
+          <Table dataSource={d.restock} columns={restockCols} rowKey={(r) => `${r.location.id}-${r.item.id}`} size="small" pagination={false} scroll={{ x: 600 }} />
+        ) : (
+          <p className="text-xs text-slate-400 py-4 text-center">All items are above threshold. Nothing to restock.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function HRDashboard() {
   const navigate = useNavigate();
 
@@ -860,6 +944,7 @@ export default function Dashboard() {
     'Sales': 'Dashboard',
     'Technician': 'Dashboard',
     'HR': 'Dashboard',
+    'Stock Manager': 'Dashboard',
   };
 
   return (
@@ -885,7 +970,8 @@ export default function Dashboard() {
       {role === 'Cashier' && <CashierDashboard />}
       {role === 'Sales' && <SalesDashboard />}
       {role === 'Technician' && <TechnicianDashboard />}
-      {!['Admin', 'General Manager', 'Operations Manager', 'Director', 'HR', 'Collector', 'Finance', 'Cashier', 'Sales', 'Technician'].includes(role) && <AdminDashboard />}
+      {role === 'Stock Manager' && <StockManagerDashboard />}
+      {!['Admin', 'General Manager', 'Operations Manager', 'Director', 'HR', 'Collector', 'Finance', 'Cashier', 'Sales', 'Technician', 'Stock Manager'].includes(role) && <AdminDashboard />}
     </div>
   );
 }
