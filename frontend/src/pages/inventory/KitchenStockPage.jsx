@@ -402,7 +402,7 @@ export default function KitchenStockPage() {
           {canCreate && (
             <>
               <Button icon={<Settings2 className="w-4 h-4" />} className="flex items-center gap-1 !text-xs"
-                onClick={() => { locationForm.resetFields({ name: '', code: '', is_active: true }); setLocationModal({ open: true, editing: null }); }}>
+                onClick={() => { locationForm.resetFields(); setLocationModal({ open: true, editing: null }); }}>
                 Locations
               </Button>
               <Button icon={<Plus className="w-4 h-4" />} className="flex items-center gap-1 !text-xs"
@@ -684,7 +684,7 @@ export default function KitchenStockPage() {
         destroyOnClose
         className="top-8">
         <Form form={locationForm} layout="vertical" className="mt-4"
-          initialValues={locationModal.editing ? { name: locationModal.editing.name, code: locationModal.editing.code, is_active: locationModal.editing.is_active } : {}}
+          initialValues={locationModal.editing ? { name: locationModal.editing.name, code: locationModal.editing.code, is_active: locationModal.editing.is_active } : { is_active: true }}
           onFinish={(values) => createLocationMutation.mutate(values)}>
           <Form.Item name="name" label={<span className="text-xs font-semibold text-slate-600">Location Name</span>} rules={[{ required: true, message: 'Required' }]}>
             <Input placeholder="e.g. Dante26 Main Kitchen" />
