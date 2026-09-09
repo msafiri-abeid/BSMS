@@ -310,12 +310,14 @@ export const kitchenStockAPI = {
   getEntries: (p) => api.get('/inventory/kitchen/entries', { params: p }),
   upsertEntries: (d) => api.post('/inventory/kitchen/entries', d),
   updateEntry: (id, d) => api.put(`/inventory/kitchen/entries/${id}`, d),
+  deleteEntry: (id) => api.delete(`/inventory/kitchen/entries/${id}`),
   quickAdjust: (d) => api.post('/inventory/kitchen/quick-adjust', d),
 
   // Reports
   getRestockList: (p) => api.get('/inventory/kitchen/restock-list', { params: p }),
   getStats: (p) => api.get('/inventory/kitchen/stats', { params: p }),
   exportEntries: (p) => api.get('/inventory/kitchen/export', { params: p, responseType: 'blob' }),
+  exportRestockPdf: (p) => api.get('/inventory/kitchen/restock/pdf', { params: p, responseType: 'blob' }),
 };
 
 export const tokensAPI = {

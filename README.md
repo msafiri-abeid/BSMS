@@ -268,13 +268,15 @@ GET|POST       /api/inventory/kitchen/items
 PUT            /api/inventory/kitchen/items/:id
 GET|POST       /api/inventory/kitchen/entries        # ?location_id (required), ?date (default today)
 PUT            /api/inventory/kitchen/entries/:id
+DELETE         /api/inventory/kitchen/entries/:id    # hard-deletes that day's row (owner-scoped, inventory:update)
 POST           /api/inventory/kitchen/quick-adjust   # { location_id, item_id, type: received|sold|spoiled, adjustment, entry_date }
 GET            /api/inventory/kitchen/restock-list   # ?location_id, ?date — items at/below min_threshold
+GET            /api/inventory/kitchen/restock/pdf    # ?location_id — server-side PDF (replaces CSV)
 GET            /api/inventory/kitchen/stats          # KPI counts + active location count
 GET            /api/inventory/kitchen/export         # Excel workbook matching the daily sheet layout
 ```
 
-**Kitchen Stock business rules**: `Closing = Opening + Received − Sold − Spoiled`; `Shot = Physical Count − Closing`. Opening stock auto-carries from the previous day's closing per item. Physical count is optional; variance (shot) is auto-computed when entered. `/entries` returns a merged per-item list (items without an entry get a pre-filled row with opening carried over), and `POST /entries` upserts all rows in bulk (`findOrCreate` on `location_id + item_id + entry_date`). Categories: meats_proteins, perishables, staples, seasonings, consumables, beverages, other. Units: portions, kg, qty, packs, bottles, liters, boxes, bags. Low stock = closing ≤ item min_threshold. Seeded locations: `Dante26 Main Kitchen` (DANTE26), `Dante26 Branch B` (BRANCH-B). Seeded catalog: 41 items in `backend/config/constants.js` `KITCHEN_SEED_ITEMS`.
+**Kitchen Stock business rules**: `Closing = Opening + Received − Sold − Spoiled`; `Shot = Physical Count − Closing`. Opening stock auto-carries from the previous day's closing per item. Physical count is optional; variance (shot) is auto-computed when entered. `/entries` returns a merged per-item list (items without an entry get a pre-filled row with opening carried over), and `POST /entries` upserts all rows in bulk (`findOrCreate` on `location_id + item_id + entry_date`). `DELETE /entries/:id` uses the `inventory:update` permission (not delete) so the Stock Manager — who has no `inventory:delete` — can still remove their **own** day's rows (ownership enforced by `created_by`; Admin/GM/Ops/Finance/Sales bypass). Categories: meats_proteins, perishables, staples, seasonings, consumables, beverages, other. Units: portions, kg, qty, packs, bottles, liters, boxes, bags. Low stock = closing ≤ item min_threshold. Seeded locations: `Dante26 Main Kitchen` (DANTE26), `Dante26 Branch B` (BRANCH-B). Seeded catalog: 41 items in `backend/config/constants.js` `KITCHEN_SEED_ITEMS`.
 
 **Stock Manager role**: inventory read/create/update only — no delete, and the sidebar Inventory group shows **Kitchen Stock only** (all POS/bar submodules are hidden for this role only; pages/routes remain for Admin/GM/Ops/Sales). Can view every location but can only edit/delete entries they created themselves (`created_by == own user id`, enforced in `kitchenStock.controller.js`).
 

@@ -273,12 +273,14 @@ router.put('/inventory/kitchen/items/:id', authenticate, checkPermission('invent
 router.get('/inventory/kitchen/entries', authenticate, checkPermission('inventory', 'read'), kitchenC.listEntries);
 router.post('/inventory/kitchen/entries', authenticate, checkPermission('inventory', 'create'), kitchenC.upsertEntries);
 router.put('/inventory/kitchen/entries/:id', authenticate, checkPermission('inventory', 'update'), kitchenC.updateEntry);
+router.delete('/inventory/kitchen/entries/:id', authenticate, checkPermission('inventory', 'update'), kitchenC.deleteEntry);
 router.post('/inventory/kitchen/quick-adjust', authenticate, checkPermission('inventory', 'create'), kitchenC.quickAdjust);
 
 // Kitchen Stock — Reports
 router.get('/inventory/kitchen/restock-list', authenticate, checkPermission('inventory', 'read'), kitchenC.getRestockList);
 router.get('/inventory/kitchen/stats', authenticate, checkPermission('inventory', 'read'), kitchenC.getStats);
 router.get('/inventory/kitchen/export', authenticate, checkPermission('inventory', 'read'), kitchenC.exportEntries);
+router.get('/inventory/kitchen/restock/pdf', authenticate, checkPermission('inventory', 'read'), kitchenC.exportRestockPdf);
 
 // ── DASHBOARDS ────────────────────────────────────────────────
 router.get('/dashboard/admin', authenticate, dashC.adminDashboard);

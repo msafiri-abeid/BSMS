@@ -3,8 +3,8 @@ import {
   Table, Button, Modal, Form, Select, InputNumber, Input, Space, Tabs, App, List, Empty, Tag, DatePicker, Popconfirm,
 } from 'antd';
 import {
-  Plus, Minus, RefreshCw, FileDown, X, MapPin, Box, AlertTriangle, CalendarCheck,
-  Package, Settings2, Save,
+  Plus, Minus, RefreshCw, FileDown, MapPin, AlertTriangle, CalendarCheck,
+  Package, Settings2, Save, Pencil, Trash2, ArrowLeft,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { kitchenStockAPI } from '../../services/api';
@@ -36,11 +36,12 @@ const toNum = (v) => {
 };
 
 export default function KitchenStockPage() {
-  const { message } = App.useApp();
+  const { message, modal } = App.useApp();
   const qc = useQueryClient();
   const { hasPermission } = useAuthStore();
   const canCreate = hasPermission('inventory', 'create');
   const canUpdate = hasPermission('inventory', 'update');
+  const canDeleteLocations = hasPermission('inventory', 'delete');
 
   const [selectedLocation, setSelectedLocation] = useState(null);
   const [selectedDate, setSelectedDate] = useState(dayjs());
@@ -50,7 +51,7 @@ export default function KitchenStockPage() {
 
   const [adjustModal, setAdjustModal] = useState({ open: false, row: null, type: 'sold', qty: 1 });
   const [editModal, setEditModal] = useState({ open: false, row: null });
-  const [locationModal, setLocationModal] = useState({ open: false, editing: null });
+  const [locationModal, setLocationModal] = useState({ open: false, showForm: false, editing: null });
   const [itemModal, setItemModal] = useState({ open: false, editing: null });
   const [locationForm] = Form.useForm();
   const [itemForm] = Form.useForm();
@@ -63,7 +64,8 @@ export default function KitchenStockPage() {
     queryKey: ['kitchen-locations'],
     queryFn: () => kitchenStockAPI.listLocations().then(r => r.data.data),
   });
-  const locations = useMemo(() => (locationsRes?.data || []).filter(l => l.is_active), [locationsRes]);
+  const allLocations = locationsRes?.data || [];
+  const locations = useMemo(() => allLocations.filter(l => l.is_active), [allLocations]);
 
   // Auto-select first location if none yet
   useEffect(() => {
@@ -122,6 +124,12 @@ export default function KitchenStockPage() {
     onError: (e) => message.error(e.response?.data?.message || 'Failed to update stock'),
   });
 
+  const deleteEntryMutation = useMutation({
+    mutationFn: (id) => kitchenStockAPI.deleteEntry(id),
+    onSuccess: () => { message.success('Entry deleted'); invalidateAll(); },
+    onError: (e) => message.error(e.response?.data?.message || 'Failed to delete entry'),
+  });
+
   const createItemMutation = useMutation({
     mutationFn: (d) => itemModal.editing ? kitchenStockAPI.updateItem(itemModal.editing.id, d) : kitchenStockAPI.createItem(d),
     onSuccess: () => { message.success('Item saved'); qc.invalidateQueries({ queryKey: ['kitchen-items'] }); itemForm.resetFields(); setItemModal({ open: false, editing: null }); },
@@ -141,19 +149,27 @@ export default function KitchenStockPage() {
   });
 
   // ── Row editing helpers ──
-  const updateDraft = (itemId, field, value) => {
-    setDraftRows(prev => prev.map(r => {
-      if (r.item_id !== itemId) return r;
-      const next = { ...r, [field]: value };
-      const opening = toNum(next.opening_stock);
-      const received = toNum(next.received);
-      const sold = toNum(next.sold);
-      const spoiled = toNum(next.spoiled);
-      next.closing_stock = Math.round((opening + received - sold - spoiled) * 100) / 100;
-      const physical = next.physical_count === null || next.physical_count === '' ? null : toNum(next.physical_count);
-      next.variance = physical === null ? null : Math.round((physical - next.closing_stock) * 100) / 100;
-      return next;
-    }));
+  const openEditModal = (row) => {
+    editForm.setFieldsValue({
+      received: toNum(row.received),
+      sold: toNum(row.sold),
+      spoiled: toNum(row.spoiled),
+      physical_count: row.physical_count === null ? undefined : toNum(row.physical_count),
+      notes: row.notes || '',
+    });
+    setEditModal({ open: true, row });
+  };
+
+  const confirmDeleteEntry = (row) => {
+    if (!row.id) return;
+    modal.confirm({
+      title: `Delete this entry for ${row.item?.name || 'this item'}?`,
+      content: 'This removes the row from the day\u2019s ledger. Other days are unaffected.',
+      okText: 'Delete',
+      okButtonProps: { danger: true },
+      cancelText: 'Cancel',
+      onOk: () => deleteEntryMutation.mutate(row.id),
+    });
   };
 
   const handleSaveAll = () => {
@@ -193,20 +209,17 @@ export default function KitchenStockPage() {
       .catch(() => message.error('Export failed'));
   };
 
-  const handleExportRestock = () => {
-    const rows = restockRes?.data || [];
-    if (rows.length === 0) { message.info('Nothing to export'); return; }
-    const csv = [
-      ['Item', 'Location', 'Current Stock', 'Min Threshold', 'Unit'].join(','),
-      ...rows.map(r => [r.item?.name, r.location?.name || locationName(), r.closing_stock, r.item?.min_threshold || 0, r.item?.default_unit || ''].join(',')),
-    ].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url;
-    a.download = `restock-list-${dateStr}.csv`; a.click();
+  const handleExportRestockPdf = () => {
+    kitchenStockAPI.exportRestockPdf({ location_id: selectedLocation, date: dateStr })
+      .then(r => {
+        const url = URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' }));
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `restock-list-${dateStr}.pdf`;
+        a.click();
+      })
+      .catch(() => message.error('Export PDF failed'));
   };
-
-  const locationName = () => locations.find(l => l.id === selectedLocation)?.name || '';
 
   // ── Desktop columns (Daily Entry tab) ──
   const entryCols = [
@@ -224,28 +237,16 @@ export default function KitchenStockPage() {
       render: (v) => <span className="text-slate-500">{toNum(v)}</span>,
     },
     {
-      title: 'Received', dataIndex: 'received', width: 100, align: 'right',
-      render: (_, r) => (
-        <InputNumber size="small" min={0} value={r.received} className="w-full"
-          onChange={(v) => updateDraft(r.item_id, 'received', v ?? 0)}
-          disabled={!canCreate && !canUpdate} />
-      ),
+      title: 'Received', dataIndex: 'received', width: 90, align: 'right',
+      render: (v) => <span className="font-medium text-slate-700">{toNum(v)}</span>,
     },
     {
-      title: 'Sold', dataIndex: 'sold', width: 90, align: 'right',
-      render: (_, r) => (
-        <InputNumber size="small" min={0} value={r.sold} className="w-full"
-          onChange={(v) => updateDraft(r.item_id, 'sold', v ?? 0)}
-          disabled={!canCreate && !canUpdate} />
-      ),
+      title: 'Sold', dataIndex: 'sold', width: 80, align: 'right',
+      render: (v) => <span className="font-medium text-slate-700">{toNum(v)}</span>,
     },
     {
-      title: 'Spoiled', dataIndex: 'spoiled', width: 90, align: 'right',
-      render: (_, r) => (
-        <InputNumber size="small" min={0} value={r.spoiled} className="w-full"
-          onChange={(v) => updateDraft(r.item_id, 'spoiled', v ?? 0)}
-          disabled={!canCreate && !canUpdate} />
-      ),
+      title: 'Spoiled', dataIndex: 'spoiled', width: 85, align: 'right',
+      render: (v) => <span className="font-medium text-slate-700">{toNum(v)}</span>,
     },
     {
       title: 'Closing', dataIndex: 'closing_stock', width: 100, align: 'right',
@@ -260,12 +261,10 @@ export default function KitchenStockPage() {
       },
     },
     {
-      title: 'Physical Count', dataIndex: 'physical_count', width: 110, align: 'right',
-      render: (_, r) => (
-        <InputNumber size="small" value={r.physical_count} className="w-full" placeholder="—"
-          onChange={(v) => updateDraft(r.item_id, 'physical_count', v === null || v === undefined ? '' : v)}
-          disabled={!canCreate && !canUpdate} />
-      ),
+      title: 'Physical Count', dataIndex: 'physical_count', width: 120, align: 'right',
+      render: (v) => v === null || v === undefined
+        ? <span className="text-slate-300">—</span>
+        : <span className="font-medium text-slate-700">{toNum(v)}</span>,
     },
     {
       title: 'Shot', width: 110, align: 'right',
@@ -277,13 +276,24 @@ export default function KitchenStockPage() {
       },
     },
     {
-      title: 'Quick', width: 90,
+      title: 'Actions', width: 250,
       render: (_, r) => (
-        <Space size={4}>
-          <Button size="small" type="text" className="!text-red-600 hover:!bg-red-50 flex items-center justify-center" icon={<Minus className="w-3.5 h-3.5" />}
-            onClick={() => canCreate && setAdjustModal({ open: true, row: r, type: 'sold', qty: 1 })} />
-          <Button size="small" type="text" className="!text-emerald-600 hover:!bg-emerald-50 flex items-center justify-center" icon={<Plus className="w-3.5 h-3.5" />}
-            onClick={() => canCreate && setAdjustModal({ open: true, row: r, type: 'received', qty: 1 })} />
+        <Space size={6} wrap>
+          <Button size="small" icon={<Minus className="w-3.5 h-3.5" />} disabled={!canCreate}
+            onClick={() => setAdjustModal({ open: true, row: r, type: 'sold', qty: 1 })}>
+            Consume
+          </Button>
+          <Button size="small" className="!text-emerald-600 hover:!bg-emerald-50 flex items-center gap-1" icon={<Plus className="w-3.5 h-3.5" />} disabled={!canCreate}
+            onClick={() => setAdjustModal({ open: true, row: r, type: 'received', qty: 1 })}>
+            Restock
+          </Button>
+          <Button size="small" type="text" className="!text-slate-500 flex items-center justify-center" icon={<Pencil className="w-3.5 h-3.5" />}
+            onClick={() => openEditModal(r)} />
+          <Popconfirm title="Delete this entry?" description="Removes the row from this day\u2019s ledger."
+            okText="Delete" okButtonProps={{ danger: true }} cancelText="Cancel"
+            onConfirm={() => r.id && deleteEntryMutation.mutate(r.id)} disabled={!canUpdate || !r.id}>
+            <Button size="small" type="text" danger icon={<Trash2 className="w-3.5 h-3.5" />} disabled={!canUpdate || !r.id} />
+          </Popconfirm>
         </Space>
       ),
     },
@@ -402,7 +412,7 @@ export default function KitchenStockPage() {
           {canCreate && (
             <>
               <Button icon={<Settings2 className="w-4 h-4" />} className="flex items-center gap-1 !text-xs"
-                onClick={() => { locationForm.resetFields(); setLocationModal({ open: true, editing: null }); }}>
+                onClick={() => { locationForm.resetFields(); setLocationModal({ open: true, showForm: false, editing: null }); }}>
                 Locations
               </Button>
               <Button icon={<Plus className="w-4 h-4" />} className="flex items-center gap-1 !text-xs"
@@ -421,7 +431,7 @@ export default function KitchenStockPage() {
           <p className="text-sm">No locations yet — create one to start tracking kitchen stock</p>
           <Button type="primary" className="mt-4 !bg-brand-dark hover:!bg-brand-light border-none"
             icon={<Plus className="w-4 h-4" />}
-            onClick={() => { locationForm.resetFields(); setLocationModal({ open: true, editing: null }); }}>
+            onClick={() => { locationForm.resetFields(); setLocationModal({ open: true, showForm: true, editing: null }); }}>
             Create Location
           </Button>
         </div>
@@ -494,7 +504,7 @@ export default function KitchenStockPage() {
                       rowKey={(r) => r.id || `new-${r.item_id}`}
                       loading={entriesLoading}
                       size="middle"
-                      scroll={{ x: 980 }}
+                      scroll={{ x: 1200 }}
                       locale={{ emptyText: <Empty description="No items available" /> }}
                       pagination={false}
                       expandable={{ expandedRowRender: entryDetailsRender }}
@@ -523,19 +533,11 @@ export default function KitchenStockPage() {
                           <MobileCard
                             record={r}
                             fields={mobileEntryFields(r)}
-                            onClick={() => {
-                              editForm.setFieldsValue({
-                                received: toNum(r.received),
-                                sold: toNum(r.sold),
-                                spoiled: toNum(r.spoiled),
-                                physical_count: r.physical_count === null ? undefined : toNum(r.physical_count),
-                                notes: r.notes || '',
-                              });
-                              setEditModal({ open: true, row: r });
-                            }}
+                            onClick={() => openEditModal(r)}
                             actions={[
-                              { label: '-', icon: <Minus className="w-3.5 h-3.5" />, danger: true, onClick: (row) => canCreate && setAdjustModal({ open: true, row, type: 'sold', qty: 1 }) },
-                              { label: '+', icon: <Plus className="w-3.5 h-3.5" />, onClick: (row) => canCreate && setAdjustModal({ open: true, row, type: 'received', qty: 1 }) },
+                              { label: 'Consume', icon: <Minus className="w-3.5 h-3.5" />, danger: true, onClick: (row) => canCreate && setAdjustModal({ open: true, row, type: 'sold', qty: 1 }) },
+                              { label: 'Restock', icon: <Plus className="w-3.5 h-3.5" />, onClick: (row) => canCreate && setAdjustModal({ open: true, row, type: 'received', qty: 1 }) },
+                              { label: 'Delete', icon: <Trash2 className="w-3.5 h-3.5" />, danger: true, onClick: (row) => canUpdate && row.id && confirmDeleteEntry(row) },
                             ]}
                           />
                         )}
@@ -565,8 +567,8 @@ export default function KitchenStockPage() {
                       {restockRes?.count ?? 0} item(s) at or below minimum threshold
                     </span>
                     <Button size="small" icon={<FileDown className="w-3.5 h-3.5" />} className="flex items-center gap-1 !text-xs"
-                      onClick={handleExportRestock}>
-                      Export CSV
+                      onClick={handleExportRestockPdf}>
+                      Export PDF
                     </Button>
                   </div>
                   <div className="hidden overflow-x-auto md:block">
@@ -674,37 +676,89 @@ export default function KitchenStockPage() {
         </Form>
       </Modal>
 
-      {/* ── LOCATION MODAL ── */}
+      {/* ── LOCATION MODAL (manage: list + add/edit form) ── */}
       <Modal
-        title={<span className="text-sm font-bold text-slate-700">{locationModal.editing ? 'Edit Location' : 'Create Location'}</span>}
+        title={<span className="text-sm font-bold text-slate-700">
+          {!locationModal.showForm
+            ? 'Manage Locations'
+            : locationModal.editing ? 'Edit Location' : 'Add Location'}
+        </span>}
         open={locationModal.open}
-        onCancel={() => { locationForm.resetFields(); setLocationModal({ open: false, editing: null }); }}
-        onOk={() => locationForm.submit()}
-        confirmLoading={createLocationMutation.isPending}
+        onCancel={() => { locationForm.resetFields(); setLocationModal({ open: false, showForm: false, editing: null }); }}
+        footer={null}
         destroyOnClose
         className="top-8">
-        <Form form={locationForm} layout="vertical" className="mt-4"
-          initialValues={locationModal.editing ? { name: locationModal.editing.name, code: locationModal.editing.code, is_active: locationModal.editing.is_active } : { is_active: true }}
-          onFinish={(values) => createLocationMutation.mutate(values)}>
-          <Form.Item name="name" label={<span className="text-xs font-semibold text-slate-600">Location Name</span>} rules={[{ required: true, message: 'Required' }]}>
-            <Input placeholder="e.g. Dante26 Main Kitchen" />
-          </Form.Item>
-          <Form.Item name="code" label={<span className="text-xs font-semibold text-slate-600">Code</span>} rules={[{ required: true, message: 'Required' }]}>
-            <Input placeholder="e.g. DANTE26" style={{ textTransform: 'uppercase' }} />
-          </Form.Item>
-          <Form.Item name="is_active" label={<span className="text-xs font-semibold text-slate-600">Active</span>}>
-            <Select>
-              <Option value={true}>Yes</Option>
-              <Option value={false}>No</Option>
-            </Select>
-          </Form.Item>
-        </Form>
-        {locationModal.editing && (
-          <Popconfirm title="Deactivate this location?" description="Historical entries are kept."
-            okText="Deactivate" okButtonProps={{ danger: true }} cancelText="Cancel"
-            onConfirm={() => { deleteLocationMutation.mutate(locationModal.editing.id); setLocationModal({ open: false, editing: null }); }}>
-            <Button danger size="small" className="mt-2">Deactivate Location</Button>
-          </Popconfirm>
+        {!locationModal.showForm ? (
+          <div className="mt-4">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs text-slate-500">{allLocations.length} location(s)</span>
+              <Button size="small" icon={<Plus className="w-3.5 h-3.5" />} className="flex items-center gap-1 !text-xs !bg-brand-dark hover:!bg-brand-light !border-0 text-white"
+                onClick={() => { locationForm.resetFields(); setLocationModal({ open: true, showForm: true, editing: null }); }}>
+                Add Location
+              </Button>
+            </div>
+            <div className="max-h-[50vh] overflow-y-auto space-y-2">
+              {allLocations.length === 0 ? <Empty description="No locations yet" /> : (
+                allLocations.map(loc => (
+                  <div key={loc.id} className="flex items-center justify-between rounded-lg border border-slate-100 p-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-slate-700 truncate">{loc.name}</p>
+                      <p className="text-[10px] uppercase tracking-wide text-slate-400 font-mono">{loc.code}</p>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <Tag color={loc.is_active ? 'green' : 'default'} className="!m-0 !text-[10px]">{loc.is_active ? 'Active' : 'Inactive'}</Tag>
+                      <Button size="small" type="text" icon={<Pencil className="w-3.5 h-3.5" />}
+                        onClick={() => setLocationModal({ open: true, showForm: true, editing: loc })} />
+                      {canDeleteLocations && (
+                        <Popconfirm title="Delete this location?" description="Deactivates it — historical entries are kept."
+                          okText="Delete" okButtonProps={{ danger: true }} cancelText="Cancel"
+                          onConfirm={() => deleteLocationMutation.mutate(loc.id)} disabled={deleteLocationMutation.isPending}>
+                          <Button size="small" type="text" danger icon={<Trash2 className="w-3.5 h-3.5" />}
+                            loading={deleteLocationMutation.isPending} />
+                        </Popconfirm>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        ) : (
+          <>
+            <Button size="small" type="text" icon={<ArrowLeft className="w-3.5 h-3.5" />} className="flex items-center gap-1 !text-xs !text-slate-500 mb-2 mt-1"
+              onClick={() => setLocationModal({ open: true, showForm: false, editing: null })}>
+              Locations
+            </Button>
+            <Form form={locationForm} layout="vertical" className="mt-2"
+              initialValues={locationModal.editing ? { name: locationModal.editing.name, code: locationModal.editing.code, is_active: locationModal.editing.is_active } : { is_active: true }}
+              onFinish={(values) => createLocationMutation.mutate(values)}>
+              <Form.Item name="name" label={<span className="text-xs font-semibold text-slate-600">Location Name</span>} rules={[{ required: true, message: 'Required' }]}>
+                <Input placeholder="e.g. Dante26 Main Kitchen" />
+              </Form.Item>
+              <Form.Item name="code" label={<span className="text-xs font-semibold text-slate-600">Code</span>} rules={[{ required: true, message: 'Required' }]}>
+                <Input placeholder="e.g. DANTE26" style={{ textTransform: 'uppercase' }} />
+              </Form.Item>
+              <Form.Item name="is_active" label={<span className="text-xs font-semibold text-slate-600">Active</span>}>
+                <Select>
+                  <Option value={true}>Yes</Option>
+                  <Option value={false}>No</Option>
+                </Select>
+              </Form.Item>
+              <div>
+                <Button type="primary" htmlType="submit" loading={createLocationMutation.isPending}
+                  className="!bg-brand-dark hover:!bg-brand-light border-none !text-xs !font-semibold">
+                  {locationModal.editing ? 'Save Changes' : 'Create Location'}
+                </Button>
+              </div>
+            </Form>
+            {locationModal.editing && (
+              <Popconfirm title="Deactivate this location?" description="Historical entries are kept."
+                okText="Deactivate" okButtonProps={{ danger: true }} cancelText="Cancel"
+                onConfirm={() => { deleteLocationMutation.mutate(locationModal.editing.id); setLocationModal({ open: false, showForm: false, editing: null }); }}>
+                <Button danger size="small" className="mt-3">Deactivate Location</Button>
+              </Popconfirm>
+            )}
+          </>
         )}
       </Modal>
 

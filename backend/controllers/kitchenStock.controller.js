@@ -94,6 +94,18 @@ const updateEntry = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+const deleteEntry = async (req, res, next) => {
+  try {
+    const entry = await KitchenDailyEntry.findByPk(req.params.id);
+    if (!entry) return res.status(404).json({ success: false, message: 'Entry not found' });
+    if (!canManageEntry(req, entry)) {
+      return res.status(403).json({ success: false, message: 'You can only delete entries you created' });
+    }
+    await kitchenService.deleteEntry(req.params.id);
+    res.json({ success: true, data: { id: +req.params.id } });
+  } catch (err) { next(err); }
+};
+
 const quickAdjust = async (req, res, next) => {
   try {
     const data = await kitchenService.quickAdjust(req.body, req.user.id);
@@ -125,6 +137,15 @@ const exportEntries = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+const exportRestockPdf = async (req, res, next) => {
+  try {
+    const buffer = await kitchenService.exportRestockPdf(req.query);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=restock-list-${new Date().toISOString().split('T')[0]}.pdf`);
+    res.send(buffer);
+  } catch (err) { next(err); }
+};
+
 module.exports = {
   listLocations,
   createLocation,
@@ -136,8 +157,10 @@ module.exports = {
   listEntries,
   upsertEntries,
   updateEntry,
+  deleteEntry,
   quickAdjust,
   getRestockList,
   getStats,
   exportEntries,
+  exportRestockPdf,
 };
