@@ -268,6 +268,7 @@ router.delete('/inventory/locations/:id', authenticate, checkPermission('invento
 router.get('/inventory/kitchen/items', authenticate, checkPermission('inventory', 'read'), kitchenC.listItems);
 router.post('/inventory/kitchen/items', authenticate, checkPermission('inventory', 'create'), kitchenC.createItem);
 router.put('/inventory/kitchen/items/:id', authenticate, checkPermission('inventory', 'update'), kitchenC.updateItem);
+router.delete('/inventory/kitchen/items/:id', authenticate, checkPermission('inventory', 'delete'), kitchenC.deleteItem);
 
 // Kitchen Stock — Daily Entries
 router.get('/inventory/kitchen/entries', authenticate, checkPermission('inventory', 'read'), kitchenC.listEntries);

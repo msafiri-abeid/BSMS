@@ -305,6 +305,7 @@ export const kitchenStockAPI = {
   listItems: (p) => api.get('/inventory/kitchen/items', { params: p }),
   createItem: (d) => api.post('/inventory/kitchen/items', d),
   updateItem: (id, d) => api.put(`/inventory/kitchen/items/${id}`, d),
+  deleteItem: (id) => api.delete(`/inventory/kitchen/items/${id}`),
 
   // Daily Entries
   getEntries: (p) => api.get('/inventory/kitchen/entries', { params: p }),

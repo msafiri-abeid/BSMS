@@ -266,23 +266,26 @@ GET|POST       /api/inventory/locations
 PUT|DELETE     /api/inventory/locations/:id
 GET|POST       /api/inventory/kitchen/items
 PUT            /api/inventory/kitchen/items/:id
+DELETE         /api/inventory/kitchen/items/:id    # soft-deletes a catalog item (is_active=false), keeps history — inventory:delete
 GET|POST       /api/inventory/kitchen/entries        # ?location_id (required), ?date (default today)
 PUT            /api/inventory/kitchen/entries/:id
 DELETE         /api/inventory/kitchen/entries/:id    # hard-deletes that day's row (owner-scoped, inventory:update)
-POST           /api/inventory/kitchen/quick-adjust   # { location_id, item_id, type: received|sold|spoiled, adjustment, entry_date }
+POST           /api/inventory/kitchen/quick-adjust   # { location_id, item_id, type: received|sold|spoiled, adjustment, entry_date, expiry_date? }
 GET            /api/inventory/kitchen/restock-list   # ?location_id, ?date — items at/below min_threshold
 GET            /api/inventory/kitchen/restock/pdf    # ?location_id — server-side PDF (replaces CSV)
 GET            /api/inventory/kitchen/stats          # KPI counts + active location count
 GET            /api/inventory/kitchen/export         # Excel workbook matching the daily sheet layout
 ```
 
-**Kitchen Stock business rules**: `Closing = Opening + Received − Sold − Spoiled`; `Shot = Physical Count − Closing`. Opening stock auto-carries from the previous day's closing per item. Physical count is optional; variance (shot) is auto-computed when entered. `/entries` returns a merged per-item list (items without an entry get a pre-filled row with opening carried over), and `POST /entries` upserts all rows in bulk (`findOrCreate` on `location_id + item_id + entry_date`). `DELETE /entries/:id` uses the `inventory:update` permission (not delete) so the Stock Manager — who has no `inventory:delete` — can still remove their **own** day's rows (ownership enforced by `created_by`; Admin/GM/Ops/Finance/Sales bypass). Categories: meats_proteins, perishables, staples, seasonings, consumables, beverages, other. Units: portions, kg, qty, packs, bottles, liters, boxes, bags. Low stock = closing ≤ item min_threshold. Seeded locations: `Dante26 Main Kitchen` (DANTE26), `Dante26 Branch B` (BRANCH-B). Seeded catalog: 41 items in `backend/config/constants.js` `KITCHEN_SEED_ITEMS`.
+**Kitchen Stock business rules**: `Closing = Opening + Received − Sold − Spoiled`; `Shot = Physical Count − Closing`. Opening stock auto-carries from the previous day's closing per item. Physical count is optional; variance (shot) is auto-computed when entered. `/entries` returns a merged per-item list (items without an entry get a pre-filled row with opening carried over), and `POST /entries` upserts all rows in bulk (`findOrCreate` on `location_id + item_id + entry_date`). Empty `expiry_date` falls back to the most recent prior entry's expiry (received-lot expiry per item). `DELETE /entries/:id` uses the `inventory:update` permission (not delete) so the Stock Manager — who has no `inventory:delete` — can still remove their **own** day's rows (ownership enforced by `created_by`; Admin/GM/Ops/Finance/Sales bypass). `DELETE /items/:id` is a soft delete (`is_active=false`) gated by `inventory:delete` (Admin/GM/Ops only — Stock Manager has no delete). Categories: meats_proteins, perishables, staples, seasonings, consumables, beverages, other. Units: portions, kg, qty, packs, bottles, liters, boxes, bags. Low stock = closing ≤ item min_threshold. Seeded locations: `Dante26 Main Kitchen` (DANTE26), `Dante26 Branch B` (BRANCH-B). Seeded catalog: 41 items in `backend/config/constants.js` `KITCHEN_SEED_ITEMS`.
+
+The Daily Entry tab is a minimal Item Name / Stock Level / Actions table: clicking an item name opens an edit popup (received/sold/spoiled/physical count/expiry/notes), clicking the clickable Stock Level pill opens a +/− popup (red **Consume**, green **Add** → `quickAdjust`), and the 3-dot menu offers Edit Entry plus Delete Entry (`inventory:update`, own rows only). Mobile cards show Category / Stock Level / Expiry with Add/Consume buttons. The Stock Overview tab adds an **Expiry** column (red when past today) and a 3-dot **Delete Item** action (soft-deactivate, Admin/GM/Ops). The top-level **Restock** button quick-adds a quantity with an optional received-batch **Expiry** date.
 
 **Stock Manager role**: inventory read/create/update only — no delete, and the sidebar Inventory group shows **Kitchen Stock only** (all POS/bar submodules are hidden for this role only; pages/routes remain for Admin/GM/Ops/Sales). Can view every location but can only edit/delete entries they created themselves (`created_by == own user id`, enforced in `kitchenStock.controller.js`).
 
 **Stock Manager dashboard**: `GET /api/dashboard/stockmanager` (inventory read) aggregates across all active locations — `overview` (totalItems, activeLocations, lowStockItems, outOfStockItems, todayRecordedCount), `perLocation` (today's received/sold/spoiled/closing + low/out counts), and a merged `restock` list (sorted by stock_ratio). Rendered by `StockManagerDashboard` in `Dashboard.jsx`.
 
-**Production schema**: dev applies via `sequelize.sync({ alter: true })`. Production (`sync()` only) needs a manual `CREATE TABLE` for `locations`, `kitchen_items`, `kitchen_daily_entries` (see model definitions in `backend/models/index.js`), plus `current_qty`/`reorder_level` columns on the existing `stock_levels` table.
+**Production schema**: dev applies via `sequelize.sync({ alter: true })`. Production (`sync()` only) needs a manual `CREATE TABLE` for `locations`, `kitchen_items`, `kitchen_daily_entries` (see model definitions in `backend/models/index.js`), plus `current_qty`/`reorder_level` columns on the existing `stock_levels` table, and `ALTER TABLE kitchen_daily_entries ADD COLUMN expiry_date DATE NULL;`.
 
 ### Machines
 ```

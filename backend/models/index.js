@@ -523,6 +523,7 @@ const KitchenDailyEntry = sequelize.define('KitchenDailyEntry', {
   physical_count: { type: DataTypes.DECIMAL(10, 2) },
   variance: { type: DataTypes.DECIMAL(10, 2) },
   notes: { type: DataTypes.STRING(255) },
+  expiry_date: { type: DataTypes.DATEONLY },
   created_by: { type: DataTypes.INTEGER, allowNull: false },
   updated_by: { type: DataTypes.INTEGER },
 }, {

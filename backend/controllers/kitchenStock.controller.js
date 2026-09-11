@@ -67,6 +67,14 @@ const updateItem = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+const deleteItem = async (req, res, next) => {
+  try {
+    const item = await kitchenService.deleteItem(req.params.id);
+    if (!item) return res.status(404).json({ success: false, message: 'Item not found' });
+    res.json({ success: true, data: item });
+  } catch (err) { next(err); }
+};
+
 // ─── DAILY ENTRIES ────────────────────────────────────────────
 const listEntries = async (req, res, next) => {
   try {
@@ -154,6 +162,7 @@ module.exports = {
   listItems,
   createItem,
   updateItem,
+  deleteItem,
   listEntries,
   upsertEntries,
   updateEntry,

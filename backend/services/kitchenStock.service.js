@@ -131,6 +131,13 @@ const updateItem = async (id, data) => {
   return item;
 };
 
+const deleteItem = async (id) => {
+  const item = await KitchenItem.findByPk(id);
+  if (!item) return null;
+  await item.update({ is_active: false });
+  return item;
+};
+
 // ─── DAILY ENTRIES ────────────────────────────────────────────
 // Returns the day's entries for a location, auto-carrying opening stock from
 // the previous day's closing for items that have no entry yet.
@@ -152,17 +159,19 @@ const listEntries = async (filters = {}) => {
     }),
     KitchenDailyEntry.findAll({
       where: { location_id: locationId, entry_date: { [Op.lte]: prevDateStr } },
-      attributes: ['item_id', 'entry_date', 'closing_stock'],
+      attributes: ['item_id', 'entry_date', 'closing_stock', 'expiry_date'],
       order: [['entry_date', 'DESC']],
     }),
     KitchenItem.findAll({ where: { is_active: true }, order: [['name', 'ASC']] }),
   ]);
 
-  // Map item_id -> most recent closing before the target date
+  // Map item_id -> most recent closing + lot expiry before the target date
   const prevClosingByItem = {};
+  const prevExpiryByItem = {};
   for (const p of prevEntries) {
     if (prevClosingByItem[p.item_id] === undefined) {
       prevClosingByItem[p.item_id] = num(p.closing_stock);
+      prevExpiryByItem[p.item_id] = p.expiry_date || null;
     }
   }
 
@@ -185,11 +194,15 @@ const listEntries = async (filters = {}) => {
         physical_count: null,
         variance: null,
         notes: null,
+        expiry_date: prevExpiryByItem[it.id] ?? null,
         location: null,
         item: { id: it.id, name: it.name, category: it.category, default_unit: it.default_unit, min_threshold: num(it.min_threshold) },
       };
     }
-    return serializeEntry(entry);
+    return {
+      ...serializeEntry(entry),
+      expiry_date: entry.expiry_date || prevExpiryByItem[entry.item_id] || null,
+    };
   });
 
   return { data: merged, count: merged.length, date: entryDate, prev_date: prevDateStr };
@@ -242,6 +255,7 @@ const upsertEntries = async (body, userId) => {
         physical_count: physical,
         variance,
         notes: raw.notes || null,
+        expiry_date: raw.expiry_date || null,
         created_by: userId,
       },
     });
@@ -256,6 +270,7 @@ const upsertEntries = async (body, userId) => {
         physical_count: physical,
         variance,
         notes: raw.notes !== undefined ? raw.notes || null : entry.notes,
+        expiry_date: raw.expiry_date !== undefined ? raw.expiry_date || null : entry.expiry_date,
         updated_by: userId,
       });
       await entry.reload({ include: ENTRY_INCLUDES() });
@@ -299,6 +314,7 @@ const updateEntry = async (id, body, userId) => {
     physical_count: physical,
     variance,
     notes: body.notes !== undefined ? body.notes || null : entry.notes,
+    expiry_date: body.expiry_date !== undefined ? body.expiry_date || null : entry.expiry_date,
     updated_by: userId,
   });
   return serializeEntry(entry);
@@ -342,13 +358,9 @@ const quickAdjust = async (body, userId) => {
     const physical = existing.physical_count === null || existing.physical_count === undefined
       ? null
       : num(existing.physical_count);
-    const variance = physical === null ? null : round2(physical - closing);
-    await existing.update({
-      ...patch,
-      closing_stock: closing,
-      variance,
-      updated_by: userId,
-    });
+const variance = physical === null ? null : round2(physical - closing);
+    if (body.expiry_date !== undefined) patch.expiry_date = body.expiry_date || null;
+    await existing.update({ ...patch, closing_stock: closing, variance, updated_by: userId });
     await existing.reload({ include: ENTRY_INCLUDES() });
     entry = existing;
   } else {
@@ -357,6 +369,7 @@ const quickAdjust = async (body, userId) => {
     const sold = type === 'sold' ? round2(adjustment) : 0;
     const spoiled = type === 'spoiled' ? round2(adjustment) : 0;
     const closing = round2(opening + received - sold - spoiled);
+
     entry = await KitchenDailyEntry.create({
       location_id: locationId,
       item_id: itemId,
@@ -368,11 +381,11 @@ const quickAdjust = async (body, userId) => {
       closing_stock: closing,
       physical_count: null,
       variance: null,
+      expiry_date: type === 'received' ? (body.expiry_date || null) : null,
       created_by: userId,
     });
     await entry.reload({ include: ENTRY_INCLUDES() });
   }
-
   return { ...serializeEntry(entry), qty_change: round2(adjustment), type };
 };
 
@@ -729,6 +742,7 @@ module.exports = {
   listItems,
   createItem,
   updateItem,
+  deleteItem,
   listEntries,
   upsertEntries,
   updateEntry,
