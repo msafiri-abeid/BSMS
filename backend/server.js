@@ -81,7 +81,16 @@ const start = async () => {
       console.log(`[SERVER] Environment: ${process.env.NODE_ENV || 'development'}`);
     });
   } catch (err) {
-    console.error('[STARTUP] Failed:', err.message);
+    console.error('[STARTUP] Failed:');
+    console.error('  name:', err.name);
+    console.error('  message:', err.message);
+    if (err.errors && err.errors.length) {
+      console.error('  details:', JSON.stringify(err.errors.map((e) => ({ field: e.path, message: e.message, value: e.value, type: e.type })), null, 2));
+    }
+    if (err.original && err.original.message) {
+      console.error('  original:', err.original.message);
+    }
+    console.error(err.stack);
     process.exit(1);
   }
 };

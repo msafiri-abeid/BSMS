@@ -241,7 +241,13 @@ module.exports = async () => {
     { name: 'Dante26 Branch B', code: 'BRANCH-B' },
   ];
   for (const loc of defaultLocations) {
-    await Location.findOrCreate({ where: { name: loc.name }, defaults: { ...loc, is_active: true } });
+    const [createdLoc, wasCreated] = await Location.findOrCreate({
+      where: { code: loc.code },
+      defaults: { ...loc, is_active: true },
+    });
+    if (!wasCreated && createdLoc.name !== loc.name) {
+      await createdLoc.update({ name: loc.name });
+    }
   }
   console.log('[SEED] Kitchen locations seeded');
 
