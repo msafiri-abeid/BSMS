@@ -13,6 +13,7 @@ const Permission = sequelize.define('Permission', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
   role_id: { type: DataTypes.INTEGER, allowNull: false },
   module: { type: DataTypes.STRING(50), allowNull: false },
+  submodule: { type: DataTypes.STRING(50), allowNull: true },
   action: { type: DataTypes.ENUM('read', 'write', 'approve', 'delete', 'create', 'update'), allowNull: false },
 }, { tableName: 'permissions', updatedAt: false });
 

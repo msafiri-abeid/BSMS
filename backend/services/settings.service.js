@@ -1,6 +1,6 @@
 // services/settings.service.js
 const { Setting, Role, Permission } = require('../models');
-const { MODULES, ACTIONS } = require('../config/constants');
+const { MODULES, ACTIONS, SUBMODULES } = require('../config/constants');
 
 const getAll = async () => {
   const rows = await Setting.findAll({ order: [['key', 'ASC']] });
@@ -55,16 +55,31 @@ const updatePermissions = async (roleId, permissions) => {
   const role = await Role.findByPk(roleId);
   if (!role) throw new Error('Role not found');
   if (role.name === 'Admin') throw new Error('Admin permissions cannot be modified');
-  await Permission.destroy({ where: { role_id: roleId } });
-  const toCreate = [];
-  permissions.forEach(({ module, actions }) => {
-    actions.forEach(action => {
-      if (MODULES.includes(module) && ACTIONS.includes(action)) {
-        toCreate.push({ role_id: roleId, module, action });
-      }
-    });
+
+  const validActions = new Set(ACTIONS);
+  const validSubmodules = new Map();
+  SUBMODULES.forEach(({ module, key }) => {
+    if (!validSubmodules.has(module)) validSubmodules.set(module, new Set());
+    validSubmodules.get(module).add(key);
   });
-  return Permission.bulkCreate(toCreate);
+
+  // Targeted replace: only the (module, submodule) combos present in the
+  // payload are deleted + recreated. Permissions for any module/submodule not
+  // sent (e.g. hidden legacy rows) are preserved — never wiped.
+  for (const entry of permissions || []) {
+    const { module, actions } = entry;
+    if (!MODULES.includes(module)) continue;
+
+    const sub = entry.submodule == null || entry.submodule === '' ? null : entry.submodule;
+    if (sub !== null && !validSubmodules.get(module)?.has(sub)) continue;
+
+    const cleanActions = (actions || []).filter(a => validActions.has(a));
+    await Permission.destroy({ where: { role_id: roleId, module, submodule: sub } });
+    if (cleanActions.length > 0) {
+      await Permission.bulkCreate(cleanActions.map(action => ({ role_id: roleId, module, submodule: sub, action })));
+    }
+  }
+  return { updated: true };
 };
 
 const DEFAULTS = {

@@ -372,8 +372,16 @@ GET            /api/debts/export
 ```
 GET|PUT        /api/settings
 GET|POST       /api/settings/roles
-PUT            /api/settings/roles/:roleId/permissions
+PUT            /api/settings/roles/:roleId/permissions   # [{module, submodule: null|key, actions:[...]}] — targeted replace
+GET            /api/settings/modules                     # { modules, actions, submodules } drives the Role Builder matrix
 POST           /api/settings/sms-test
+```
+
+**Role permissions support submodule scoping (Sep 2026)**. A `permissions` row with `submodule` IS NULL grants a module action across every screen; a non-null `submodule` restricts it to that screen (keys come from `SUBMODULES` in `backend/config/constants.js`, e.g. inventory: tokens/kitchen/products/stock/sales/returns/alerts/accounting). The Role Builder matrix in Settings → Role Builder renders an "All {module}" row plus one row per submodule, and saves only changed combos (unrepresented modules are never wiped). The sidebar is fully permission-driven — hardcoded role lists were removed, so a role holding a module's `read` permission sees that module's submenus.
+
+Production migration (additive; dev applies via `sequelize.sync({ alter: true })`):
+```sql
+ALTER TABLE permissions ADD COLUMN submodule VARCHAR(50) NULL;
 ```
 
 ### Dashboards

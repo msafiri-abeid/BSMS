@@ -97,5 +97,43 @@ module.exports = {
 
   ACTIONS: ['read', 'create', 'update', 'delete', 'approve'],
 
+  // Submodule-level access control. A role may be granted a whole module
+  // (submodule = NULL → grants every submodule) or individual submodules below.
+  // The frontend Role Builder renders one "All {module}" row + one row per
+  // submodule so menus can be controlled from inside the app.
+  SUBMODULES: [
+    { module: 'partners', key: 'partners', label: 'Partners' },
+    { module: 'shops', key: 'slot', label: 'Slot Shops' },
+    { module: 'shops', key: 'meteora', label: 'Meteora Shops' },
+    { module: 'machines', key: 'novomatic', label: 'Novomatic' },
+    { module: 'machines', key: 'meteora', label: 'Meteora' },
+    { module: 'machines', key: 'debts', label: 'Debts' },
+    { module: 'collections', key: 'assignments', label: 'Assignments' },
+    { module: 'collections', key: 'targets', label: 'Weekly Targets' },
+    { module: 'finance', key: 'expenses', label: 'Expenses' },
+    { module: 'finance', key: 'invoices', label: 'Invoices' },
+    { module: 'finance', key: 'payroll', label: 'Payroll' },
+    { module: 'inventory', key: 'tokens', label: 'Token Stock' },
+    { module: 'inventory', key: 'kitchen', label: 'Kitchen Stock' },
+    { module: 'inventory', key: 'products', label: 'Products' },
+    { module: 'inventory', key: 'stock', label: 'Stock Management' },
+    { module: 'inventory', key: 'sales', label: 'Sales' },
+    { module: 'inventory', key: 'returns', label: 'Returns' },
+    { module: 'inventory', key: 'alerts', label: 'Alerts' },
+    { module: 'inventory', key: 'accounting', label: 'Accounting' },
+    { module: 'accounts', key: 'accounts', label: 'Accounts' },
+    { module: 'accounts', key: 'reports', label: 'Financial Reports' },
+    { module: 'staff', key: 'employees', label: 'Employees' },
+    { module: 'staff', key: 'departments', label: 'Departments' },
+    { module: 'staff', key: 'positions', label: 'Positions' },
+    { module: 'settings', key: 'company', label: 'Company Profile' },
+    { module: 'settings', key: 'machines', label: 'Machine Settings' },
+    { module: 'settings', key: 'finance', label: 'Finance & SLA' },
+    { module: 'settings', key: 'notifications', label: 'Notifications & SMS' },
+    { module: 'settings', key: 'roles', label: 'Role Builder' },
+    { module: 'settings', key: 'businesses', label: 'Business Management' },
+    { module: 'settings', key: 'system', label: 'System' },
+  ],
+
   PORT: process.env.PORT || 5000,
 };

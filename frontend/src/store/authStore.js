@@ -19,10 +19,14 @@ export const useAuthStore = create(
 
       clearAuth: () => set({ user: null, accessToken: null, refreshToken: null, permissions: [] }),
 
-      hasPermission: (module, action) => {
+      hasPermission: (module, action, submodule) => {
         const { user, permissions } = get();
         if (user?.role?.name === 'Admin') return true;
-        return permissions.some(p => p.module === module && p.action === action);
+        return permissions.some(p =>
+          p.module === module &&
+          p.action === action &&
+          (p.submodule == null || submodule == null || p.submodule === submodule)
+        );
       },
 
       getRoleName: () => get().user?.role?.name || '',
@@ -30,7 +34,9 @@ export const useAuthStore = create(
       updateAuthUser: (userData) => {
         const current = get().user;
         if (!current) return;
-        set({ user: { ...current, ...userData } });
+        const nextUser = { ...current, ...userData };
+        const nextPermissions = nextUser?.role?.permissions || get().permissions;
+        set({ user: nextUser, permissions: nextPermissions });
       },
     }),
     {

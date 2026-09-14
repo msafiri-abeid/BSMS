@@ -226,6 +226,12 @@ module.exports = async () => {
       await Permission.findOrCreate({ where: { role_id: stockMgrRole.id, module: 'inventory', action: act } });
     }
   }
+  // Ensure Director gets inventory read on existing installs (idempotent).
+  // Module-wide grant (submodule NULL) → every inventory submenu becomes visible.
+  const directorRole = await Role.findOne({ where: { name: 'Director' } });
+  if (directorRole) {
+    await Permission.findOrCreate({ where: { role_id: directorRole.id, module: 'inventory', action: 'read', submodule: null } });
+  }
   console.log('[SEED] Permissions ensured');
 
   // ─── ALWAYS: migrate 'selcom' account_type → 'bank' ───

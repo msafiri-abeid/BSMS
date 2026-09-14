@@ -84,8 +84,8 @@ const testSMS = async (req, res, next) => {
 
 const listModules = async (req, res, next) => {
   try {
-    const { MODULES } = require('../config/constants');
-    res.json({ success: true, data: MODULES });
+    const { MODULES, ACTIONS, SUBMODULES } = require('../config/constants');
+    res.json({ success: true, data: { modules: MODULES, actions: ACTIONS, submodules: SUBMODULES } });
   } catch (err) { next(err); }
 };
 
