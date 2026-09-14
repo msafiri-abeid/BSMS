@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import {
-  Table, Button, Modal, Form, Select, InputNumber, Input, Space, Tabs, App, List, Empty, Tag, DatePicker, Popconfirm,
+  Table, Button, Modal, Form, Select, InputNumber, Input, Space, Tabs, App, List, Empty, Tag, DatePicker, Popconfirm, Switch,
 } from 'antd';
 import {
   Plus, Minus, FileDown, MapPin, AlertTriangle, CalendarCheck,
@@ -64,7 +64,7 @@ export default function KitchenStockPage() {
   const [editDayNotes, setEditDayNotes] = useState([]);
   const [editNoteInput, setEditNoteInput] = useState('');
   const [locationModal, setLocationModal] = useState({ open: false, showForm: false, editing: null });
-  const [itemModal, setItemModal] = useState({ open: false, editing: null });
+  const [itemModal, setItemModal] = useState({ open: false, editing: null, row: null });
   const [locationForm] = Form.useForm();
   const [itemForm] = Form.useForm();
   const [editForm] = Form.useForm();
@@ -154,7 +154,7 @@ export default function KitchenStockPage() {
 
   const createItemMutation = useMutation({
     mutationFn: (d) => itemModal.editing ? kitchenStockAPI.updateItem(itemModal.editing.id, d) : kitchenStockAPI.createItem(d),
-    onSuccess: () => { message.success('Item saved'); qc.invalidateQueries({ queryKey: ['kitchen-items'] }); itemForm.resetFields(); setItemModal({ open: false, editing: null }); },
+    onSuccess: () => { message.success('Item saved'); qc.invalidateQueries({ queryKey: ['kitchen-items'] }); invalidateAll(); itemForm.resetFields(); setItemModal({ open: false, editing: null, row: null }); },
     onError: (e) => message.error(e.response?.data?.message || 'Failed to save item'),
   });
 
@@ -171,6 +171,18 @@ export default function KitchenStockPage() {
   });
 
   // ── Row editing helpers ──
+  const openItemModal = (row) => {
+    itemForm.setFieldsValue({
+      name: row.item?.name,
+      category: row.item?.category,
+      default_unit: row.item?.default_unit,
+      min_threshold: toNum(row.item?.min_threshold),
+      is_active: row.item?.is_active !== false,
+      expiry_date: row.expiry_date ? dayjs(row.expiry_date) : undefined,
+    });
+    setItemModal({ open: true, editing: row.item, row });
+  };
+
   const openEditModal = (row) => {
     editForm.setFieldsValue({
       received: toNum(row.received),
@@ -348,13 +360,19 @@ export default function KitchenStockPage() {
       if (th > 0 && v <= th) return <Tag color="red" className="!font-semibold">Low Stock</Tag>;
       return <Tag color="green">OK</Tag>;
     } },
-    ...(canDelete ? [{
+    ...(canUpdate ? [{
       title: 'Actions', width: 60, align: 'center',
       render: (_, r) => (
         <ActionMenu
           record={r}
-          actionItems={() => [{ key: 'deleteItem', label: 'Delete Item', icon: <Trash2 className="w-3.5 h-3.5" />, danger: true }]}
-          onAction={(key) => { if (key === 'deleteItem') confirmDeleteItem(r); }}
+          actionItems={() => [
+            { key: 'editItem', label: 'Edit Item', icon: <Pencil className="w-3.5 h-3.5" /> },
+            { key: 'deleteItem', label: 'Delete Item', icon: <Trash2 className="w-3.5 h-3.5" />, danger: true },
+          ]}
+          onAction={(key) => {
+            if (key === 'editItem') openItemModal(r);
+            if (key === 'deleteItem') confirmDeleteItem(r);
+          }}
         />
       ),
     }] : []),
@@ -371,10 +389,6 @@ export default function KitchenStockPage() {
   // ── Mobile fields ──
   const mobileEntryFields = (row) => [
     { key: 'name', dataIndex: ['item', 'name'] },
-    { key: 'opening', label: 'Opening', render: (_, r) => toNum(r.opening_stock) },
-    { key: 'received', label: 'Received', render: (_, r) => <span className="text-emerald-600 font-medium">{toNum(r.received)}</span> },
-    { key: 'sold', label: 'Sold', render: (_, r) => <span className="text-orange-600 font-medium">{toNum(r.sold)}</span> },
-    { key: 'spoiled', label: 'Spoiled/Dmg', render: (_, r) => <span className="text-red-600 font-medium">{toNum(r.spoiled)}</span> },
     {
       key: 'stock', label: 'Stock Level',
       render: (_, r) => {
@@ -877,7 +891,7 @@ export default function KitchenStockPage() {
       <Modal
         title={<span className="text-sm font-bold text-slate-700">{itemModal.editing ? 'Edit Item' : 'Add Item to Catalog'}</span>}
         open={itemModal.open}
-        onCancel={() => { itemForm.resetFields(); setItemModal({ open: false, editing: null }); }}
+        onCancel={() => { itemForm.resetFields(); setItemModal({ open: false, editing: null, row: null }); }}
         onOk={() => itemForm.submit()}
         confirmLoading={createItemMutation.isPending}
         destroyOnClose
@@ -888,9 +902,16 @@ export default function KitchenStockPage() {
             category: itemModal.editing.category,
             default_unit: itemModal.editing.default_unit,
             min_threshold: toNum(itemModal.editing.min_threshold),
-          } : { category: 'meats_proteins', default_unit: 'qty' }}
+            is_active: itemModal.editing.is_active !== false,
+          } : { category: 'meats_proteins', default_unit: 'qty', is_active: true }}
           onFinish={(values) => {
-            createItemMutation.mutate({ ...values, v: undefined });
+            const payload = { ...values, v: undefined };
+            if (itemModal.editing) {
+              payload.location_id = selectedLocation;
+              payload.entry_date = dateStr;
+              payload.expiry_date = values.expiry_date ? values.expiry_date.format('YYYY-MM-DD') : null;
+            }
+            createItemMutation.mutate(payload);
           }}>
           <Form.Item name="name" label={<span className="text-xs font-semibold text-slate-600">Item Name</span>} rules={[{ required: true, message: 'Required' }]}>
             <Input placeholder="e.g. Beef Ribs" />
@@ -908,6 +929,16 @@ export default function KitchenStockPage() {
           <Form.Item name="min_threshold" label={<span className="text-xs font-semibold text-slate-600">Min Threshold (low-stock alert)</span>}>
             <InputNumber min={0} className="w-full" />
           </Form.Item>
+          {itemModal.editing && (
+            <>
+              <Form.Item name="expiry_date" label={<span className="text-xs font-semibold text-slate-600">Batch Expiry Date (today's stock)</span>}>
+                <DatePicker className="w-full" placeholder="Expiry of the current received batch" />
+              </Form.Item>
+              <Form.Item name="is_active" label={<span className="text-xs font-semibold text-slate-600">Active</span>} valuePropName="checked">
+                <Switch />
+              </Form.Item>
+            </>
+          )}
         </Form>
       </Modal>
 
@@ -916,7 +947,12 @@ export default function KitchenStockPage() {
         title={<span className="text-sm font-bold text-slate-700">{detailModal?.item?.name || 'Item Details'}</span>}
         open={!!detailModal}
         onCancel={() => setDetailModal(null)}
-        footer={null}
+        footer={canUpdate ? [(
+          <Button key="edit" type="primary" icon={<Pencil className="w-3.5 h-3.5" />} className="!bg-brand-dark hover:!bg-brand-light !border-0"
+            onClick={() => { if (detailModal) openEditModal(detailModal); setDetailModal(null); }}>
+            Edit Entry
+          </Button>
+        )] : null}
         destroyOnClose
         className="top-8">
         <div className="mt-4 space-y-5">

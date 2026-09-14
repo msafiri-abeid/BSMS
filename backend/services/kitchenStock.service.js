@@ -38,7 +38,7 @@ const serializeNotes = (arr) => {
 
 const ENTRY_INCLUDES = () => [
   { model: Location, as: 'location', attributes: ['id', 'name', 'code'] },
-  { model: KitchenItem, as: 'item', attributes: ['id', 'name', 'category', 'default_unit', 'min_threshold'] },
+  { model: KitchenItem, as: 'item', attributes: ['id', 'name', 'category', 'default_unit', 'min_threshold', 'is_active'] },
   { model: User, as: 'creator', attributes: ['id', 'name'] },
   { model: User, as: 'updater', attributes: ['id', 'name'] },
   {
@@ -159,7 +159,7 @@ const createItem = async (data, userId) => {
   return item;
 };
 
-const updateItem = async (id, data) => {
+const updateItem = async (id, data, userId) => {
   const item = await KitchenItem.findByPk(id);
   if (!item) return null;
   await item.update({
@@ -169,6 +169,35 @@ const updateItem = async (id, data) => {
     min_threshold: data.min_threshold !== undefined ? num(data.min_threshold) : item.min_threshold,
     is_active: data.is_active !== undefined ? !!data.is_active : item.is_active,
   });
+
+  // Optional: persist a received-batch expiry on the day's entry for this item.
+  // Used by the Stock Overview "Edit Item" action — one atomic save for item + batch expiry.
+  if (data.location_id && data.entry_date && data.expiry_date !== undefined) {
+    const locationId = +data.location_id;
+    const entryDate = data.entry_date;
+    const prev = await KitchenDailyEntry.findOne({
+      where: { location_id: locationId, item_id: item.id, entry_date: { [Op.lte]: entryDate } },
+      order: [['entry_date', 'DESC']],
+    });
+    const [entry] = await KitchenDailyEntry.findOrCreate({
+      where: { location_id: locationId, item_id: item.id, entry_date: entryDate },
+      defaults: {
+        opening_stock: prev?.closing_stock ?? 0,
+        received: 0,
+        sold: 0,
+        spoiled: 0,
+        closing_stock: prev?.closing_stock ?? 0,
+        notes: null,
+        expiry_date: data.expiry_date || null,
+        created_by: userId || null,
+      },
+    });
+    await entry.update({
+      expiry_date: data.expiry_date || null,
+      updated_by: userId || entry.updated_by,
+    });
+  }
+
   return item;
 };
 
@@ -238,7 +267,7 @@ const listEntries = async (filters = {}) => {
         movements: [],
         expiry_date: prevExpiryByItem[it.id] ?? null,
         location: null,
-        item: { id: it.id, name: it.name, category: it.category, default_unit: it.default_unit, min_threshold: num(it.min_threshold) },
+        item: { id: it.id, name: it.name, category: it.category, default_unit: it.default_unit, min_threshold: num(it.min_threshold), is_active: it.is_active },
       };
     }
     return {

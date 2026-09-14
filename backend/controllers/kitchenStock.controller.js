@@ -61,7 +61,7 @@ const createItem = async (req, res, next) => {
 
 const updateItem = async (req, res, next) => {
   try {
-    const item = await kitchenService.updateItem(req.params.id, req.body);
+    const item = await kitchenService.updateItem(req.params.id, req.body, req.user.id);
     if (!item) return res.status(404).json({ success: false, message: 'Item not found' });
     res.json({ success: true, data: item });
   } catch (err) { next(err); }
