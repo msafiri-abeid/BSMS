@@ -386,7 +386,23 @@ export default function KitchenStockPage() {
     { title: 'Unit', render: (_, r) => UNIT_META[r.item?.default_unit] || '', responsive: ['md'] },
   ];
 
-  // ── Mobile fields ──
+  // ── Mobile fields (Stock Overview) ──
+  const mobileOverviewFields = (row) => {
+    const low = toNum(row.closing_stock) <= toNum(row.item?.min_threshold) && toNum(row.item?.min_threshold) > 0;
+    const c = CATEGORY_META[row.item?.category] || CATEGORY_META.other;
+    return [
+      { key: 'name', dataIndex: ['item', 'name'] },
+      {
+        key: 'stock', label: 'Current Stock',
+        render: (_, r) => <span className={low ? 'text-red-600 font-semibold' : 'font-semibold'}>{toNum(r.closing_stock)} <span className="text-xs text-slate-400">{UNIT_META[r.item?.default_unit] || ''}</span></span>,
+      },
+      { key: 'category', label: 'Category', render: () => <Tag color={c.color}>{c.label}</Tag> },
+      { key: 'expiry', label: 'Expiry', render: () => renderExpiry(row.expiry_date) },
+      { key: 'status', label: 'Status', render: () => low ? <Tag color="red" className="!font-semibold">Low Stock</Tag> : <Tag color="green">OK</Tag> },
+    ];
+  };
+
+  // ── Mobile fields (Daily Entry) ──
   const mobileEntryFields = (row) => [
     { key: 'name', dataIndex: ['item', 'name'] },
     {
@@ -543,9 +559,28 @@ export default function KitchenStockPage() {
               key: 'overview',
               label: <span className="text-xs font-semibold">Stock Overview</span>,
               children: (
-                <div className="hidden overflow-x-auto md:block">
-                  <Table dataSource={draftRows} columns={overviewCols} rowKey={(r) => r.id || `new-${r.item_id}`}
-                    size="middle" pagination={false} loading={entriesLoading} />
+                <div>
+                  <div className="hidden overflow-x-auto md:block">
+                    <Table dataSource={draftRows} columns={overviewCols} rowKey={(r) => r.id || `new-${r.item_id}`}
+                      size="middle" pagination={false} loading={entriesLoading} />
+                  </div>
+                  <div className="md:hidden space-y-2">
+                    {draftRows.length === 0 ? <Empty description="No items" /> : (
+                      <List
+                        dataSource={draftRows}
+                        renderItem={(r) => (
+                          <MobileCard
+                            record={r}
+                            fields={mobileOverviewFields(r)}
+                            onClick={() => openItemModal(r)}
+                            actions={canUpdate ? [
+                              { label: 'Edit Item', icon: <Pencil className="w-3.5 h-3.5" />, onClick: (row) => openItemModal(row) },
+                            ] : []}
+                          />
+                        )}
+                      />
+                    )}
+                  </div>
                 </div>
               ),
             },
