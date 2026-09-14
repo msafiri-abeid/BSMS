@@ -4,7 +4,7 @@ import {
 } from 'antd';
 import {
   Plus, Minus, FileDown, MapPin, AlertTriangle, CalendarCheck,
-  Package, PackagePlus, Settings2, Pencil, Trash2, ArrowLeft,
+  Package, PackagePlus, Settings2, Pencil, Trash2, ArrowLeft, SlidersHorizontal, X,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { kitchenStockAPI } from '../../services/api';
@@ -31,6 +31,12 @@ const UNIT_META = {
   bottles: 'Bottles', liters: 'Liters', boxes: 'Boxes', bags: 'Bags',
 };
 
+const MOVE_TYPE_META = {
+  received: { label: 'Received', color: 'green' },
+  sold: { label: 'Sold', color: 'orange' },
+  spoiled: { label: 'Spoiled / Damaged', color: 'red' },
+};
+
 const toNum = (v) => {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
@@ -50,9 +56,13 @@ export default function KitchenStockPage() {
   const [activeTab, setActiveTab] = useState('daily');
   const [categoryFilter, setCategoryFilter] = useState(null);
 
-  const [adjustModal, setAdjustModal] = useState({ open: false, row: null, qty: 1 });
-  const [restockModal, setRestockModal] = useState({ open: false, item_id: null, qty: 1, expiry: null });
+  const [adjustModal, setAdjustModal] = useState({ open: false, row: null, qty: 1, notes: '' });
+  const [restockModal, setRestockModal] = useState({ open: false, item_id: null, qty: 1, expiry: null, notes: '' });
+  const [disposeModal, setDisposeModal] = useState({ open: false, item_id: null, qty: 1, notes: '' });
   const [editModal, setEditModal] = useState({ open: false, row: null });
+  const [detailModal, setDetailModal] = useState(null);
+  const [editDayNotes, setEditDayNotes] = useState([]);
+  const [editNoteInput, setEditNoteInput] = useState('');
   const [locationModal, setLocationModal] = useState({ open: false, showForm: false, editing: null });
   const [itemModal, setItemModal] = useState({ open: false, editing: null });
   const [locationForm] = Form.useForm();
@@ -166,10 +176,9 @@ export default function KitchenStockPage() {
       received: toNum(row.received),
       sold: toNum(row.sold),
       spoiled: toNum(row.spoiled),
-      physical_count: row.physical_count === null ? undefined : toNum(row.physical_count),
-      expiry_date: row.expiry_date ? dayjs(row.expiry_date) : undefined,
-      notes: row.notes || '',
     });
+    setEditDayNotes(Array.isArray(row.notes) ? row.notes.filter(Boolean) : []);
+    setEditNoteInput('');
     setEditModal({ open: true, row });
   };
 
@@ -180,9 +189,10 @@ export default function KitchenStockPage() {
       item_id: adjustModal.row.item_id,
       type,
       adjustment: adjustModal.qty,
+      notes: adjustModal.notes || null,
       entry_date: dateStr,
     });
-    setAdjustModal({ open: false, row: null, qty: 1 });
+    setAdjustModal({ open: false, row: null, qty: 1, notes: '' });
   };
 
   const handleRestock = () => {
@@ -192,10 +202,24 @@ export default function KitchenStockPage() {
       item_id: restockModal.item_id,
       type: 'received',
       expiry_date: restockModal.expiry ? restockModal.expiry.format('YYYY-MM-DD') : null,
+      notes: restockModal.notes || null,
       adjustment: restockModal.qty,
       entry_date: dateStr,
     });
-    setRestockModal({ open: false, item_id: null, qty: 1, expiry: null });
+    setRestockModal({ open: false, item_id: null, qty: 1, expiry: null, notes: '' });
+  };
+
+  const handleDispose = () => {
+    if (!canCreate || !disposeModal.item_id) return;
+    quickAdjustMutation.mutate({
+      location_id: selectedLocation,
+      item_id: disposeModal.item_id,
+      type: 'spoiled',
+      adjustment: disposeModal.qty,
+      notes: disposeModal.notes || null,
+      entry_date: dateStr,
+    });
+    setDisposeModal({ open: false, item_id: null, qty: 1, notes: '' });
   };
 
   const confirmDeleteEntry = (row) => {
@@ -250,18 +274,22 @@ export default function KitchenStockPage() {
     {
       title: 'Item Name', dataIndex: ['item', 'name'],
       render: (name, r) => (
-        <button type="button" onClick={() => openEditModal(r)} className="text-left group">
+        <button type="button" onClick={() => setDetailModal(r)} className="text-left group">
           <span className="block font-medium text-sm text-slate-700 group-hover:text-brand-dark transition-colors">{name}</span>
           <span className="block text-[10px] uppercase tracking-wide text-slate-400 group-hover:text-brand-dark transition-colors">{UNIT_META[r.item?.default_unit] || r.item?.default_unit}</span>
         </button>
       ),
     },
+    { title: 'Opening Stock', dataIndex: 'opening_stock', width: 90, align: 'center', render: (v) => <span className="text-slate-600">{toNum(v)}</span> },
+    { title: 'Received', dataIndex: 'received', width: 90, align: 'center', render: (v) => <span className="font-medium text-emerald-600">{toNum(v)}</span> },
+    { title: 'Sold', dataIndex: 'sold', width: 90, align: 'center', render: (v) => <span className="font-medium text-orange-600">{toNum(v)}</span> },
+    { title: 'Spoiled / Damaged', dataIndex: 'spoiled', width: 120, align: 'center', render: (v) => <span className="font-medium text-red-600">{toNum(v)}</span> },
     {
-      title: 'Stock Level', dataIndex: 'closing_stock', width: 140, align: 'center',
+      title: 'Stock Level', dataIndex: 'closing_stock', width: 130, align: 'center',
       render: (v, r) => {
         const low = toNum(v) <= toNum(r.item?.min_threshold) && toNum(r.item?.min_threshold) > 0;
         return (
-          <button type="button" onClick={() => canCreate && setAdjustModal({ open: true, row: r, qty: 1 })}
+          <button type="button" onClick={() => canCreate && setAdjustModal({ open: true, row: r, qty: 1, notes: '' })}
             className={`inline-flex items-center gap-1 rounded px-2.5 py-1 text-sm font-bold transition-colors ${low ? 'text-red-600 bg-red-50 hover:bg-red-100' : 'text-slate-800 bg-slate-100 hover:bg-slate-200'}`}>
             {toNum(v)}
             {low && <AlertTriangle className="w-3.5 h-3.5 text-red-500" />}
@@ -275,10 +303,12 @@ export default function KitchenStockPage() {
         <ActionMenu
           record={r}
           actionItems={() => [
+            ...(canCreate ? [{ key: 'adjust', label: 'Adjust Stock', icon: <SlidersHorizontal className="w-3.5 h-3.5" /> }] : []),
             { key: 'edit', label: 'Edit Entry', icon: <Pencil className="w-3.5 h-3.5" /> },
             ...(canUpdate && r.id ? [{ key: 'delete', label: 'Delete Entry', icon: <Trash2 className="w-3.5 h-3.5" />, danger: true }] : []),
           ]}
           onAction={(key) => {
+            if (key === 'adjust') setAdjustModal({ open: true, row: r, qty: 1, notes: '' });
             if (key === 'edit') openEditModal(r);
             if (key === 'delete') confirmDeleteEntry(r);
           }}
@@ -341,20 +371,16 @@ export default function KitchenStockPage() {
   // ── Mobile fields ──
   const mobileEntryFields = (row) => [
     { key: 'name', dataIndex: ['item', 'name'] },
-    {
-      key: 'cat', label: 'Category',
-      render: (_, r) => CATEGORY_META[r.item?.category]?.label || 'Other',
-    },
+    { key: 'opening', label: 'Opening', render: (_, r) => toNum(r.opening_stock) },
+    { key: 'received', label: 'Received', render: (_, r) => <span className="text-emerald-600 font-medium">{toNum(r.received)}</span> },
+    { key: 'sold', label: 'Sold', render: (_, r) => <span className="text-orange-600 font-medium">{toNum(r.sold)}</span> },
+    { key: 'spoiled', label: 'Spoiled/Dmg', render: (_, r) => <span className="text-red-600 font-medium">{toNum(r.spoiled)}</span> },
     {
       key: 'stock', label: 'Stock Level',
       render: (_, r) => {
         const low = toNum(r.closing_stock) <= toNum(r.item?.min_threshold) && toNum(r.item?.min_threshold) > 0;
         return <span className={low ? 'text-red-600 font-semibold' : ''}>{toNum(r.closing_stock)} <span className="text-xs text-slate-400">{UNIT_META[r.item?.default_unit] || ''}</span></span>;
       },
-    },
-    {
-      key: 'expiry', label: 'Expiry',
-      render: (_, r) => renderExpiry(r.expiry_date),
     },
   ];
 
@@ -442,10 +468,16 @@ export default function KitchenStockPage() {
               </Select>
               <div className="flex-1" />
               {canCreate && (
-                <Button size="small" icon={<PackagePlus className="w-3.5 h-3.5" />} className="flex items-center gap-1 !text-xs !bg-emerald-600 hover:!bg-emerald-500 !border-0 text-white"
-                  onClick={() => setRestockModal({ open: true, item_id: null, qty: 1, expiry: null })}>
-                  Restock
-                </Button>
+                <>
+                  <Button size="small" icon={<PackagePlus className="w-3.5 h-3.5" />} className="flex items-center gap-1 !text-xs !bg-emerald-600 hover:!bg-emerald-500 !border-0 text-white"
+                    onClick={() => setRestockModal({ open: true, item_id: null, qty: 1, expiry: null, notes: '' })}>
+                    Restock
+                  </Button>
+                  <Button size="small" icon={<AlertTriangle className="w-3.5 h-3.5" />} className="flex items-center gap-1 !text-xs !bg-red-600 hover:!bg-red-500 !border-0 text-white"
+                    onClick={() => setDisposeModal({ open: true, item_id: null, qty: 1, notes: '' })}>
+                    Dispose Stock
+                  </Button>
+                </>
               )}
               <Button size="small" icon={<FileDown className="w-3.5 h-3.5" />} className="flex items-center gap-1 !text-xs hover:!bg-brand-dark hover:!text-white hover:!border-brand-dark"
                 onClick={handleExport}>
@@ -481,10 +513,9 @@ export default function KitchenStockPage() {
                           <MobileCard
                             record={r}
                             fields={mobileEntryFields(r)}
-                            onClick={() => openEditModal(r)}
+                            onClick={() => setDetailModal(r)}
                             actions={canCreate ? [
-                              { label: 'Add (+)', icon: <Plus className="w-3.5 h-3.5" />, onClick: (row) => setAdjustModal({ open: true, row, qty: 1 }) },
-                              { label: 'Consume', icon: <Minus className="w-3.5 h-3.5" />, danger: true, onClick: (row) => setAdjustModal({ open: true, row, qty: 1 }) },
+                              { label: 'Adjust Stock', icon: <SlidersHorizontal className="w-3.5 h-3.5" />, onClick: (row) => setAdjustModal({ open: true, row, qty: 1, notes: '' }) },
                             ] : []}
                           />
                         )}
@@ -542,11 +573,11 @@ export default function KitchenStockPage() {
         </>
       )}
 
-      {/* ── STOCK LEVEL POPUP ── */}
+      {/* ── ADJUST STOCK POPUP ── */}
       <Modal
-        title={<span className="text-sm font-bold text-slate-700">{adjustModal.row?.item?.name} — stock level</span>}
+        title={<span className="text-sm font-bold text-slate-700">{adjustModal.row?.item?.name} — adjust stock</span>}
         open={adjustModal.open}
-        onCancel={() => setAdjustModal({ open: false, row: null, qty: 1 })}
+        onCancel={() => setAdjustModal({ open: false, row: null, qty: 1, notes: '' })}
         footer={null}
         destroyOnClose
         className="top-8">
@@ -560,6 +591,15 @@ export default function KitchenStockPage() {
         <div className="flex items-center gap-2 mb-4">
           <span className="text-sm font-medium text-slate-700">Quantity:</span>
           <InputNumber min={1} value={adjustModal.qty} onChange={(v) => setAdjustModal(m => ({ ...m, qty: v || 1 }))} className="flex-1" />
+        </div>
+        <div className="mb-4">
+          <label className="text-xs font-semibold text-slate-600 mb-1 block">Notes (optional)</label>
+          <Input.TextArea
+            rows={2}
+            value={adjustModal.notes}
+            onChange={(e) => setAdjustModal(m => ({ ...m, notes: e.target.value }))}
+            placeholder="e.g. 5 packs received from supplier"
+          />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <Button block danger icon={<Minus className="w-4 h-4" />} disabled={!canCreate}
@@ -580,7 +620,7 @@ export default function KitchenStockPage() {
       <Modal
         title={<span className="text-sm font-bold text-slate-700">Restock — add to received</span>}
         open={restockModal.open}
-        onCancel={() => setRestockModal({ open: false, item_id: null, qty: 1, expiry: null })}
+        onCancel={() => setRestockModal({ open: false, item_id: null, qty: 1, expiry: null, notes: '' })}
         onOk={handleRestock}
         okButtonProps={{ disabled: !restockModal.item_id }}
         confirmLoading={quickAdjustMutation.isPending}
@@ -609,9 +649,63 @@ export default function KitchenStockPage() {
             <InputNumber min={1} value={restockModal.qty} onChange={(v) => setRestockModal(m => ({ ...m, qty: v || 1 }))} className="w-full" />
           </div>
           <div>
+            <label className="text-xs font-semibold text-slate-600 mb-1 block">Notes (optional)</label>
+            <Input.TextArea
+              rows={2}
+              value={restockModal.notes}
+              onChange={(e) => setRestockModal(m => ({ ...m, notes: e.target.value }))}
+              placeholder="e.g. 10kg delivery from Bongo Fresh"
+            />
+          </div>
+          <div>
             <label className="text-xs font-semibold text-slate-600 mb-1 block">Expiry (optional)</label>
             <DatePicker className="w-full" value={restockModal.expiry}
               onChange={(d) => setRestockModal(m => ({ ...m, expiry: d }))} placeholder="Received batch expiry date" />
+          </div>
+        </div>
+      </Modal>
+
+      {/* ── DISPOSE STOCK MODAL ── */}
+      <Modal
+        title={<span className="text-sm font-bold text-slate-700">Dispose Stock — record spoiled / damaged</span>}
+        open={disposeModal.open}
+        onCancel={() => setDisposeModal({ open: false, item_id: null, qty: 1, notes: '' })}
+        onOk={handleDispose}
+        okText="Record Spoiled"
+        okButtonProps={{ danger: true, disabled: !disposeModal.item_id }}
+        confirmLoading={quickAdjustMutation.isPending}
+        destroyOnClose
+        className="top-8">
+        <p className="text-xs text-slate-500 mb-4">
+          Adds the quantity to {dateStr}&apos;s Spoiled / Damaged column for the selected item.
+        </p>
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs font-semibold text-slate-600 mb-1 block">Item</label>
+            <Select
+              showSearch
+              optionFilterProp="children"
+              placeholder="Select item"
+              className="w-full"
+              value={disposeModal.item_id || undefined}
+              onChange={(v) => setDisposeModal(m => ({ ...m, item_id: v }))}>
+              {(items || []).filter(i => i.is_active !== false).map(i => (
+                <Option key={i.id} value={i.id}>{i.name} ({UNIT_META[i.default_unit] || i.default_unit})</Option>
+              ))}
+            </Select>
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-slate-600 mb-1 block">Quantity</label>
+            <InputNumber min={1} value={disposeModal.qty} onChange={(v) => setDisposeModal(m => ({ ...m, qty: v || 1 }))} className="w-full" />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-slate-600 mb-1 block">Notes (optional)</label>
+            <Input.TextArea
+              rows={2}
+              value={disposeModal.notes}
+              onChange={(e) => setDisposeModal(m => ({ ...m, notes: e.target.value }))}
+              placeholder="e.g. expired before opening, stored at wrong temp"
+            />
           </div>
         </div>
       </Modal>
@@ -633,9 +727,7 @@ export default function KitchenStockPage() {
               received: values.received || 0,
               sold: values.sold || 0,
               spoiled: values.spoiled || 0,
-              physical_count: values.physical_count === undefined || values.physical_count === null ? null : values.physical_count,
-              expiry_date: values.expiry_date ? values.expiry_date.format('YYYY-MM-DD') : null,
-              notes: values.notes || null,
+              notes: editDayNotes.length ? editDayNotes : null,
             }]);
             setEditModal({ open: false, row: null });
           }}>
@@ -668,15 +760,30 @@ export default function KitchenStockPage() {
           <Form.Item name="spoiled" label={<span className="text-xs font-semibold text-slate-600">Spoiled / Damaged</span>}>
             <InputNumber min={0} className="w-full" />
           </Form.Item>
-          <Form.Item name="physical_count" label={<span className="text-xs font-semibold text-slate-600">Physical Count</span>}>
-            <InputNumber className="w-full" />
-          </Form.Item>
-          <Form.Item name="expiry_date" label={<span className="text-xs font-semibold text-slate-600">Expiry (received lot)</span>}>
-            <DatePicker className="w-full" placeholder="Optional received batch expiry" />
-          </Form.Item>
-          <Form.Item name="notes" label={<span className="text-xs font-semibold text-slate-600">Notes</span>}>
-            <Input.TextArea rows={2} />
-          </Form.Item>
+          {/* Day-level notes list (append-only with remove) */}
+          <div>
+            <label className="text-xs font-semibold text-slate-600 mb-1 block">Day Notes</label>
+            {editDayNotes.length > 0 && (
+              <div className="space-y-1.5 mb-2">
+                {editDayNotes.map((n, i) => (
+                  <div key={`${i}-${n}`} className="flex items-center justify-between gap-2 rounded border border-slate-100 bg-slate-50 px-2.5 py-1.5">
+                    <span className="text-xs text-slate-600 flex-1 break-words">{n}</span>
+                    <button type="button" onClick={() => setEditDayNotes((arr) => arr.filter((_, j) => j !== i))}
+                      className="text-slate-400 hover:text-red-600 shrink-0">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <Space.Compact style={{ width: '100%' }}>
+              <Input placeholder="Add a note for today" value={editNoteInput} onChange={(e) => setEditNoteInput(e.target.value)} />
+              <Button type="primary" className="!bg-brand-dark hover:!bg-brand-light !border-0"
+                onClick={() => { const t = editNoteInput.trim(); if (t) { setEditDayNotes((a) => [...a, t]); setEditNoteInput(''); } }}>
+                Add
+              </Button>
+            </Space.Compact>
+          </div>
         </Form>
       </Modal>
 
@@ -802,6 +909,94 @@ export default function KitchenStockPage() {
             <InputNumber min={0} className="w-full" />
           </Form.Item>
         </Form>
+      </Modal>
+
+      {/* ── ITEM DETAIL MODAL ── */}
+      <Modal
+        title={<span className="text-sm font-bold text-slate-700">{detailModal?.item?.name || 'Item Details'}</span>}
+        open={!!detailModal}
+        onCancel={() => setDetailModal(null)}
+        footer={null}
+        destroyOnClose
+        className="top-8">
+        <div className="mt-4 space-y-5">
+          {detailModal && (
+            <>
+              {/* Item meta */}
+              <div className="rounded-lg bg-slate-50 border border-slate-100 p-3 grid grid-cols-2 gap-3 text-xs">
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">Category</p>
+                  <span>{CATEGORY_META[detailModal.item?.category]?.label || 'Other'}</span>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">Unit</p>
+                  <span>{UNIT_META[detailModal.item?.default_unit] || detailModal.item?.default_unit || '—'}</span>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">Min Threshold</p>
+                  <span className="font-semibold">{toNum(detailModal.item?.min_threshold)}</span>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">Expiry</p>
+                  <span>{detailModal.expiry_date ? dayjs(detailModal.expiry_date).format('DD MMM YYYY') : '—'}</span>
+                </div>
+              </div>
+
+              {/* Day numbers */}
+              <div className="grid grid-cols-5 gap-2 text-center">
+                {[
+                  { label: 'Opening', value: toNum(detailModal.opening_stock), cls: 'text-slate-600' },
+                  { label: 'Received', value: toNum(detailModal.received), cls: 'text-emerald-600' },
+                  { label: 'Sold', value: toNum(detailModal.sold), cls: 'text-orange-600' },
+                  { label: 'Spoiled', value: toNum(detailModal.spoiled), cls: 'text-red-600' },
+                  { label: 'Stock', value: toNum(detailModal.closing_stock), cls: toNum(detailModal.closing_stock) <= toNum(detailModal.item?.min_threshold) && toNum(detailModal.item?.min_threshold) > 0 ? 'text-red-600 font-bold' : 'font-bold' },
+                ].map(c => (
+                  <div key={c.label} className="rounded-lg border border-slate-100 p-2">
+                    <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold mb-1">{c.label}</p>
+                    <span className={`text-sm ${c.cls}`}>{c.value}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Day-level notes */}
+              <div>
+                <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold mb-2">Day Notes</p>
+                {detailModal.notes?.length ? (
+                  <div className="space-y-1.5">
+                    {detailModal.notes.map((n, i) => (
+                      <div key={`${i}-${n}`} className="rounded bg-slate-50 border border-slate-100 px-2.5 py-1.5 text-xs text-slate-600">{n}</div>
+                    ))}
+                  </div>
+                ) : <p className="text-xs text-slate-300">No day notes</p>}
+              </div>
+
+              {/* Movement log (labeled notes) */}
+              <div>
+                <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold mb-2">Movements</p>
+                {detailModal.movements?.length ? (
+                  <div className="space-y-2">
+                    {detailModal.movements.map(m => {
+                      const meta = MOVE_TYPE_META[m.type] || { label: m.type, color: 'default' };
+                      return (
+                        <div key={m.id} className="flex items-start gap-2.5 rounded-lg border border-slate-100 p-2.5">
+                          <Tag color={meta.color} className="!m-0 shrink-0 !text-[10px]">{meta.label}</Tag>
+                          <div className="flex-1 min-w-0">
+                            {m.notes ? <p className="text-xs text-slate-700 break-words">{m.notes}</p> : <p className="text-xs italic text-slate-400">No comment</p>}
+                            <p className="text-[10px] text-slate-400 mt-0.5">
+                              {m.quantity} {UNIT_META[detailModal.item?.default_unit] || detailModal.item?.default_unit || ''}
+                              {m.recorded_by ? ` · ${m.recorded_by}` : ''}
+                              {m.created_at ? ` · ${dayjs(m.created_at).format('DD MMM HH:mm')}` : ''}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : <p className="text-xs text-slate-300">No movements recorded for this day</p>}
+              </div>
+            </>
+          )}
+        </div>
       </Modal>
     </div>
   );

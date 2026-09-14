@@ -1,5 +1,5 @@
 // backend/services/kitchenStock.service.js
-const { Location, KitchenItem, KitchenDailyEntry, User } = require('../models');
+const { Location, KitchenItem, KitchenDailyEntry, KitchenStockMovement, User } = require('../models');
 const { Op } = require('sequelize');
 const ExcelJS = require('exceljs');
 
@@ -11,11 +11,41 @@ const num = (v) => {
 
 const round2 = (v) => Math.round(num(v) * 100) / 100;
 
+const MOVEMENT_LABELS = { received: 'Received', sold: 'Sold', spoiled: 'Spoiled' };
+
+// Day-level notes are stored as a JSON array of strings (TEXT column).
+const parseNotes = (v) => {
+  if (!v) return [];
+  if (Array.isArray(v)) return v.filter((n) => n && String(n).trim()).map((n) => String(n).trim());
+  if (typeof v === 'string') {
+    const t = v.trim();
+    if (!t) return [];
+    if (t.startsWith('[')) {
+      try {
+        const a = JSON.parse(t);
+        if (Array.isArray(a)) return parseNotes(a);
+      } catch { /* fall through to legacy string */ }
+    }
+    return [t];
+  }
+  return [];
+};
+
+const serializeNotes = (arr) => {
+  const a = parseNotes(arr);
+  return a.length ? JSON.stringify(a) : null;
+};
+
 const ENTRY_INCLUDES = () => [
   { model: Location, as: 'location', attributes: ['id', 'name', 'code'] },
   { model: KitchenItem, as: 'item', attributes: ['id', 'name', 'category', 'default_unit', 'min_threshold'] },
   { model: User, as: 'creator', attributes: ['id', 'name'] },
   { model: User, as: 'updater', attributes: ['id', 'name'] },
+  {
+    model: KitchenStockMovement, as: 'movements',
+    include: [{ model: User, as: 'creator', attributes: ['id', 'name'] }],
+    order: [['created_at', 'ASC']],
+  },
 ];
 
 const toDecimal = (v) => (v === null || v === undefined ? null : round2(v));
@@ -32,6 +62,17 @@ const serializeEntry = (entry) => {
     closing_stock: num(e.closing_stock),
     physical_count: e.physical_count === null || e.physical_count === undefined ? null : num(e.physical_count),
     variance: e.variance === null || e.variance === undefined ? null : num(e.variance),
+    notes: parseNotes(e.notes),
+    movements: Array.isArray(e.movements)
+      ? e.movements.map((m) => ({
+          id: m.id,
+          type: m.type,
+          quantity: num(m.quantity),
+          notes: m.notes || null,
+          created_at: m.created_at,
+          recorded_by: m.creator ? m.creator.name || m.creator.id : null,
+        }))
+      : [],
   };
 };
 
@@ -193,7 +234,8 @@ const listEntries = async (filters = {}) => {
         closing_stock: prevClosingByItem[it.id] ?? 0,
         physical_count: null,
         variance: null,
-        notes: null,
+        notes: [],
+        movements: [],
         expiry_date: prevExpiryByItem[it.id] ?? null,
         location: null,
         item: { id: it.id, name: it.name, category: it.category, default_unit: it.default_unit, min_threshold: num(it.min_threshold) },
@@ -254,7 +296,7 @@ const upsertEntries = async (body, userId) => {
         closing_stock: closing,
         physical_count: physical,
         variance,
-        notes: raw.notes || null,
+        notes: serializeNotes(raw.notes),
         expiry_date: raw.expiry_date || null,
         created_by: userId,
       },
@@ -269,7 +311,7 @@ const upsertEntries = async (body, userId) => {
         closing_stock: closing,
         physical_count: physical,
         variance,
-        notes: raw.notes !== undefined ? raw.notes || null : entry.notes,
+        notes: raw.notes !== undefined ? serializeNotes(raw.notes) : entry.notes,
         expiry_date: raw.expiry_date !== undefined ? raw.expiry_date || null : entry.expiry_date,
         updated_by: userId,
       });
@@ -287,6 +329,7 @@ const upsertEntries = async (body, userId) => {
 const deleteEntry = async (id) => {
   const entry = await KitchenDailyEntry.findByPk(id);
   if (!entry) return null;
+  await KitchenStockMovement.destroy({ where: { entry_id: id } });
   await entry.destroy();
   return true;
 };
@@ -313,7 +356,7 @@ const updateEntry = async (id, body, userId) => {
     closing_stock: closing,
     physical_count: physical,
     variance,
-    notes: body.notes !== undefined ? body.notes || null : entry.notes,
+    notes: body.notes !== undefined ? serializeNotes(body.notes) : entry.notes,
     expiry_date: body.expiry_date !== undefined ? body.expiry_date || null : entry.expiry_date,
     updated_by: userId,
   });
@@ -386,6 +429,21 @@ const variance = physical === null ? null : round2(physical - closing);
     });
     await entry.reload({ include: ENTRY_INCLUDES() });
   }
+
+  // Record a labeled movement so the day's item detail shows what happened.
+  const qty = Math.abs(round2(adjustment));
+  await KitchenStockMovement.create({
+    location_id: locationId,
+    item_id: itemId,
+    entry_id: entry.id,
+    entry_date: entryDate,
+    type,
+    quantity: qty,
+    notes: body.notes ? String(body.notes).trim() || null : null,
+    created_by: userId,
+  });
+  await entry.reload({ include: ENTRY_INCLUDES() });
+
   return { ...serializeEntry(entry), qty_change: round2(adjustment), type };
 };
 
@@ -688,6 +746,17 @@ const exportEntriesExcel = async (filters = {}) => {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet(`Kitchen Stock ${location.code || location.name}`);
 
+  // Movement notes per entry so the export mirrors what the detail view shows.
+  const entryIds = entries.map((e) => e.id);
+  const movementRows = entryIds.length
+    ? await KitchenStockMovement.findAll({ where: { entry_id: { [Op.in]: entryIds } } })
+    : [];
+  const movementsByEntry = {};
+  for (const m of movementRows) {
+    if (!movementsByEntry[m.entry_id]) movementsByEntry[m.entry_id] = [];
+    movementsByEntry[m.entry_id].push(m);
+  }
+
   ws.columns = [
     { header: 'NO', key: 'no', width: 6 },
     { header: 'DETAILS', key: 'details', width: 28 },
@@ -710,6 +779,12 @@ const exportEntriesExcel = async (filters = {}) => {
   for (const e of entries) {
     idx++;
     const variance = e.variance === null || e.variance === undefined ? '' : num(e.variance);
+    const dayNotes = parseNotes(e.notes);
+    const moveLines = (movementsByEntry[e.id] || []).map((m) =>
+      m.notes
+        ? `${MOVEMENT_LABELS[m.type] || m.type}: ${num(m.quantity)} (${m.notes})`
+        : `${MOVEMENT_LABELS[m.type] || m.type}: ${num(m.quantity)}`
+    );
     ws.addRow({
       no: idx - 1,
       details: e.item?.name || `#${e.item_id}`,
@@ -722,7 +797,7 @@ const exportEntriesExcel = async (filters = {}) => {
       closing: num(e.closing_stock),
       physical: e.physical_count === null || e.physical_count === undefined ? '' : num(e.physical_count),
       variance,
-      notes: e.notes || '',
+      notes: [...dayNotes, ...moveLines].join(' | '),
     });
     // Highlight negative variance (shortage) in red
     if (num(variance) < 0) {

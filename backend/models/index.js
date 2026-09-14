@@ -522,7 +522,7 @@ const KitchenDailyEntry = sequelize.define('KitchenDailyEntry', {
   closing_stock: { type: DataTypes.DECIMAL(10, 2), allowNull: false, defaultValue: 0 },
   physical_count: { type: DataTypes.DECIMAL(10, 2) },
   variance: { type: DataTypes.DECIMAL(10, 2) },
-  notes: { type: DataTypes.STRING(255) },
+  notes: { type: DataTypes.TEXT },
   expiry_date: { type: DataTypes.DATEONLY },
   created_by: { type: DataTypes.INTEGER, allowNull: false },
   updated_by: { type: DataTypes.INTEGER },
@@ -532,6 +532,26 @@ const KitchenDailyEntry = sequelize.define('KitchenDailyEntry', {
     { unique: true, fields: ['location_id', 'item_id', 'entry_date'] },
     { fields: ['location_id', 'entry_date'] },
     { fields: ['entry_date'] },
+  ],
+});
+
+// One row per Add / Consume / Dispose / Restock action. Lets the day's item
+// detail view show labeled, timestamped notes per movement type.
+const KitchenStockMovement = sequelize.define('KitchenStockMovement', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  location_id: { type: DataTypes.INTEGER, allowNull: false },
+  item_id: { type: DataTypes.INTEGER, allowNull: false },
+  entry_id: { type: DataTypes.INTEGER, allowNull: false },
+  entry_date: { type: DataTypes.DATEONLY, allowNull: false },
+  type: { type: DataTypes.ENUM('received', 'sold', 'spoiled'), allowNull: false },
+  quantity: { type: DataTypes.DECIMAL(10, 2), allowNull: false, defaultValue: 0 },
+  notes: { type: DataTypes.TEXT },
+  created_by: { type: DataTypes.INTEGER, allowNull: false },
+}, {
+  tableName: 'kitchen_stock_movements',
+  indexes: [
+    { fields: ['entry_id'] },
+    { fields: ['location_id', 'item_id', 'entry_date'] },
   ],
 });
 
@@ -847,6 +867,11 @@ KitchenItem.hasMany(KitchenDailyEntry, { foreignKey: 'item_id', as: 'entries' })
 KitchenDailyEntry.belongsTo(KitchenItem, { foreignKey: 'item_id', as: 'item' });
 KitchenDailyEntry.belongsTo(User, { foreignKey: 'created_by', as: 'creator' });
 KitchenDailyEntry.belongsTo(User, { foreignKey: 'updated_by', as: 'updater' });
+KitchenDailyEntry.hasMany(KitchenStockMovement, { foreignKey: 'entry_id', as: 'movements', onDelete: 'CASCADE', hooks: true });
+KitchenStockMovement.belongsTo(KitchenDailyEntry, { foreignKey: 'entry_id', as: 'entry' });
+KitchenStockMovement.belongsTo(Location, { foreignKey: 'location_id', as: 'location' });
+KitchenStockMovement.belongsTo(KitchenItem, { foreignKey: 'item_id', as: 'item' });
+KitchenStockMovement.belongsTo(User, { foreignKey: 'created_by', as: 'creator' });
 
 Ticket.belongsTo(Machine, { foreignKey: 'machine_id', as: 'machine' });
 Ticket.belongsTo(Shop, { foreignKey: 'shop_id', as: 'shop' });
@@ -897,7 +922,7 @@ module.exports = {
   ExpenseCategory, Expense, Invoice, Payment, CreditNote, Payroll, SalePayment,
   TokenInventory, Product, StockMovement, StockLevel, VipOffer,
   Sale, SaleItem, SalesReturn, StockAudit, AuditItem, StockTransfer, LowStockAlert,
-  Location, KitchenItem, KitchenDailyEntry,
+  Location, KitchenItem, KitchenDailyEntry, KitchenStockMovement,
   TicketGroup, Ticket, TicketActivity,
   Department, Position, Employee, Attendance,
   SmsLog, Notification,
