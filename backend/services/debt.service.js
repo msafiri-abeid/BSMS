@@ -34,7 +34,7 @@ const create = async (data, userId) => {
   });
 };
 
-const recordPayment = async (id, amount, userId, receiptUrl) => {
+const recordPayment = async (id, amount, userId, receiptUrl, receiptOptimized, receiptThumb) => {
   const debt = await MachineDebt.findByPk(id);
   if (!debt) return null;
   if (debt.status === 'paid' || debt.status === 'written_off') {
@@ -50,6 +50,8 @@ const recordPayment = async (id, amount, userId, receiptUrl) => {
     status: newStatus,
     paid_at: paidAt,
     receipt_url: receiptUrl || debt.receipt_url,
+    receipt_optimized: receiptOptimized || debt.receipt_optimized,
+    receipt_thumb: receiptThumb || debt.receipt_thumb,
   });
 
   if (newStatus === 'paid' && debt.type === 'token') {

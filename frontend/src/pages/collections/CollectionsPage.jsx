@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Table, Tag, Button, Space, DatePicker, Select, Input, InputNumber, Typography, Empty, Modal, App, Image, List, Segmented } from 'antd';
+import { Table, Tag, Button, Space, DatePicker, Select, Input, InputNumber, Typography, Empty, Modal, App, List, Segmented } from 'antd';
 import { Download, Plus, Eye, Edit3, Trash2, Camera, Search, X, CheckCircle, XCircle, FileDown, TrendingUp, ShieldCheck, ClipboardList, Calendar, RefreshCw } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { collectionsAPI, financeAPI, shopsAPI, usersAPI } from '../../services/api';
@@ -8,6 +8,7 @@ import KpiCard from '../../components/KpiCard';
 import ActionMenu from '../../components/ActionMenu';
 import MobileCard from '../../components/MobileCard';
 import PhotoUpload from '../../components/PhotoUpload';
+import OptimizedImage from '../../components/OptimizedImage';
 import CreateAssignmentModal from './CreateAssignmentModal';
 import RecordCollectionModal from './RecordCollectionModal';
 import dayjs from 'dayjs';
@@ -610,7 +611,7 @@ export default function CollectionsPage() {
             {viewRecord.meter_image_url ? (
               <div>
                 <Text className="text-xs font-semibold uppercase tracking-wider text-slate-500 block mb-2">Meter Image</Text>
-                <Image src={viewRecord.meter_image_url} className="rounded-lg max-h-64 object-contain border border-slate-200" />
+                <OptimizedImage src={viewRecord.meter_image_url} optimizedSrc={viewRecord.meter_image_optimized} thumbSrc={viewRecord.meter_image_thumb} className="rounded-lg max-h-64 object-contain border border-slate-200" />
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center h-40 bg-slate-50 rounded-lg text-slate-400 border border-slate-200">
@@ -750,7 +751,7 @@ export default function CollectionsPage() {
                   <Text className="text-xs font-semibold text-slate-500 block mb-1">Meter Photo</Text>
                   {editRecord.meter_image_url && !editRemoveImage ? (
                     <div className="flex items-center gap-2 mb-2">
-                      <Image src={editRecord.meter_image_url} className="max-h-16 rounded border border-slate-200" preview={{ mask: 'View' }} />
+                      <OptimizedImage src={editRecord.meter_image_url} optimizedSrc={editRecord.meter_image_optimized} thumbSrc={editRecord.meter_image_thumb} useThumb className="max-h-16 rounded border border-slate-200" />
                       <Button size="small" icon={<Trash2 className="w-3 h-3" />}
                         onClick={() => setEditRemoveImage(true)}
                         className="flex items-center gap-1 !text-xs text-red-500 hover:!border-red-400">

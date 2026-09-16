@@ -1,11 +1,12 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Table, Tag, Button, Spin, Space, DatePicker, InputNumber, Input, Modal, App, Image, Radio, Upload, Select } from 'antd';
+import { Table, Tag, Button, Spin, Space, DatePicker, InputNumber, Input, Modal, App, Radio, Upload, Select } from 'antd';
 import { ArrowLeft, Store, Cpu, TrendingUp, DollarSign, PiggyBank, MapPin, FileText, BarChart3, History, ExternalLink, Receipt, Wallet, Landmark, Plus, Eye, Camera, Upload as UploadIcon, Download, Building2, CalendarDays, FilterX, Ban } from 'lucide-react';
 import { ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, ReferenceLine, Brush } from 'recharts';
 import { shopsAPI, financeAPI, collectionsAPI, accountsAPI } from '../../services/api';
 import KpiCard from '../../components/KpiCard';
+import OptimizedImage from '../../components/OptimizedImage';
 import TransactionDetailModal from '../../components/TransactionDetailModal';
 import ActionMenu from '../../components/ActionMenu';
 import { useAuthStore } from '../../store/authStore';
@@ -839,7 +840,7 @@ export default function ShopDetailPage() {
             {viewDetail.meter_image_url ? (
               <div>
                 <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 block mb-2">Meter Image</span>
-                <Image src={viewDetail.meter_image_url} className="rounded-lg max-h-64 object-contain border border-slate-200" />
+                <OptimizedImage src={viewDetail.meter_image_url} optimizedSrc={viewDetail.meter_image_optimized} thumbSrc={viewDetail.meter_image_thumb} className="rounded-lg max-h-64 object-contain border border-slate-200" />
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center h-40 bg-slate-50 rounded-lg text-slate-400 border border-slate-200">

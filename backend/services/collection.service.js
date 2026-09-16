@@ -110,7 +110,7 @@ const payOutstandingDebts = async (machineId, amount, options = {}) => {
   return amount - remaining;
 };
 
-const submitCollection = async ({ machineId, shopId, collectorId, currCount, meterImageUrl, novomaticData, assignmentId, skipDebtRepayment, collectionDate }) => {
+const submitCollection = async ({ machineId, shopId, collectorId, currCount, meterImageUrl, meterImageOptimized, meterImageThumb, novomaticData, assignmentId, skipDebtRepayment, collectionDate }) => {
   const machine = await Machine.findByPk(machineId);
   if (!machine) throw new Error('Machine not found');
 
@@ -178,6 +178,8 @@ const submitCollection = async ({ machineId, shopId, collectorId, currCount, met
       owner_tzs: calcData.owner_tzs,
       net_tzs: calcData.net_tzs,
       meter_image_url: meterImageUrl,
+      meter_image_optimized: meterImageOptimized,
+      meter_image_thumb: meterImageThumb,
       collection_date: colDate,
       collected_at: new Date(),
     }, { transaction: t });
@@ -189,6 +191,8 @@ const submitCollection = async ({ machineId, shopId, collectorId, currCount, met
         closing_credits: novomaticData.closing_credits,
         total_credits: calcData.total_credits,
         screenshot_url: novomaticData.screenshot_url || meterImageUrl,
+        screenshot_optimized: novomaticData.screenshot_url ? null : meterImageOptimized,
+        screenshot_thumb: novomaticData.screenshot_url ? null : meterImageThumb,
         read_at: new Date(),
       }, { transaction: t });
       await machine.update({ previous_count: novomaticData.closing_credits }, { transaction: t });
@@ -293,6 +297,8 @@ const updateCollection = async (id, data) => {
         closing_credits: nd.closing_credits,
         total_credits: totalCredits,
         screenshot_url: 'meter_image_url' in data ? (data.meter_image_url || null) : collection.novomaticReading?.screenshot_url,
+        screenshot_optimized: 'meter_image_url' in data ? (data.meter_image_optimized || null) : collection.novomaticReading?.screenshot_optimized,
+        screenshot_thumb: 'meter_image_url' in data ? (data.meter_image_thumb || null) : collection.novomaticReading?.screenshot_thumb,
         read_at: new Date(),
       };
       await NovomaticReading.update(nrUpdate, {
@@ -318,6 +324,8 @@ const updateCollection = async (id, data) => {
 
     if ('meter_image_url' in data) {
       updateData.meter_image_url = data.meter_image_url || null;
+      updateData.meter_image_optimized = data.meter_image_optimized || null;
+      updateData.meter_image_thumb = data.meter_image_thumb || null;
     }
 
     await collection.update(updateData, { transaction: t });

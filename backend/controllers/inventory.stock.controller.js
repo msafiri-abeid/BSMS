@@ -4,6 +4,8 @@ const addStock = async (req, res, next) => {
   try {
     const { product_id, qty, reference_no, note } = req.body;
     const receipt_url = req.file?.path || null;
+    const receipt_optimized = req.file?.optimizedPath || null;
+    const receipt_thumb = req.file?.thumbnailPath || null;
 
     if (!product_id || !qty || qty < 1) {
       return res.status(400).json({ success: false, message: 'product_id and positive qty required' });
@@ -32,6 +34,8 @@ const addStock = async (req, res, next) => {
         reference_no: reference_no || null,
         note: note || null,
         receipt_url,
+        receipt_optimized,
+        receipt_thumb,
         created_by: req.user.id,
       }, { transaction: t });
 

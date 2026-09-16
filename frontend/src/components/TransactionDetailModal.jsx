@@ -1,8 +1,9 @@
-import { Modal, Tag, Image, Spin } from 'antd';
+import { Modal, Tag, Spin } from 'antd';
 import { ArrowUpRight, ArrowDownRight, ArrowLeftRight, Receipt, Ban, CalendarDays, User, Landmark, Building2, FileText } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { accountsAPI } from '../services/api';
 import dayjs from 'dayjs';
+import OptimizedImage from './OptimizedImage';
 
 const fmt = (n) => `TZS ${(n || 0).toLocaleString()}`;
 
@@ -124,7 +125,7 @@ export default function TransactionDetailModal({ tx, open, onClose }) {
           <div>
             <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 block mb-2"><Receipt size={11} className="inline mr-1" />Attached Receipt</span>
             {d?.receipt_url ? (
-              <Image src={d.receipt_url} alt="Receipt" className="rounded-lg max-h-64 object-contain border border-slate-200" />
+              <OptimizedImage src={d.receipt_url} optimizedSrc={d.receipt_optimized} thumbSrc={d.receipt_thumb} alt="Receipt" className="rounded-lg max-h-64 object-contain border border-slate-200" />
             ) : (
               <div className="flex flex-col items-center justify-center h-32 bg-slate-50 rounded-lg text-slate-400 border border-slate-200">
                 <Receipt className="w-8 h-8 mb-1" />

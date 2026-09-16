@@ -1,6 +1,7 @@
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 
 const UPLOAD_DIR = path.resolve(__dirname, '..', process.env.UPLOAD_DIR || 'uploads');
 
@@ -17,7 +18,7 @@ const localDisk = (subfolder) => {
     filename: (req, file, cb) => {
       const sub = getSub(req);
       const ext = path.extname(file.originalname) || '';
-      cb(null, `${sub.slice(0, -1)}-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
+      cb(null, `${sub.slice(0, -1)}-${crypto.randomUUID()}${ext}`);
     },
   });
   return {
@@ -49,4 +50,5 @@ module.exports = {
   uploadAvatar: base('avatars'),
   uploadTicket: base('tickets'),
   uploadEmployee: base('employees').array('documents', 5),
+  processUploadedImages: require('./imageProcessor').processUploadedImages,
 };

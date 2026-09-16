@@ -437,3 +437,24 @@ If OCR confidence < 0.8, the form flags values for manual confirmation — the c
 ## Currency
 
 All monetary amounts are stored and processed as **integers in TZS** (Tanzanian Shillings). No decimal values. The system displays amounts formatted with `.toLocaleString()` for readability.
+
+## Image Optimization (Sep 2026)
+
+All uploaded photos (collection meter images, expense receipts, debt receipts, deposit/withdraw receipts, stock receipts) are processed **synchronously on upload** with `sharp`:
+
+- **WebP re-encode** — max 1200px wide, quality 80
+- **Thumbnail** — 200px wide, quality 75
+- Originals are never modified or deleted; the DB stores explicit `*_optimized` / `*_thumb` URLs (no frontend derivation)
+- Animated GIFs are preserved via `sharp({ animated: true, loop: true })`
+- If compression fails, the middleware logs and the original URL is stored as-is (graceful degradation)
+
+The processed files are served by `express.static` with `Cache-Control: public, max-age=2592000, immutable` (30 days), so browser caching is aggressive and safe because every upload gets a unique filename. The frontend `OptimizedImage` component lazy-loads via IntersectionObserver, prefers the WebP variant, and falls back to the original.
+
+**Backfill existing uploads** (run from `backend/`):
+```bash
+node scripts/optimizeExistingImages.js --dry-run   # preview
+node scripts/optimizeExistingImages.js --files-only # compress files only (before DB ALTER)
+node scripts/optimizeExistingImages.js             # files + DB column backfill
+```
+
+**New DB columns** (additive, nullable): `collections.meter_image_optimized/thumb`, `novomatic_readings.screenshot_optimized/thumb`, `expenses.receipt_optimized/thumb`, `machine_debts.receipt_optimized/thumb`, `stock_movements.receipt_optimized/thumb`, `account_transactions.receipt_optimized/thumb`. Dev applies automatically via `sequelize.sync({ alter: true })`. **Production requires a manual ALTER** — see `AGENTS.md` (Image Optimization section) for the SQL.

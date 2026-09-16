@@ -2,7 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const { authenticate, checkPermission } = require('../middleware/auth');
-const { uploadContract, uploadDocuments, uploadReceipt, uploadMeter, uploadTicket, uploadEmployee } = require('../middleware/upload');
+const { uploadContract, uploadDocuments, uploadReceipt, uploadMeter, uploadTicket, uploadEmployee, processUploadedImages } = require('../middleware/upload');
 
 const authC = require('../controllers/auth.controller');
 const machineC = require('../controllers/machine.controller');
@@ -78,11 +78,11 @@ router.post('/collections/assignments', authenticate, checkPermission('collectio
 router.put('/collections/assignments/:id', authenticate, checkPermission('collections', 'update'), collectionC.editAssignment);
 router.delete('/collections/assignments/:id', authenticate, checkPermission('collections', 'delete'), collectionC.deleteAssignment);
 router.get('/collections', authenticate, checkPermission('collections', 'read'), collectionC.list);
-router.post('/collections', authenticate, uploadMeter.single('meter_image'), collectionC.submit);
+router.post('/collections', authenticate, uploadMeter.single('meter_image'), processUploadedImages, collectionC.submit);
 router.post('/collections/assignments/:id/open', authenticate, collectionC.openMachine);
 router.get('/collections/assignments/export', authenticate, checkPermission('collections', 'read'), collectionC.exportAssignments);
 router.get('/collections/weekly-targets', authenticate, checkPermission('collections', 'read'), collectionC.weeklyTargets);
-router.put('/collections/:id', authenticate, uploadMeter.single('meter_image'), (req, res, next) => {
+router.put('/collections/:id', authenticate, uploadMeter.single('meter_image'), processUploadedImages, (req, res, next) => {
   const allowed = ['Admin', 'General Manager', 'Operations Manager', 'Supervisor', 'Cashier', 'Finance'];
   if (allowed.includes(req.user.role?.name)) return collectionC.update(req, res, next);
   return res.status(403).json({ success: false, message: 'Permission denied' });
@@ -100,8 +100,8 @@ router.delete('/collections/:id', authenticate, (req, res, next) => {
 
 // ── FINANCE ───────────────────────────────────────────────────
 router.get('/finance/expenses', authenticate, checkPermission('finance', 'read'), financeC.listExpenses);
-router.post('/finance/expenses', authenticate, checkPermission('finance', 'create'), uploadReceipt.single('receipt'), financeC.submitExpense);
-router.put('/finance/expenses/:id', authenticate, checkPermission('finance', 'update'), uploadReceipt.single('receipt'), financeC.updateExpense);
+router.post('/finance/expenses', authenticate, checkPermission('finance', 'create'), uploadReceipt.single('receipt'), processUploadedImages, financeC.submitExpense);
+router.put('/finance/expenses/:id', authenticate, checkPermission('finance', 'update'), uploadReceipt.single('receipt'), processUploadedImages, financeC.updateExpense);
 router.delete('/finance/expenses/:id', authenticate, checkPermission('finance', 'delete'), financeC.removeExpense);
 router.get('/finance/expenses/categories', authenticate, financeC.listCategories);
 router.get('/finance/expenses/pending', authenticate, checkPermission('finance', 'approve'), financeC.getPendingExpenses);
@@ -122,8 +122,8 @@ router.get('/finance/accounts/:id', authenticate, checkPermission('accounts', 'r
 router.put('/finance/accounts/:id', authenticate, checkPermission('accounts', 'update'), financeC.updateAccount);
 router.delete('/finance/accounts/:id', authenticate, checkPermission('accounts', 'delete'), financeC.deleteAccount);
 router.get('/finance/accounts/:id/transactions', authenticate, checkPermission('accounts', 'read'), financeC.listTransactions);
-router.post('/finance/accounts/:id/deposit', authenticate, checkPermission('accounts', 'create'), uploadReceipt.single('receipt'), financeC.recordDeposit);
-router.post('/finance/accounts/:id/withdraw', authenticate, checkPermission('accounts', 'create'), uploadReceipt.single('receipt'), financeC.recordWithdraw);
+router.post('/finance/accounts/:id/deposit', authenticate, checkPermission('accounts', 'create'), uploadReceipt.single('receipt'), processUploadedImages, financeC.recordDeposit);
+router.post('/finance/accounts/:id/withdraw', authenticate, checkPermission('accounts', 'create'), uploadReceipt.single('receipt'), processUploadedImages, financeC.recordWithdraw);
 router.get('/finance/accounts/:id/statement', authenticate, checkPermission('accounts', 'read'), financeC.downloadAccountStatement);
 router.get('/finance/transactions', authenticate, checkPermission('accounts', 'read'), financeC.listShopTransactions);
 router.get('/finance/transactions/:id', authenticate, checkPermission('accounts', 'read'), financeC.getTransactionDetail);
@@ -148,7 +148,7 @@ const debtC = require('../controllers/debt.controller');
 
 router.get('/debts', authenticate, checkPermission('machines', 'read'), debtC.list);
 router.post('/debts', authenticate, checkPermission('machines', 'create'), debtC.create);
-router.put('/debts/:id/pay', authenticate, checkPermission('machines', 'update'), uploadReceipt.single('receipt'), debtC.recordPayment);
+router.put('/debts/:id/pay', authenticate, checkPermission('machines', 'update'), uploadReceipt.single('receipt'), processUploadedImages, debtC.recordPayment);
 router.put('/debts/:id/write-off', authenticate, checkPermission('machines', 'update'), debtC.writeOff);
 router.get('/debts/export', authenticate, checkPermission('machines', 'read'), debtC.exportDebts);
 
@@ -214,7 +214,7 @@ router.get('/inventory/categories', authenticate, checkPermission('inventory', '
     res.json({ success: true, data: categories.filter(c => c.value) });
   } catch (err) { next(err); }
 });
-router.post('/inventory/stock/add', authenticate, checkPermission('inventory', 'create'), uploadReceipt.single('receipt'), stockC.addStock);
+router.post('/inventory/stock/add', authenticate, checkPermission('inventory', 'create'), uploadReceipt.single('receipt'), processUploadedImages, stockC.addStock);
 
 // Sales
 router.get('/inventory/sales', authenticate, checkPermission('inventory', 'read'), salesC.listSales);

@@ -5,8 +5,10 @@ const { Expense, Invoice, Payroll, CreditNote, Payment, ExpenseCategory, Collect
 
 const submitExpense = async (req, res, next) => {
   try {
-    const receipt_url = req.file?.path;
-    const expense = await financeService.submitExpense({ ...req.body, receipt_url }, req.user.id);
+    const receipt_url = req.file?.path || null;
+    const receipt_optimized = req.file?.optimizedPath || null;
+    const receipt_thumb = req.file?.thumbnailPath || null;
+    const expense = await financeService.submitExpense({ ...req.body, receipt_url, receipt_optimized, receipt_thumb }, req.user.id);
     res.status(201).json({ success: true, data: expense });
   } catch (err) { next(err); }
 };
@@ -48,7 +50,11 @@ const changeExpenseStatus = async (req, res, next) => {
 
 const updateExpense = async (req, res, next) => {
   try {
-    if (req.file) req.body.receipt_url = req.file.path;
+    if (req.file) {
+      req.body.receipt_url = req.file.path;
+      req.body.receipt_optimized = req.file.optimizedPath || null;
+      req.body.receipt_thumb = req.file.thumbnailPath || null;
+    }
     const expense = await financeService.updateExpense(req.params.id, req.body, req.user.id);
     res.json({ success: true, data: expense });
   } catch (err) { next(err); }
@@ -166,7 +172,9 @@ const createPayroll = async (req, res, next) => {
 const recordDeposit = async (req, res, next) => {
   try {
     const receipt_url = req.file?.path || null;
-    const result = await financeService.recordDeposit(req.params.id, { ...req.body, receipt_url }, req.user.id);
+    const receipt_optimized = req.file?.optimizedPath || null;
+    const receipt_thumb = req.file?.thumbnailPath || null;
+    const result = await financeService.recordDeposit(req.params.id, { ...req.body, receipt_url, receipt_optimized, receipt_thumb }, req.user.id);
     res.json({ success: true, data: result });
   } catch (err) { next(err); }
 };
@@ -174,7 +182,9 @@ const recordDeposit = async (req, res, next) => {
 const recordWithdraw = async (req, res, next) => {
   try {
     const receipt_url = req.file?.path || null;
-    const result = await financeService.recordWithdraw(req.params.id, { ...req.body, receipt_url }, req.user.id);
+    const receipt_optimized = req.file?.optimizedPath || null;
+    const receipt_thumb = req.file?.thumbnailPath || null;
+    const result = await financeService.recordWithdraw(req.params.id, { ...req.body, receipt_url, receipt_optimized, receipt_thumb }, req.user.id);
     res.json({ success: true, data: result });
   } catch (err) { next(err); }
 };

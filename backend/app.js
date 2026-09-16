@@ -36,7 +36,17 @@ app.use(compression());
 if (process.env.NODE_ENV !== 'test') app.use(morgan('combined'));
 
 // Serve uploaded files (photos, receipts, documents)
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
+  maxAge: '30d',
+  etag: true,
+  lastModified: true,
+  setHeaders: (res, filePath) => {
+    // Long-term caching for images (immutable filenames — unique per upload)
+    if (/\.(webp|jpg|jpeg|png|gif|svg)$/i.test(filePath)) {
+      res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
+    }
+  },
+}));
 
 // Health check
 app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));

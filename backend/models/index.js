@@ -200,6 +200,8 @@ const Collection = sequelize.define('Collection', {
   operator_tzs: { type: DataTypes.INTEGER, defaultValue: 0 },
   net_tzs: { type: DataTypes.INTEGER, defaultValue: 0 },
   meter_image_url: { type: DataTypes.TEXT },
+  meter_image_optimized: { type: DataTypes.TEXT },
+  meter_image_thumb: { type: DataTypes.TEXT },
   collection_date: { type: DataTypes.DATEONLY, allowNull: false },
   collected_at: { type: DataTypes.DATE, allowNull: false },
   approved_by: { type: DataTypes.INTEGER },
@@ -228,6 +230,8 @@ const NovomaticReading = sequelize.define('NovomaticReading', {
   closing_credits: { type: DataTypes.INTEGER, allowNull: false },
   total_credits: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
   screenshot_url: { type: DataTypes.TEXT },
+  screenshot_optimized: { type: DataTypes.TEXT },
+  screenshot_thumb: { type: DataTypes.TEXT },
   read_at: { type: DataTypes.DATE, allowNull: false },
 }, { tableName: 'novomatic_readings', updatedAt: false });
 
@@ -256,6 +260,8 @@ const MachineDebt = sequelize.define('MachineDebt', {
   paid_amount: { type: DataTypes.INTEGER, defaultValue: 0 },
   reason: { type: DataTypes.TEXT },
   receipt_url: { type: DataTypes.TEXT },
+  receipt_optimized: { type: DataTypes.TEXT },
+  receipt_thumb: { type: DataTypes.TEXT },
   recorded_by: { type: DataTypes.INTEGER, allowNull: false },
   status: { type: DataTypes.ENUM('pending', 'partial', 'paid', 'written_off'), defaultValue: 'pending' },
   paid_at: { type: DataTypes.DATE },
@@ -281,6 +287,8 @@ const Expense = sequelize.define('Expense', {
   amount: { type: DataTypes.INTEGER, allowNull: false },
   description: { type: DataTypes.TEXT, allowNull: false },
   receipt_url: { type: DataTypes.TEXT },
+  receipt_optimized: { type: DataTypes.TEXT },
+  receipt_thumb: { type: DataTypes.TEXT },
   expense_date: { type: DataTypes.DATEONLY, allowNull: false },
   business_type: { type: DataTypes.ENUM('meteora', 'bentabet'), defaultValue: 'meteora' },
   payment_source: { type: DataTypes.ENUM('cash', 'selcom'), defaultValue: 'cash' },
@@ -380,6 +388,8 @@ const StockMovement = sequelize.define('StockMovement', {
   reference_no: { type: DataTypes.STRING(100) },
   note: { type: DataTypes.TEXT },
   receipt_url: { type: DataTypes.TEXT },
+  receipt_optimized: { type: DataTypes.TEXT },
+  receipt_thumb: { type: DataTypes.TEXT },
   created_by: { type: DataTypes.INTEGER, allowNull: false },
 }, { tableName: 'stock_movements', updatedAt: false });
 
@@ -702,6 +712,8 @@ const AccountTransaction = sequelize.define('AccountTransaction', {
   transaction_date: { type: DataTypes.DATEONLY, allowNull: false },
   status: { type: DataTypes.ENUM('active', 'cancelled'), defaultValue: 'active' },
   receipt_url: { type: DataTypes.STRING(255) },
+  receipt_optimized: { type: DataTypes.STRING(255) },
+  receipt_thumb: { type: DataTypes.STRING(255) },
   charges: { type: DataTypes.INTEGER },
   transfer_id: { type: DataTypes.INTEGER },
   cancelled_by: { type: DataTypes.INTEGER },

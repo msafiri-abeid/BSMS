@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Table, Button, Modal, Form, Input, Select, InputNumber, Tag, Space, App, Typography, List, Empty, Segmented, DatePicker, Image } from 'antd';
+import { Table, Button, Modal, Form, Input, Select, InputNumber, Tag, Space, App, Typography, List, Empty, Segmented, DatePicker } from 'antd';
 import { Plus, CheckCircle, XCircle, FileDown, Search, X, Store, Cpu, Smartphone, Wallet, Eye, Edit3, Trash2, Landmark, Camera, RefreshCw } from 'lucide-react';
 import ActionMenu from '../../components/ActionMenu';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -8,6 +8,7 @@ import { useAuthStore } from '../../store/authStore';
 import KpiCard from '../../components/KpiCard';
 import MobileCard from '../../components/MobileCard';
 import PhotoUpload from '../../components/PhotoUpload';
+import OptimizedImage from '../../components/OptimizedImage';
 import dayjs from 'dayjs';
 
 const { Option } = Select;
@@ -409,7 +410,7 @@ export default function ExpensesPage() {
           <Form.Item label={<span className="text-xs font-semibold text-slate-600">Receipt Image</span>}>
             {editRecord?.receipt_url && !editRemoveReceipt && receiptFileList.length === 0 && (
               <div className="flex items-center gap-2 mb-2">
-                <Image src={editRecord.receipt_url} className="max-h-16 rounded border border-slate-200" preview={{ mask: 'View' }} />
+                <OptimizedImage src={editRecord.receipt_url} optimizedSrc={editRecord.receipt_optimized} thumbSrc={editRecord.receipt_thumb} useThumb className="max-h-16 rounded border border-slate-200" />
                 <Button size="small" icon={<Trash2 className="w-3 h-3" />}
                   onClick={() => setEditRemoveReceipt(true)}
                   className="flex items-center gap-1 !text-xs text-red-500 hover:!border-red-400">

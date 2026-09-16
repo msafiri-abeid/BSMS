@@ -8,6 +8,8 @@ const submit = async (req, res, next) => {
   try {
     const body = req.body;
     const meterImageUrl = req.file?.path || null;
+    const meterImageOptimized = req.file?.optimizedPath || null;
+    const meterImageThumb = req.file?.thumbnailPath || null;
 
     const allowedRoles = ['Admin', 'General Manager', 'Operations Manager'];
     const skipDebtRepayment = allowedRoles.includes(req.user.role?.name) && body.skip_debt_repayment === 'true';
@@ -18,6 +20,8 @@ const submit = async (req, res, next) => {
       collectorId: req.user.id,
       currCount: parseInt(body.curr_count),
       meterImageUrl,
+      meterImageOptimized,
+      meterImageThumb,
       novomaticData: body.novomatic_data ? JSON.parse(body.novomatic_data) : null,
       assignmentId: body.assignment_id,
       skipDebtRepayment,
@@ -131,6 +135,8 @@ const update = async (req, res, next) => {
 
     if (req.file) {
       req.body.meter_image_url = req.file.path;
+      req.body.meter_image_optimized = req.file.optimizedPath || null;
+      req.body.meter_image_thumb = req.file.thumbnailPath || null;
     }
 
     if (req.body.status === 'approved') {

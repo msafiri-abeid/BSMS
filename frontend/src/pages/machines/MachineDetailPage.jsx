@@ -1,12 +1,13 @@
 import { useState, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Card, Tag, Table, Button, Typography, Space, Modal, Form, Input, InputNumber, Select, Checkbox, DatePicker, App, Empty, Image, Tooltip } from 'antd';
+import { Card, Tag, Table, Button, Typography, Space, Modal, Form, Input, InputNumber, Select, Checkbox, DatePicker, App, Empty, Tooltip } from 'antd';
 import { ArrowLeft, Download, Plus, Pencil, Trash2, Eye, Edit3, X, CheckCircle, XCircle, Cpu, DollarSign, MapPin, Target, Receipt, BarChart3, History, RotateCcw } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import { machinesAPI, collectionsAPI, financeAPI, shopsAPI } from '../../services/api';
 import { useAuthStore } from '../../store/authStore';
 import KpiCard from '../../components/KpiCard';
+import OptimizedImage from '../../components/OptimizedImage';
 import dayjs from 'dayjs';
 
 const { Text } = Typography;
@@ -663,7 +664,7 @@ export default function MachineDetailPage() {
             {viewRecord.meter_image_url ? (
               <div>
                 <Text className="text-xs font-semibold uppercase tracking-wider text-slate-500 block mb-2">Meter Image</Text>
-                <Image src={viewRecord.meter_image_url} className="rounded-lg max-h-60 object-contain border border-slate-200" />
+                <OptimizedImage src={viewRecord.meter_image_url} optimizedSrc={viewRecord.meter_image_optimized} thumbSrc={viewRecord.meter_image_thumb} className="rounded-lg max-h-60 object-contain border border-slate-200" />
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center h-32 bg-slate-50 rounded-lg text-slate-400 border border-slate-200">

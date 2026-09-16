@@ -905,7 +905,7 @@ const generateAccountReport = async (accountId, query) => {
 // ── ACCOUNT DEPOSIT / WITHDRAW / STATEMENT ────────────────────
 
 const recordDeposit = async (accountId, data, userId) => {
-  const { amount, transaction_date, description, receipt_url, charges } = data;
+  const { amount, transaction_date, description, receipt_url, receipt_optimized, receipt_thumb, charges } = data;
   const account = await Account.findByPk(accountId);
   if (!account) throw new Error('Account not found');
 
@@ -926,6 +926,8 @@ const recordDeposit = async (accountId, data, userId) => {
     recorded_by: userId,
     transaction_date: txnDate,
     receipt_url: receipt_url || null,
+    receipt_optimized: receipt_optimized || null,
+    receipt_thumb: receipt_thumb || null,
     charges: parseInt(charges) || 0,
   });
   await account.update({ current_balance: balanceAfter });
@@ -936,7 +938,7 @@ const recordDeposit = async (accountId, data, userId) => {
 };
 
 const recordWithdraw = async (accountId, data, userId) => {
-  const { amount, transaction_date, description, receipt_url } = data;
+  const { amount, transaction_date, description, receipt_url, receipt_optimized, receipt_thumb } = data;
   const account = await Account.findByPk(accountId);
   if (!account) throw new Error('Account not found');
 
@@ -956,6 +958,8 @@ const recordWithdraw = async (accountId, data, userId) => {
     recorded_by: userId,
     transaction_date: txnDate,
     receipt_url: receipt_url || null,
+    receipt_optimized: receipt_optimized || null,
+    receipt_thumb: receipt_thumb || null,
   });
   await account.update({ current_balance: balanceAfter });
 
@@ -1041,6 +1045,15 @@ const updateExpense = async (id, data, userId) => {
     if (Array.isArray(rv)) rv = rv[rv.length - 1];
     if (rv === '' || rv === 'null' || rv === 'undefined') rv = null;
     updateData.receipt_url = rv;
+    // A removed/replaced receipt (or an untouched one) must not keep stale
+    // optimized/thumb references — clear them unless a fresh path was provided.
+    if (updateData.receipt_url === null) {
+      updateData.receipt_optimized = null;
+      updateData.receipt_thumb = null;
+    } else if (!('receipt_optimized' in updateData)) {
+      updateData.receipt_optimized = null;
+      updateData.receipt_thumb = null;
+    }
   }
 
   const oldReceipt = expense.receipt_url;

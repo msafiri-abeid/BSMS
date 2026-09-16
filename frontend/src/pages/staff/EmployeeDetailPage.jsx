@@ -7,6 +7,7 @@ import dayjs from 'dayjs';
 import { staffAPI } from '../../services/api';
 import { STATUS_COLORS, empName, buildEmployeeFormData, isImage, isPdf } from './staffUtils';
 import EmployeeFormModal from './components/EmployeeFormModal';
+import OptimizedImage from '../../components/OptimizedImage';
 
 const { Title, Text } = Typography;
 
@@ -289,8 +290,8 @@ export default function EmployeeDetailPage() {
             )}
             {activeDoc && !docLoading && signedUrl && (
               <div className="mt-4 border border-slate-200 rounded-lg overflow-hidden bg-slate-50">
-                {isImage(activeDoc.name) && (
-                  <img src={signedUrl} alt={activeDoc.name} className="max-w-full mx-auto block" />
+{isImage(activeDoc.name) && (
+                  <OptimizedImage src={signedUrl} alt={activeDoc.name} className="max-w-full mx-auto block" />
                 )}
                 {isPdf(activeDoc.name) && (
                   <iframe title={activeDoc.name} src={signedUrl} className="w-full h-[480px] border-0" />
