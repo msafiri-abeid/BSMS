@@ -1,4 +1,4 @@
-const { Product, StockLevel, StockMovement } = require('../models');
+const { sequelize, Product, StockLevel, StockMovement } = require('../models');
 
 const addStock = async (req, res, next) => {
   try {
@@ -16,21 +16,26 @@ const addStock = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Product not found' });
     }
 
-    const [stockLevel] = await StockLevel.findOrCreate({
-      where: { product_id },
-      defaults: { current_qty: 0, reorder_level: 10 },
-    });
+    const { movement } = await sequelize.transaction(async (t) => {
+      const [stockLevel] = await StockLevel.findOrCreate({
+        where: { product_id },
+        defaults: { current_qty: 0, reorder_level: 10 },
+        transaction: t,
+      });
 
-    await stockLevel.increment('current_qty', { by: parseInt(qty) });
+      await stockLevel.increment('current_qty', { by: parseInt(qty), transaction: t });
 
-    const movement = await StockMovement.create({
-      product_id,
-      qty_change: parseInt(qty),
-      movement_type: 'purchase',
-      reference_no: reference_no || null,
-      note: note || null,
-      receipt_url,
-      created_by: req.user.id,
+      const mv = await StockMovement.create({
+        product_id,
+        qty_change: parseInt(qty),
+        movement_type: 'purchase',
+        reference_no: reference_no || null,
+        note: note || null,
+        receipt_url,
+        created_by: req.user.id,
+      }, { transaction: t });
+
+      return { movement: mv };
     });
 
     const updated = await Product.findByPk(product_id, {

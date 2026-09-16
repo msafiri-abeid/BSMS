@@ -19,8 +19,8 @@ export default function AccountingPage() {
   const [valuationRowKeys, setValuationRowKeys] = useState([]);
   const { message } = App.useApp();
 
-  const { data: shopsData } = useQuery({ queryKey: ['shops-list'], queryFn: () => shopsAPI.list().then(r => r.data.data) });
-  const shops = (shopsData?.rows || []).filter(s => ['Bentabet', 'Dante'].includes(s.partner?.label) && ['bar', 'grocery', 'mixed'].includes(s.type));
+  const { data: shopsData } = useQuery({ queryKey: ['shops-slot-list'], queryFn: () => shopsAPI.list({ business_type: 'slot' }).then(r => r.data.data) });
+  const shops = shopsData?.rows || [];
 
   const { data: profitLoss } = useQuery({
     queryKey: ['profit-loss', selectedShop, dateRange],

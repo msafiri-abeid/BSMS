@@ -1,5 +1,5 @@
 // controllers/inventory.returns.controller.js
-const { SalesReturn, Sale, SaleItem, Product, StockLevel, StockMovement } = require('../models');
+const { sequelize, SalesReturn, Sale, SaleItem, Product, StockLevel, StockMovement } = require('../models');
 
 const listReturns = async (req, res, next) => {
   try {
@@ -7,18 +7,14 @@ const listReturns = async (req, res, next) => {
     const where = {};
     if (sale_id) where.sale_id = parseInt(sale_id);
 
-    let include = [
-      { model: Sale, as: 'sale' },
-      { model: Product, as: 'product', attributes: ['name', 'category'] },
-    ];
-
-    if (shop_id) {
-      include.push({
+    const include = [
+      {
         model: Sale,
         as: 'sale',
-        where: { shop_id: parseInt(shop_id) },
-      });
-    }
+        ...(shop_id ? { where: { shop_id: parseInt(shop_id) } } : {}),
+      },
+      { model: Product, as: 'product', attributes: ['name', 'category'] },
+    ];
 
     const returns = await SalesReturn.findAll({
       where,
@@ -59,49 +55,56 @@ const processReturn = async (req, res, next) => {
     // Calculate refund amount
     const refund_amount_tzs = qty_returned * product.selling_price;
 
-    const saleReturn = await SalesReturn.create({
-      sale_id,
-      product_id,
-      return_date: new Date(),
-      qty_returned,
-      reason,
-      refund_amount_tzs,
-      refund_method: refund_method || 'cash',
-      processed_by: req.user.id,
+    const saleReturn = await sequelize.transaction(async (t) => {
+      const created = await SalesReturn.create({
+        sale_id,
+        product_id,
+        return_date: new Date(),
+        qty_returned,
+        reason,
+        refund_amount_tzs,
+        refund_method: refund_method || 'cash',
+        processed_by: req.user.id,
+      }, { transaction: t });
+
+      // Restore stock
+      await StockLevel.increment('current_qty', {
+        by: qty_returned,
+        where: { product_id },
+        transaction: t,
+      });
+
+      // Log movement
+      await StockMovement.create({
+        product_id,
+        qty_change: qty_returned,
+        movement_type: 'adjustment',
+        reference_no: `RETURN-${created.id}`,
+        note: `Sales return: ${reason}`,
+        created_by: req.user.id,
+      }, { transaction: t });
+
+      // Update sale status
+      const totalReturned = await SalesReturn.sum('qty_returned', {
+        where: { sale_id },
+        transaction: t,
+      });
+
+      const saleItems = await Sale.findByPk(sale_id, {
+        include: [{ model: SaleItem, as: 'items' }],
+        transaction: t,
+      });
+
+      const totalQty = saleItems.items.reduce((sum, item) => sum + item.qty, 0);
+
+      if (totalReturned >= totalQty) {
+        await sale.update({ status: 'returned' }, { transaction: t });
+      } else if (totalReturned > 0) {
+        await sale.update({ status: 'partial_returned' }, { transaction: t });
+      }
+
+      return created;
     });
-
-    // Restore stock
-    await StockLevel.increment('current_qty', {
-      by: qty_returned,
-      where: { product_id },
-    });
-
-    // Log movement
-    await StockMovement.create({
-      product_id,
-      qty_change: qty_returned,
-      movement_type: 'adjustment',
-      reference_no: `RETURN-${saleReturn.id}`,
-      note: `Sales return: ${reason}`,
-      created_by: req.user.id,
-    });
-
-    // Update sale status
-    const totalReturned = await SalesReturn.sum('qty_returned', {
-      where: { sale_id },
-    });
-
-    const saleItems = await Sale.findByPk(sale_id, {
-      include: [{ model: SaleItem, as: 'items' }],
-    });
-
-    const totalQty = saleItems.items.reduce((sum, item) => sum + item.qty, 0);
-
-    if (totalReturned >= totalQty) {
-      await sale.update({ status: 'returned' });
-    } else if (totalReturned > 0) {
-      await sale.update({ status: 'partial_returned' });
-    }
 
     res.status(201).json({ success: true, data: saleReturn });
   } catch (err) { next(err); }

@@ -16,11 +16,8 @@ export default function ShopInventoryPage() {
   const { message } = App.useApp();
   const qc = useQueryClient();
 
-  const { data: shopsData } = useQuery({ queryKey: ['shops-list'], queryFn: () => shopsAPI.list().then(r => r.data.data) });
-  const shops = (shopsData?.rows || []).filter(s => 
-    ['Bentabet', 'Dante'].includes(s.partner?.label) && 
-    ['bar', 'grocery', 'mixed'].includes(s.type)
-  );
+  const { data: shopsData } = useQuery({ queryKey: ['shops-slot-list'], queryFn: () => shopsAPI.list({ business_type: 'slot' }).then(r => r.data.data) });
+  const shops = shopsData?.rows || [];
 
   const { data: products, isLoading } = useQuery({
     queryKey: ['products', selectedShop],

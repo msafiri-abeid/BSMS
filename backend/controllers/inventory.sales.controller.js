@@ -1,5 +1,5 @@
 // controllers/inventory.sales.controller.js
-const { Sale, SaleItem, SalesReturn, SalePayment, Product, StockLevel, StockMovement, Shop } = require('../models');
+const { sequelize, Sale, SaleItem, SalesReturn, SalePayment, Product, StockLevel, StockMovement, Shop } = require('../models');
 const { Op } = require('sequelize');
 
 const listSales = async (req, res, next) => {
@@ -45,9 +45,15 @@ const getSale = async (req, res, next) => {
 const recordSale = async (req, res, next) => {
   try {
     const { shop_id, items, payment_method, customer_name, discount_amount_tzs, notes } = req.body;
-    
+
     if (!shop_id || !items || items.length === 0) {
       return res.status(400).json({ success: false, message: 'Missing required fields' });
+    }
+
+    for (const item of items) {
+      if (!item.product_id || !item.qty || item.qty < 1) {
+        return res.status(400).json({ success: false, message: 'Each item requires a product_id and a positive qty' });
+      }
     }
 
     // Calculate totals
@@ -58,46 +64,68 @@ const recordSale = async (req, res, next) => {
     }
     const net_amount_tzs = Math.max(0, total_amount_tzs - (discount_amount_tzs || 0));
 
-    const sale = await Sale.create({
-      shop_id,
-      sale_date: new Date(),
-      total_amount_tzs,
-      discount_amount_tzs: discount_amount_tzs || 0,
-      net_amount_tzs,
-      payment_method,
-      customer_name,
-      notes,
-      recorded_by: req.user.id,
+    const sale = await sequelize.transaction(async (t) => {
+      // Validate stock availability before writing anything (lock rows to prevent races)
+      for (const item of items) {
+        const stockLevel = await StockLevel.findOne({
+          where: { product_id: item.product_id },
+          transaction: t,
+          lock: t.LOCK.UPDATE,
+        });
+        if (!stockLevel || stockLevel.current_qty < item.qty) {
+          const product = await Product.findByPk(item.product_id, { attributes: ['name'], transaction: t });
+          const err = new Error(
+            `Insufficient stock for ${product?.name || `product #${item.product_id}`} (available: ${stockLevel?.current_qty ?? 0}, requested: ${item.qty})`
+          );
+          err.status = 400;
+          throw err;
+        }
+      }
+
+      const created = await Sale.create({
+        shop_id,
+        sale_date: new Date(),
+        total_amount_tzs,
+        discount_amount_tzs: discount_amount_tzs || 0,
+        net_amount_tzs,
+        payment_method,
+        customer_name,
+        notes,
+        recorded_by: req.user.id,
+      }, { transaction: t });
+
+      // Create sale items and update stock
+      for (let item of items) {
+        const lineTotal = (item.unit_price_tzs * item.qty) - ((item.discount_pct || 0) * (item.unit_price_tzs * item.qty) / 100);
+
+        await SaleItem.create({
+          sale_id: created.id,
+          product_id: item.product_id,
+          qty: item.qty,
+          unit_price_tzs: item.unit_price_tzs,
+          discount_pct: item.discount_pct || 0,
+          line_total_tzs: lineTotal,
+        }, { transaction: t });
+
+        // Reduce stock
+        await StockLevel.decrement('current_qty', {
+          by: item.qty,
+          where: { product_id: item.product_id },
+          transaction: t,
+        });
+
+        // Log movement
+        await StockMovement.create({
+          product_id: item.product_id,
+          qty_change: -item.qty,
+          movement_type: 'sale',
+          reference_no: `SALE-${created.id}`,
+          created_by: req.user.id,
+        }, { transaction: t });
+      }
+
+      return created;
     });
-
-    // Create sale items and update stock
-    for (let item of items) {
-      const lineTotal = (item.unit_price_tzs * item.qty) - ((item.discount_pct || 0) * (item.unit_price_tzs * item.qty) / 100);
-      
-      await SaleItem.create({
-        sale_id: sale.id,
-        product_id: item.product_id,
-        qty: item.qty,
-        unit_price_tzs: item.unit_price_tzs,
-        discount_pct: item.discount_pct || 0,
-        line_total_tzs: lineTotal,
-      });
-
-      // Reduce stock
-      await StockLevel.decrement('current_qty', {
-        by: item.qty,
-        where: { product_id: item.product_id },
-      });
-
-      // Log movement
-      await StockMovement.create({
-        product_id: item.product_id,
-        qty_change: -item.qty,
-        movement_type: 'sale',
-        reference_no: `SALE-${sale.id}`,
-        created_by: req.user.id,
-      });
-    }
 
     res.status(201).json({ success: true, data: sale });
   } catch (err) { next(err); }

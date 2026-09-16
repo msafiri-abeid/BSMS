@@ -1,5 +1,5 @@
 // controllers/inventory.transfers.controller.js
-const { StockTransfer, Product, StockLevel, StockMovement } = require('../models');
+const { sequelize, StockTransfer, Product, StockLevel, StockMovement } = require('../models');
 const { Op } = require('sequelize');
 
 const listTransfers = async (req, res, next) => {
@@ -80,44 +80,50 @@ const initializeTransfer = async (req, res, next) => {
 const approveTransfer = async (req, res, next) => {
   try {
     const { transfer_id } = req.params;
-    const transfer = await StockTransfer.findByPk(transfer_id);
 
-    if (!transfer) return res.status(404).json({ success: false, message: 'Transfer not found' });
-    if (transfer.status !== 'pending') {
-      return res.status(400).json({ success: false, message: 'Only pending transfers can be approved' });
-    }
+    const transfer = await sequelize.transaction(async (t) => {
+      const tr = await StockTransfer.findByPk(transfer_id, { transaction: t, lock: t.LOCK.UPDATE });
+      if (!tr) { const e = new Error('Transfer not found'); e.status = 404; throw e; }
+      if (tr.status !== 'pending') { const e = new Error('Only pending transfers can be approved'); e.status = 400; throw e; }
 
-    // Verify product still belongs to source shop and has enough stock
-    const product = await Product.findOne({
-      where: { id: transfer.product_id, shop_id: transfer.from_shop_id },
+      // Verify product still belongs to source shop and has enough stock
+      const product = await Product.findOne({
+        where: { id: tr.product_id, shop_id: tr.from_shop_id },
+        transaction: t,
+      });
+      if (!product) { const e = new Error('Source product not found in the source shop'); e.status = 400; throw e; }
+
+      const stockLevel = await StockLevel.findOne({
+        where: { product_id: tr.product_id },
+        transaction: t,
+        lock: t.LOCK.UPDATE,
+      });
+      if (!stockLevel || stockLevel.current_qty < tr.qty) {
+        const e = new Error('Insufficient stock to complete transfer');
+        e.status = 400;
+        throw e;
+      }
+
+      // Deduct from source shop
+      await StockLevel.decrement('current_qty', {
+        by: tr.qty,
+        where: { product_id: tr.product_id },
+        transaction: t,
+      });
+
+      // Log outgoing movement
+      await StockMovement.create({
+        product_id: tr.product_id,
+        qty_change: -tr.qty,
+        movement_type: 'transfer',
+        reference_no: `TRANSFER-OUT-${tr.id}`,
+        created_by: req.user.id,
+      }, { transaction: t });
+
+      await tr.update({ status: 'in_transit' }, { transaction: t });
+      return tr;
     });
-    if (!product) {
-      return res.status(400).json({ success: false, message: 'Source product not found in the source shop' });
-    }
 
-    const stockLevel = await StockLevel.findOne({
-      where: { product_id: transfer.product_id },
-    });
-    if (!stockLevel || stockLevel.current_qty < transfer.qty) {
-      return res.status(400).json({ success: false, message: 'Insufficient stock to complete transfer' });
-    }
-
-    // Deduct from source shop
-    await StockLevel.decrement('current_qty', {
-      by: transfer.qty,
-      where: { product_id: transfer.product_id },
-    });
-
-    // Log outgoing movement
-    await StockMovement.create({
-      product_id: transfer.product_id,
-      qty_change: -transfer.qty,
-      movement_type: 'transfer',
-      reference_no: `TRANSFER-OUT-${transfer.id}`,
-      created_by: req.user.id,
-    });
-
-    await transfer.update({ status: 'in_transit' });
     res.json({ success: true, data: transfer });
   } catch (err) { next(err); }
 };
@@ -125,51 +131,55 @@ const approveTransfer = async (req, res, next) => {
 const receiveTransfer = async (req, res, next) => {
   try {
     const { transfer_id } = req.params;
-    const transfer = await StockTransfer.findByPk(transfer_id, {
-      include: [{ model: Product, as: 'product' }],
-    });
 
-    if (!transfer) return res.status(404).json({ success: false, message: 'Transfer not found' });
-    if (transfer.status !== 'in_transit') {
-      return res.status(400).json({ success: false, message: 'Transfer must be in transit to receive' });
-    }
+    const transfer = await sequelize.transaction(async (t) => {
+      const tr = await StockTransfer.findByPk(transfer_id, { transaction: t, lock: t.LOCK.UPDATE });
+      if (!tr) { const e = new Error('Transfer not found'); e.status = 404; throw e; }
+      if (tr.status !== 'in_transit') { const e = new Error('Transfer must be in transit to receive'); e.status = 400; throw e; }
 
-    // Find or create product at destination shop
-    let destProduct = await Product.findOne({
-      where: { shop_id: transfer.to_shop_id, name: transfer.product.name },
-    });
+      const srcProduct = await Product.findByPk(tr.product_id, { transaction: t });
 
-    if (!destProduct) {
-      destProduct = await Product.create({
-        shop_id: transfer.to_shop_id,
-        name: transfer.product.name,
-        category: transfer.product.category,
-        unit: transfer.product.unit,
-        purchase_price: transfer.product.purchase_price,
-        selling_price: transfer.product.selling_price,
+      // Find or create product at destination shop
+      let destProduct = await Product.findOne({
+        where: { shop_id: tr.to_shop_id, name: srcProduct.name },
+        transaction: t,
       });
-      await StockLevel.create({ product_id: destProduct.id });
-    }
 
-    // Add to destination shop stock
-    await StockLevel.increment('current_qty', {
-      by: transfer.qty,
-      where: { product_id: destProduct.id },
-    });
+      if (!destProduct) {
+        destProduct = await Product.create({
+          shop_id: tr.to_shop_id,
+          name: srcProduct.name,
+          category: srcProduct.category,
+          unit: srcProduct.unit,
+          purchase_price: srcProduct.purchase_price,
+          selling_price: srcProduct.selling_price,
+        }, { transaction: t });
+        await StockLevel.create({ product_id: destProduct.id }, { transaction: t });
+      }
 
-    // Log incoming movement
-    await StockMovement.create({
-      product_id: destProduct.id,
-      qty_change: transfer.qty,
-      movement_type: 'transfer',
-      reference_no: `TRANSFER-IN-${transfer.id}`,
-      created_by: req.user.id,
-    });
+      // Add to destination shop stock
+      await StockLevel.increment('current_qty', {
+        by: tr.qty,
+        where: { product_id: destProduct.id },
+        transaction: t,
+      });
 
-    await transfer.update({
-      status: 'received',
-      received_by: req.user.id,
-      received_at: new Date(),
+      // Log incoming movement
+      await StockMovement.create({
+        product_id: destProduct.id,
+        qty_change: tr.qty,
+        movement_type: 'transfer',
+        reference_no: `TRANSFER-IN-${tr.id}`,
+        created_by: req.user.id,
+      }, { transaction: t });
+
+      await tr.update({
+        status: 'received',
+        received_by: req.user.id,
+        received_at: new Date(),
+      }, { transaction: t });
+
+      return tr;
     });
 
     res.json({ success: true, data: transfer });
@@ -179,22 +189,29 @@ const receiveTransfer = async (req, res, next) => {
 const cancelTransfer = async (req, res, next) => {
   try {
     const { transfer_id } = req.params;
-    const transfer = await StockTransfer.findByPk(transfer_id);
 
-    if (!transfer) return res.status(404).json({ success: false, message: 'Transfer not found' });
-    if (transfer.status === 'received' || transfer.status === 'cancelled') {
-      return res.status(400).json({ success: false, message: 'Cannot cancel completed or already cancelled transfers' });
-    }
+    const transfer = await sequelize.transaction(async (t) => {
+      const tr = await StockTransfer.findByPk(transfer_id, { transaction: t, lock: t.LOCK.UPDATE });
+      if (!tr) { const e = new Error('Transfer not found'); e.status = 404; throw e; }
+      if (tr.status === 'received' || tr.status === 'cancelled') {
+        const e = new Error('Cannot cancel completed or already cancelled transfers');
+        e.status = 400;
+        throw e;
+      }
 
-    if (transfer.status === 'in_transit') {
-      // Restore stock to source shop (source product)
-      await StockLevel.increment('current_qty', {
-        by: transfer.qty,
-        where: { product_id: transfer.product_id },
-      });
-    }
+      if (tr.status === 'in_transit') {
+        // Restore stock to source shop (source product)
+        await StockLevel.increment('current_qty', {
+          by: tr.qty,
+          where: { product_id: tr.product_id },
+          transaction: t,
+        });
+      }
 
-    await transfer.update({ status: 'cancelled' });
+      await tr.update({ status: 'cancelled' }, { transaction: t });
+      return tr;
+    });
+
     res.json({ success: true, data: transfer });
   } catch (err) { next(err); }
 };

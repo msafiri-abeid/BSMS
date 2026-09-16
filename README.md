@@ -260,6 +260,8 @@ PUT            /api/inventory/alerts/:id/acknowledge
 GET            /api/inventory/accounting/profit-loss|margins|valuation|daily-report
 ```
 
+**POS / Bar Stock module notes (Sep 2026)**: This submodule serves **Bentabet (slot) shops** only. The shop selectors on all six pages (`products`, `stock`, `sales`, `returns`, `alerts`, `accounting`) query `GET /api/shops?business_type=slot` — the old client-side `Shop.type` filter was removed with the model change. `POST /api/inventory/sales` now rejects a sale if any line's quantity exceeds current stock (`400`, short product named) and validates/updates stock inside a DB transaction. Returns listing fixed (duplicate `sale` include removed). `stock/add`, sales, returns, stock transfers and audits now run every multi-table write inside a `sequelize.transaction`, so a mid-sequence failure rolls back fully.
+
 ### Kitchen Stock (multi-restaurant daily ledger)
 ```
 GET|POST       /api/inventory/locations
