@@ -145,6 +145,15 @@ const exportEntries = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+const exportEntriesPdf = async (req, res, next) => {
+  try {
+    const buffer = await kitchenService.exportEntriesPdf(req.query);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=kitchen-stock-${new Date().toISOString().split('T')[0]}.pdf`);
+    res.send(buffer);
+  } catch (err) { next(err); }
+};
+
 const exportRestockPdf = async (req, res, next) => {
   try {
     const buffer = await kitchenService.exportRestockPdf(req.query);
@@ -171,5 +180,6 @@ module.exports = {
   getRestockList,
   getStats,
   exportEntries,
+  exportEntriesPdf,
   exportRestockPdf,
 };

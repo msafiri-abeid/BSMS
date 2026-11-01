@@ -269,6 +269,18 @@ export default function KitchenStockPage() {
       .catch(() => message.error('Export failed'));
   };
 
+  const handleExportPdf = () => {
+    kitchenStockAPI.exportEntriesPdf({ location_id: selectedLocation, date_from: dateStr, date_to: dateStr })
+      .then(r => {
+        const url = URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' }));
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `kitchen-stock-${dateStr}.pdf`;
+        a.click();
+      })
+      .catch(() => message.error('Export PDF failed'));
+  };
+
   const handleExportRestockPdf = () => {
     kitchenStockAPI.exportRestockPdf({ location_id: selectedLocation, date: dateStr })
       .then(r => {
@@ -511,7 +523,11 @@ export default function KitchenStockPage() {
               )}
               <Button size="small" icon={<FileDown className="w-3.5 h-3.5" />} className="flex items-center gap-1 !text-xs hover:!bg-brand-dark hover:!text-white hover:!border-brand-dark"
                 onClick={handleExport}>
-                Export
+                Export Excel
+              </Button>
+              <Button size="small" icon={<FileDown className="w-3.5 h-3.5" />} className="flex items-center gap-1 !text-xs hover:!bg-brand-dark hover:!text-white hover:!border-brand-dark"
+                onClick={handleExportPdf}>
+                Export PDF
               </Button>
             </Space>
           </div>

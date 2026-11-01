@@ -318,6 +318,7 @@ export const kitchenStockAPI = {
   getRestockList: (p) => api.get('/inventory/kitchen/restock-list', { params: p }),
   getStats: (p) => api.get('/inventory/kitchen/stats', { params: p }),
   exportEntries: (p) => api.get('/inventory/kitchen/export', { params: p, responseType: 'blob' }),
+  exportEntriesPdf: (p) => api.get('/inventory/kitchen/export/pdf', { params: p, responseType: 'blob' }),
   exportRestockPdf: (p) => api.get('/inventory/kitchen/restock/pdf', { params: p, responseType: 'blob' }),
 };
 

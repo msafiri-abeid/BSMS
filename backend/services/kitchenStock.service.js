@@ -754,37 +754,52 @@ const getStockManagerDashboard = async (filters = {}) => {
 };
 
 // Excel export mirroring the DANTE26 DAILY KITCHEN STOCK sheet layout.
+const getExportDateRange = (from, to) => {
+  const start = new Date(`${from}T00:00:00`);
+  const end = new Date(`${to}T00:00:00`);
+  const dates = [];
+  for (let cur = new Date(start); cur <= end; cur.setDate(cur.getDate() + 1)) {
+    dates.push(cur.toISOString().split('T')[0]);
+  }
+  return dates;
+};
+
 const exportEntriesExcel = async (filters = {}) => {
   const locationId = +filters.location_id;
   if (!locationId) throw new Error('location_id is required');
+
   const from = filters.date_from || new Date().toISOString().split('T')[0];
   const to = filters.date_to || from;
 
   const location = await Location.findByPk(locationId);
   if (!location) throw new Error('Location not found');
 
-  const entries = await KitchenDailyEntry.findAll({
-    where: { location_id: locationId, entry_date: { [Op.between]: [from, to] } },
-    include: [
-      { model: KitchenItem, as: 'item', attributes: ['id', 'name', 'default_unit'] },
-      { model: User, as: 'creator', attributes: ['id', 'name'] },
-    ],
-    order: [['entry_date', 'ASC'], [{ model: KitchenItem, as: 'item' }, 'name', 'ASC']],
-  });
+  const dates = getExportDateRange(from, to);
+  const exportRows = [];
+
+  for (const date of dates) {
+    const { data: rows } = await listEntries({ location_id: locationId, date });
+    for (const row of rows) {
+      exportRows.push({
+        id: row.id,
+        item_id: row.item_id,
+        item_name: row.item?.name || `#${row.item_id}`,
+        unit: row.item?.default_unit || '',
+        date,
+        opening: num(row.opening_stock),
+        received: num(row.received),
+        sold: num(row.sold),
+        spoiled: num(row.spoiled),
+        closing: num(row.closing_stock),
+        physical: row.physical_count === null || row.physical_count === undefined ? '' : num(row.physical_count),
+        variance: row.variance === null || row.variance === undefined ? '' : num(row.variance),
+        notes: parseNotes(row.notes).concat((row.movements || []).map((m) => m.notes ? `${MOVEMENT_LABELS[m.type] || m.type}: ${num(m.quantity)} (${m.notes})` : `${MOVEMENT_LABELS[m.type] || m.type}: ${num(m.quantity)}`)).join(' | '),
+      });
+    }
+  }
 
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet(`Kitchen Stock ${location.code || location.name}`);
-
-  // Movement notes per entry so the export mirrors what the detail view shows.
-  const entryIds = entries.map((e) => e.id);
-  const movementRows = entryIds.length
-    ? await KitchenStockMovement.findAll({ where: { entry_id: { [Op.in]: entryIds } } })
-    : [];
-  const movementsByEntry = {};
-  for (const m of movementRows) {
-    if (!movementsByEntry[m.entry_id]) movementsByEntry[m.entry_id] = [];
-    movementsByEntry[m.entry_id].push(m);
-  }
 
   ws.columns = [
     { header: 'NO', key: 'no', width: 6 },
@@ -805,37 +820,124 @@ const exportEntriesExcel = async (filters = {}) => {
   ws.autoFilter = { from: 'A1', to: 'L1' };
 
   let idx = 1;
-  for (const e of entries) {
+  for (const row of exportRows) {
     idx++;
-    const variance = e.variance === null || e.variance === undefined ? '' : num(e.variance);
-    const dayNotes = parseNotes(e.notes);
-    const moveLines = (movementsByEntry[e.id] || []).map((m) =>
-      m.notes
-        ? `${MOVEMENT_LABELS[m.type] || m.type}: ${num(m.quantity)} (${m.notes})`
-        : `${MOVEMENT_LABELS[m.type] || m.type}: ${num(m.quantity)}`
-    );
     ws.addRow({
       no: idx - 1,
-      details: e.item?.name || `#${e.item_id}`,
-      unit: e.item?.default_unit || '',
-      date: e.entry_date,
-      opening: num(e.opening_stock),
-      received: num(e.received),
-      sold: num(e.sold),
-      spoiled: num(e.spoiled),
-      closing: num(e.closing_stock),
-      physical: e.physical_count === null || e.physical_count === undefined ? '' : num(e.physical_count),
-      variance,
-      notes: [...dayNotes, ...moveLines].join(' | '),
+      details: row.item_name,
+      unit: row.unit,
+      date: row.date,
+      opening: row.opening,
+      received: row.received,
+      sold: row.sold,
+      spoiled: row.spoiled,
+      closing: row.closing,
+      physical: row.physical,
+      variance: row.variance,
+      notes: row.notes,
     });
-    // Highlight negative variance (shortage) in red
-    if (num(variance) < 0) {
+
+    if (Number(row.variance) < 0) {
       ws.getRow(idx).getCell('K').font = { bold: true, color: { argb: 'FFC0392B' } };
     }
   }
 
   const buffer = await wb.xlsx.writeBuffer();
   return buffer;
+};
+
+const exportEntriesPdf = async (filters = {}) => {
+  const locationId = +filters.location_id;
+  if (!locationId) throw new Error('location_id is required');
+
+  const from = filters.date_from || filters.date || new Date().toISOString().split('T')[0];
+  const to = filters.date_to || from;
+
+  const location = await Location.findByPk(locationId);
+  if (!location) throw new Error('Location not found');
+
+  const dates = getExportDateRange(from, to);
+  const rows = [];
+
+  for (const date of dates) {
+    const { data: dailyRows } = await listEntries({ location_id: locationId, date });
+    rows.push(...dailyRows.map((row) => ({
+      item_name: row.item?.name || `#${row.item_id}`,
+      unit: row.item?.default_unit || '',
+      date,
+      opening: num(row.opening_stock),
+      received: num(row.received),
+      sold: num(row.sold),
+      spoiled: num(row.spoiled),
+      closing: num(row.closing_stock),
+      variance: row.variance === null || row.variance === undefined ? '' : num(row.variance),
+      notes: parseNotes(row.notes).concat((row.movements || []).map((m) => m.notes ? `${MOVEMENT_LABELS[m.type] || m.type}: ${num(m.quantity)} (${m.notes})` : `${MOVEMENT_LABELS[m.type] || m.type}: ${num(m.quantity)}`)).join(' | ') || '—',
+    })));
+  }
+
+  return new Promise((resolve, reject) => {
+    const PDFDocument = require('pdfkit');
+    const doc = new PDFDocument({ margin: 40, size: 'A4' });
+    const chunks = [];
+    doc.on('data', (c) => chunks.push(c));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+
+    const brandColor = '#021559';
+    const muted = '#64748b';
+    const border = '#e2e8f0';
+    const lightGray = '#f8fafc';
+
+    doc.fontSize(18).fillColor(brandColor).font('Helvetica-Bold').text('BENTABET LTD', 40, 40);
+    doc.fontSize(10).fillColor(muted).font('Helvetica').text('Kitchen Stock Ledger', 40, 66);
+    doc.moveTo(40, 82).lineTo(555, 82).strokeColor(border).lineWidth(1).stroke();
+
+    let y = 96;
+    doc.fontSize(9).fillColor(muted).text('Location:', 40, y);
+    doc.fillColor('#0f172a').text(`${location.name} (${location.code})`, 95, y);
+    doc.fillColor(muted).text('Date range:', 335, y);
+    doc.fillColor('#0f172a').text(`${from} to ${to}`, 395, y);
+    y += 18;
+    doc.fillColor(muted).text('Items exported:', 40, y);
+    doc.fillColor('#0f172a').text(String(rows.length), 110, y);
+
+    y += 22;
+    doc.rect(40, y, 515, 22).fill(brandColor);
+    doc.fillColor('#fff').fontSize(8.5).font('Helvetica-Bold');
+    doc.text('ITEM', 48, y + 7, { width: 150 });
+    doc.text('DATE', 200, y + 7, { width: 60 });
+    doc.text('UNIT', 265, y + 7, { width: 45 });
+    doc.text('OPEN', 315, y + 7, { width: 42, align: 'right' });
+    doc.text('RECV', 360, y + 7, { width: 42, align: 'right' });
+    doc.text('SOLD', 405, y + 7, { width: 42, align: 'right' });
+    doc.text('SPOIL', 450, y + 7, { width: 42, align: 'right' });
+    doc.text('CLOSING', 495, y + 7, { width: 40, align: 'right' });
+
+    y += 22;
+    rows.forEach((r, idx) => {
+      if (y > 720) {
+        doc.addPage();
+        y = 45;
+      }
+      if (idx % 2 === 0) doc.rect(40, y, 515, 18).fill(lightGray);
+      doc.fillColor('#0f172a').fontSize(8).font('Helvetica');
+      doc.text(String(r.item_name || ''), 48, y + 5, { width: 145 });
+      doc.text(String(r.date || ''), 200, y + 5, { width: 52 });
+      doc.text(String(r.unit || ''), 265, y + 5, { width: 40 });
+      doc.text(String(num(r.opening)), 315, y + 5, { width: 42, align: 'right' });
+      doc.text(String(num(r.received)), 360, y + 5, { width: 42, align: 'right' });
+      doc.text(String(num(r.sold)), 405, y + 5, { width: 42, align: 'right' });
+      doc.text(String(num(r.spoiled)), 450, y + 5, { width: 42, align: 'right' });
+      doc.text(String(num(r.closing)), 495, y + 5, { width: 40, align: 'right' });
+      y += 18;
+    });
+
+    if (rows.length === 0) {
+      doc.fillColor(muted).fontSize(9).font('Helvetica').text('No stock rows available for the selected date range.', 48, y + 12);
+    }
+
+    doc.end();
+  });
 };
 
 module.exports = {
@@ -856,5 +958,6 @@ module.exports = {
   getStats,
   getStockManagerDashboard,
   exportEntriesExcel,
+  exportEntriesPdf,
   exportRestockPdf,
 };

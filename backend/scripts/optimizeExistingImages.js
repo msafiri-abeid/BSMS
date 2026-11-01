@@ -143,7 +143,7 @@ async function backfillDb(generated) {
     for (const [Model, col, optCol, thumbCol] of colMaps) {
       if (!Model) continue;
       try {
-        const [, n] = await Model.update(
+        const [n] = await Model.update(
           { [optCol]: optimizedUrl, [thumbCol]: thumbUrl },
           { where: { [col]: originalUrl, [optCol]: null } }
         );
