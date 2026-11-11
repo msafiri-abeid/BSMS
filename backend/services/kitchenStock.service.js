@@ -145,17 +145,29 @@ const listItems = async (filters = {}) => {
 };
 
 const createItem = async (data, userId) => {
-  if (!data.name) throw new Error('name is required');
+  const name = typeof data.name === 'string' ? data.name.trim() : '';
+  if (!name) throw new Error('name is required');
   const [item, created] = await KitchenItem.findOrCreate({
-    where: { name: data.name },
+    where: { name },
     defaults: {
-      name: data.name,
+      name,
       category: data.category || 'other',
       default_unit: data.default_unit || 'qty',
       min_threshold: num(data.min_threshold),
       is_active: true,
     },
   });
+
+  if (!created && !item.is_active) {
+    await item.update({
+      name,
+      category: data.category || 'other',
+      default_unit: data.default_unit || 'qty',
+      min_threshold: num(data.min_threshold),
+      is_active: true,
+    });
+  }
+
   return item;
 };
 

@@ -118,9 +118,11 @@ export default function KitchenStockPage() {
   });
 
   const invalidateAll = () => {
-    qc.invalidateQueries({ queryKey: ['kitchen-entries'] });
-    qc.invalidateQueries({ queryKey: ['kitchen-stats'] });
-    qc.invalidateQueries({ queryKey: ['kitchen-restock'] });
+    return Promise.all([
+      qc.invalidateQueries({ queryKey: ['kitchen-entries'] }),
+      qc.invalidateQueries({ queryKey: ['kitchen-stats'] }),
+      qc.invalidateQueries({ queryKey: ['kitchen-restock'] }),
+    ]);
   };
 
   // ── Mutations ──
@@ -154,7 +156,15 @@ export default function KitchenStockPage() {
 
   const createItemMutation = useMutation({
     mutationFn: (d) => itemModal.editing ? kitchenStockAPI.updateItem(itemModal.editing.id, d) : kitchenStockAPI.createItem(d),
-    onSuccess: () => { message.success('Item saved'); qc.invalidateQueries({ queryKey: ['kitchen-items'] }); invalidateAll(); itemForm.resetFields(); setItemModal({ open: false, editing: null, row: null }); },
+    onSuccess: async () => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ['kitchen-items'] }),
+        invalidateAll(),
+      ]);
+      message.success('Item saved');
+      itemForm.resetFields();
+      setItemModal({ open: false, editing: null, row: null });
+    },
     onError: (e) => message.error(e.response?.data?.message || 'Failed to save item'),
   });
 
