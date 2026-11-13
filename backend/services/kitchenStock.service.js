@@ -288,6 +288,21 @@ const listEntries = async (filters = {}) => {
     };
   });
 
+  const activeItemIds = new Set(items.map((item) => Number(item.id)));
+  for (const entry of entries) {
+    if (activeItemIds.has(Number(entry.item_id))) continue;
+    merged.push({
+      ...serializeEntry(entry),
+      expiry_date: entry.expiry_date || prevExpiryByItem[entry.item_id] || null,
+    });
+  }
+
+  merged.sort((a, b) => {
+    const nameA = a.item?.name || `#${a.item_id}`;
+    const nameB = b.item?.name || `#${b.item_id}`;
+    return nameA.localeCompare(nameB, undefined, { sensitivity: 'base' });
+  });
+
   return { data: merged, count: merged.length, date: entryDate, prev_date: prevDateStr };
 };
 
